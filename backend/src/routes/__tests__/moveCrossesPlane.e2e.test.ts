@@ -22,12 +22,12 @@ jest.setTimeout(30000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let shownId: string;
 let otherId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 const SHADE = randomUUID();
 const WRAITH = randomUUID();
 
@@ -38,14 +38,14 @@ const token = (id: string, extra: Record<string, unknown>) => ({
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `crossmove-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gmUser = await createTestUser({ email: `crossmove-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const playerUser = await createTestUser({ email: `crossmove-p-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Cross move ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Cross move ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -55,8 +55,8 @@ beforeAll(async () => {
   })).id;
   otherId = (await prisma.map.create({ data: { ...base, name: 'Elsewhere', tokens: [] } })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: shownId, spiritLayerEnabled: false } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
@@ -66,7 +66,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
@@ -83,7 +83,7 @@ it("sends the order again when a move takes a player's spirit token off the map"
     });
   });
 
-  const res = await dm.post(`/api/campaigns/${campaignId}/maps/${shownId}/tokens/move`).send({ tokenIds: [SHADE], targetMapId: otherId });
+  const res = await gm.post(`/api/campaigns/${campaignId}/maps/${shownId}/tokens/move`).send({ tokenIds: [SHADE], targetMapId: otherId });
   expect(res.status).toBe(200);
   await expect(Promise.race([back, new Promise((_r, reject) => setTimeout(() => reject(new Error('order not sent again')), 3000))])).resolves.toBeUndefined();
   player.disconnect();
@@ -112,7 +112,7 @@ describe('placing or deleting a player\'s spirit token', () => {
     combat();
     const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
     const back = orderFor(player, false);
-    expect((await dm.delete(`/api/campaigns/${campaignId}/maps/${shownId}/tokens/${SHADE}`)).status).toBe(200);
+    expect((await gm.delete(`/api/campaigns/${campaignId}/maps/${shownId}/tokens/${SHADE}`)).status).toBe(200);
     await expect(back).resolves.toBeUndefined();
     player.disconnect();
   });
@@ -122,7 +122,7 @@ describe('placing or deleting a player\'s spirit token', () => {
     combat();
     const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
     const across = orderFor(player, true);
-    const res = await dm.post(`/api/campaigns/${campaignId}/maps/${shownId}/tokens`)
+    const res = await gm.post(`/api/campaigns/${campaignId}/maps/${shownId}/tokens`)
       .send({ name: 'Shade', position: { x: 2, y: 2 }, layer: 'spirit', controlledBy: playerId, type: 'player' });
     expect(res.status).toBe(201);
     await expect(across).resolves.toBeUndefined();
@@ -135,7 +135,7 @@ describe('placing or deleting a player\'s spirit token', () => {
     combat();
     const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
     const across = orderFor(player, true);
-    const res = await dm.put(`/api/campaigns/${campaignId}/maps/${shownId}/tokens/${SHADE}`).send({ controlledBy: playerId });
+    const res = await gm.put(`/api/campaigns/${campaignId}/maps/${shownId}/tokens/${SHADE}`).send({ controlledBy: playerId });
     expect(res.status).toBe(200);
     await expect(across).resolves.toBeUndefined();
     player.disconnect();

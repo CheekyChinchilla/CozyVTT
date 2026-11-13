@@ -6,7 +6,7 @@
  * and attack +0, which are wrong for every character that has ever existed —
  * the lowest legal DC at level 1 is 10.
  *
- * Formulas from the Basic Rules, "Spellcasting Ability" (page 24):
+ * Formulas from SRD 5.1, "Spellcasting Ability":
  *   Spell save DC       = 8 + proficiency bonus + spellcasting ability modifier
  *   Spell attack modifier =   proficiency bonus + spellcasting ability modifier
  *
@@ -17,14 +17,14 @@
  */
 
 import {
-  dnd5eSpellSaveDC,
-  dnd5eSpellAttackBonus,
+  fifthEditionSpellSaveDC,
+  fifthEditionSpellAttackBonus,
   spellcastingAbilityKey,
   spellcastingAbilityModifier,
   exhaustionLevel,
   exhaustionEffects,
   hasSpellcasting,
-} from '../dnd5e';
+} from '../fifthEdition';
 
 /** A sheet with one ability score and a named spellcasting ability. */
 function sheet(opts: {
@@ -91,10 +91,10 @@ describe('spellcastingAbilityModifier', () => {
   });
 });
 
-describe('dnd5eSpellSaveDC', () => {
+describe('fifthEditionSpellSaveDC', () => {
   it('is 8 + proficiency + ability modifier', () => {
     // Level 1 wizard, INT 16 (+3), proficiency +2 -> 8 + 2 + 3 = 13
-    expect(dnd5eSpellSaveDC(sheet({ score: 16, proficiencyBonus: 2 }))).toBe(13);
+    expect(fifthEditionSpellSaveDC(sheet({ score: 16, proficiencyBonus: 2 }))).toBe(13);
   });
 
   it.each([
@@ -102,49 +102,49 @@ describe('dnd5eSpellSaveDC', () => {
     [20, 6, 19], // INT 20 (+5), PB +6  -> 8 + 6 + 5
     [8, 2, 9], //  INT 8  (-1), PB +2  -> 8 + 2 - 1
   ])('INT %i with proficiency +%i gives DC %i', (score, proficiencyBonus, expected) => {
-    expect(dnd5eSpellSaveDC(sheet({ score, proficiencyBonus }))).toBe(expected);
+    expect(fifthEditionSpellSaveDC(sheet({ score, proficiencyBonus }))).toBe(expected);
   });
 
   it('never comes out below 10 for a real level 1 caster', () => {
     // The templates shipped 8, which no character can legitimately have.
-    const lowest = dnd5eSpellSaveDC(sheet({ score: 10, proficiencyBonus: 2 }));
+    const lowest = fifthEditionSpellSaveDC(sheet({ score: 10, proficiencyBonus: 2 }));
     expect(lowest).toBeGreaterThanOrEqual(10);
   });
 
   it('adds a manual bonus, for items that raise it', () => {
-    expect(dnd5eSpellSaveDC(sheet({ score: 16, proficiencyBonus: 2, dcBonus: 2 }))).toBe(15);
+    expect(fifthEditionSpellSaveDC(sheet({ score: 16, proficiencyBonus: 2, dcBonus: 2 }))).toBe(15);
   });
 
   it('accepts a negative manual adjustment', () => {
-    expect(dnd5eSpellSaveDC(sheet({ score: 16, proficiencyBonus: 2, dcBonus: -1 }))).toBe(12);
+    expect(fifthEditionSpellSaveDC(sheet({ score: 16, proficiencyBonus: 2, dcBonus: -1 }))).toBe(12);
   });
 
   it('falls back to the proficiency bonus implied by level', () => {
     // No proficiencyBonus recorded; level 5 implies +3. 8 + 3 + 3 = 14.
-    expect(dnd5eSpellSaveDC(sheet({ score: 16, level: 5 }))).toBe(14);
+    expect(fifthEditionSpellSaveDC(sheet({ score: 16, level: 5 }))).toBe(14);
   });
 });
 
-describe('dnd5eSpellAttackBonus', () => {
+describe('fifthEditionSpellAttackBonus', () => {
   it('is proficiency + ability modifier', () => {
-    expect(dnd5eSpellAttackBonus(sheet({ score: 16, proficiencyBonus: 2 }))).toBe(5);
+    expect(fifthEditionSpellAttackBonus(sheet({ score: 16, proficiencyBonus: 2 }))).toBe(5);
   });
 
   it('is exactly the save DC minus 8, before any manual adjustment', () => {
     const data = sheet({ score: 18, proficiencyBonus: 4 });
-    expect(dnd5eSpellAttackBonus(data)).toBe(dnd5eSpellSaveDC(data) - 8);
+    expect(fifthEditionSpellAttackBonus(data)).toBe(fifthEditionSpellSaveDC(data) - 8);
   });
 
   it('takes its own manual bonus, separate from the save DC', () => {
     // A Wand of the War Mage adds to attack rolls and not to the save DC, so
     // one shared adjustment would be wrong.
     const data = sheet({ score: 16, proficiencyBonus: 2, attackBonus: 2 });
-    expect(dnd5eSpellAttackBonus(data)).toBe(7);
-    expect(dnd5eSpellSaveDC(data)).toBe(13);
+    expect(fifthEditionSpellAttackBonus(data)).toBe(7);
+    expect(fifthEditionSpellSaveDC(data)).toBe(13);
   });
 
   it('is the bare proficiency bonus for a sheet naming no ability', () => {
-    expect(dnd5eSpellAttackBonus(sheet({ ability: '', proficiencyBonus: 3 }))).toBe(3);
+    expect(fifthEditionSpellAttackBonus(sheet({ ability: '', proficiencyBonus: 3 }))).toBe(3);
   });
 });
 
@@ -152,8 +152,8 @@ describe('sheets that are missing pieces', () => {
   it.each([undefined, null, {}, { spellcasting: {} }, 'nonsense'])(
     'does not throw for %j',
     (data) => {
-      expect(() => dnd5eSpellSaveDC(data)).not.toThrow();
-      expect(() => dnd5eSpellAttackBonus(data)).not.toThrow();
+      expect(() => fifthEditionSpellSaveDC(data)).not.toThrow();
+      expect(() => fifthEditionSpellAttackBonus(data)).not.toThrow();
     }
   );
 });
@@ -161,31 +161,31 @@ describe('sheets that are missing pieces', () => {
 /**
  * Exhaustion.
  *
- * Basic Rules, Appendix A: six cumulative levels, each carrying every level
+ * SRD 5.1, "Exhaustion": six cumulative levels, each carrying every level
  * below it, with level 6 being death. It used to be a single checkbox in the
  * conditions list, which cannot record which level a character is on.
  */
 describe('exhaustion', () => {
   it.each([
     [0, []],
-    [1, ['Disadvantage on ability checks']],
-    [2, ['Disadvantage on ability checks', 'Speed halved']],
+    [1, ['Ability checks have disadvantage']],
+    [2, ['Ability checks have disadvantage', 'Speed is cut to half']],
   ])('level %i lists %j', (level, expected) => {
     expect(exhaustionEffects(level)).toEqual(expected);
   });
 
   it('is cumulative — level 3 carries levels 1 and 2', () => {
     expect(exhaustionEffects(3)).toEqual([
-      'Disadvantage on ability checks',
-      'Speed halved',
-      'Disadvantage on attack rolls and saving throws',
+      'Ability checks have disadvantage',
+      'Speed is cut to half',
+      'Attack rolls and saving throws have disadvantage',
     ]);
   });
 
   it('level 6 is death, and lists all six', () => {
     const effects = exhaustionEffects(6);
     expect(effects).toHaveLength(6);
-    expect(effects[5]).toBe('Death');
+    expect(effects.slice(3)).toEqual(['Hit point maximum is cut to half', 'Speed drops to 0', 'The creature dies']);
   });
 
   it('clamps a level above 6 rather than reading past the end', () => {

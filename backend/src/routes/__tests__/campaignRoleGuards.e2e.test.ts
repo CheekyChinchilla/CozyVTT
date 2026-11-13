@@ -1,10 +1,10 @@
 /**
  * Every campaign route turns away the people its guard says it must.
  *
- * Which routes are the DM's alone, and which any member's, is written down
+ * Which routes are the GM's alone, and which any member's, is written down
  * below and compared with the guard each route runs, read from the routers.
  * A route whose guard is loosened, or a new route, fails that comparison
- * until the list is changed on purpose. Then, for each route the DM alone may
+ * until the list is changed on purpose. Then, for each route the GM alone may
  * use: a player, a spectator, a member of another campaign (403 each) and a
  * caller who is not signed in (401). For each route any member may use: the
  * member of another campaign and the caller who is not signed in. The guard
@@ -19,10 +19,10 @@ import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { mountedRoutes, routeKey, runs, type MountedRoute } from '../../__tests__/helpers/routeInventory';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns, TEST_PASSWORD } from '../../__tests__/helpers/db';
-import { requireDM, requireCampaignMember, requireDMOrPlayer } from '../../middleware/rbac';
+import { requireGM, requireCampaignMember, requireGMOrPlayer } from '../../middleware/rbac';
 
-/** Routes only the campaign's DM may use. */
-const DM_ONLY = [
+/** Routes only the campaign's GM may use. */
+const GM_ONLY = [
   'PUT /api/campaigns/:campaignId',
   'PUT /api/campaigns/:campaignId/vibe',
   'GET /api/campaigns/:campaignId/invitable-users',
@@ -66,6 +66,7 @@ const DM_ONLY = [
   'DELETE /api/campaigns/:campaignId/maps/:id/tokens/:tokenId',
   'PUT /api/campaigns/:campaignId/maps/:id/walls',
   'POST /api/campaigns/:campaignId/maps/:id/walls',
+  'POST /api/campaigns/:campaignId/maps/:id/walls/batch',
   'DELETE /api/campaigns/:campaignId/maps/:id/walls/:sid',
   'PATCH /api/campaigns/:campaignId/maps/:id/walls/:sid',
   'PUT /api/campaigns/:campaignId/maps/:id/lights',
@@ -107,7 +108,7 @@ const ANY_MEMBER = [
 
 const app = createTestApp();
 const routes = mountedRoutes(app);
-const dmOnly = routes.filter((r) => runs(r, requireDM));
+const gmOnly = routes.filter((r) => runs(r, requireGM));
 const anyMember = routes.filter((r) => runs(r, requireCampaignMember));
 
 const users: string[] = [];
@@ -117,7 +118,7 @@ let player: request.Agent;
 let spectator: request.Agent;
 let stranger: request.Agent;
 
-async function member(role: 'DM' | 'PLAYER' | 'SPECTATOR', campaign: string): Promise<request.Agent> {
+async function member(role: 'GM' | 'PLAYER' | 'SPECTATOR', campaign: string): Promise<request.Agent> {
   const user = await createTestUser({ displayName: `Guard ${role}` });
   users.push(user.id);
   await prisma.campaignMembership.create({ data: { userId: user.id, campaignId: campaign, role, characterIds: [] } });
@@ -132,16 +133,16 @@ beforeAll(async () => {
   const campaign = await createTestCampaign(owner.id);
   campaigns.push(campaign.id);
   campaignId = campaign.id;
-  await prisma.campaignMembership.create({ data: { userId: owner.id, campaignId, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId: owner.id, campaignId, role: 'GM', characterIds: [] } });
 
   player = await member('PLAYER', campaignId);
   spectator = await member('SPECTATOR', campaignId);
 
-  const elsewhereOwner = await createTestUser({ displayName: 'Other DM' });
+  const elsewhereOwner = await createTestUser({ displayName: 'Other GM' });
   users.push(elsewhereOwner.id);
   const elsewhere = await createTestCampaign(elsewhereOwner.id);
   campaigns.push(elsewhere.id);
-  stranger = await member('DM', elsewhere.id);
+  stranger = await member('GM', elsewhere.id);
 });
 
 afterAll(async () => {
@@ -176,17 +177,19 @@ function send(agent: request.Agent | null, route: MountedRoute): request.Test {
 it('has the guards written down here', () => {
   // A difference is a route whose guard changed, or a new one. Make sure the
   // change is meant, then move or add the route in the lists above.
-  expect(dmOnly.map(routeKey).sort()).toEqual([...DM_ONLY].sort());
+  expect(gmOnly.map(routeKey).sort()).toEqual([...GM_ONLY].sort());
   expect(anyMember.map(routeKey).sort()).toEqual([...ANY_MEMBER].sort());
   // Not used by any route today. When one is, give it a case below.
-  expect(routes.filter((r) => runs(r, requireDMOrPlayer)).map(routeKey)).toEqual([]);
+  expect(routes.filter((r) => runs(r, requireGMOrPlayer)).map(routeKey)).toEqual([]);
 });
 
 it('has every campaign route guarded, or listed as deciding in its own handler', () => {
   // These answer for themselves, and their refusals are tested where named.
   const ownChecks: Record<string, string> = {
     'DELETE /api/campaigns/:campaignId': 'this file, below',
-    'PUT /api/campaigns/:campaignId/dm': 'dmTransfer.e2e.test.ts',
+    'PUT /api/campaigns/:campaignId/gm': 'gmTransfer.e2e.test.ts',
+    // The same hand-over at the path older versions gave it.
+    'PUT /api/campaigns/:campaignId/dm': 'legacy/__tests__/oldValuesAccepted.e2e.test.ts',
     // A removed member reading their own notes and macros: no membership by
     // design, and every query is scoped to the caller and to a campaign they
     // are not a member of.
@@ -198,7 +201,7 @@ it('has every campaign route guarded, or listed as deciding in its own handler',
     'POST /api/campaigns/:campaignId/creatures/seed': 'srdSeedRoute.e2e.test.ts',
   };
   const unguarded = routes
-    .filter((r) => r.path.includes(':campaignId') && !runs(r, requireDM) && !runs(r, requireCampaignMember))
+    .filter((r) => r.path.includes(':campaignId') && !runs(r, requireGM) && !runs(r, requireCampaignMember))
     .map(routeKey)
     .filter((key) => !(key in ownChecks));
   expect(unguarded).toEqual([]);
@@ -216,12 +219,12 @@ describe('DELETE /api/campaigns/:campaignId, the owner\'s or an admin\'s alone,'
   });
 });
 
-describe.each(dmOnly.map((r) => [routeKey(r), r] as const))('%s, the DM\'s alone,', (_key, route) => {
+describe.each(gmOnly.map((r) => [routeKey(r), r] as const))('%s, the GM\'s alone,', (_key, route) => {
   it('refuses a player and a spectator', async () => {
     for (const agent of [player, spectator]) {
       const res = await send(agent, route);
       expect(res.status).toBe(403);
-      expect(res.body.message).toBe('This action requires Dungeon Master (DM) role');
+      expect(res.body.message).toBe('This action requires the GM role');
     }
   });
 

@@ -3,7 +3,7 @@
  *
  * `chat.message` with a `recipientId` is stored as a WHISPER naming them and
  * sent to the sender's sockets and the recipient's sockets in this campaign,
- * the `clientId` on the sender's copies only. Nobody else is sent it, the DM
+ * the `clientId` on the sender's copies only. Nobody else is sent it, the GM
  * included unless they are one of the two, and neither is the recipient's
  * connection to another campaign: their user room spans every campaign they
  * have open. Whoever may chat may whisper, spectators too, to any current
@@ -43,7 +43,7 @@ interface Received {
   clientId?: string;
 }
 
-const NAMES = { dm: 'Dana', ash: 'Ash', mara: 'Mara', cole: 'Cole', sky: 'Sky', out: 'Otto', finn: 'Finn', gail: 'Gail', hal: 'Hal' } as const;
+const NAMES = { gm: 'Dana', ash: 'Ash', mara: 'Mara', cole: 'Cole', sky: 'Sky', out: 'Otto', finn: 'Finn', gail: 'Gail', hal: 'Hal' } as const;
 type Person = keyof typeof NAMES;
 
 let server: WsTestServer;
@@ -71,11 +71,11 @@ beforeAll(async () => {
     });
     ids[who] = user.id;
   }
-  campaignId = (await prisma.campaign.create({ data: { name: `Whispers ${runId}`, ownerId: ids.dm, vibeSettings: {} } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Whispers ${runId}`, ownerId: ids.gm, vibeSettings: {} } })).id;
   otherCampaignId = (await prisma.campaign.create({ data: { name: `Elsewhere ${runId}`, ownerId: ids.out, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: ids.dm, campaignId, role: 'DM', characterIds: [] },
+      { userId: ids.gm, campaignId, role: 'GM', characterIds: [] },
       { userId: ids.ash, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: ids.mara, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: ids.cole, campaignId, role: 'PLAYER', characterIds: [] },
@@ -83,7 +83,7 @@ beforeAll(async () => {
       { userId: ids.finn, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: ids.gail, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: ids.hal, campaignId, role: 'PLAYER', characterIds: [] },
-      { userId: ids.out, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
+      { userId: ids.out, campaignId: otherCampaignId, role: 'GM', characterIds: [] },
       { userId: ids.mara, campaignId: otherCampaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -109,11 +109,11 @@ describe('a whisper', () => {
     const ash = await connect('ash');
     const mara = await connect('mara');
     const cole = await connect('cole');
-    const dm = await connect('dm');
+    const gm = await connect('gm');
     const toAsh = nextMessage(ash);
     const toMara = nextMessage(mara);
     const toCole = nextMessage(cole);
-    const toDm = nextMessage(dm);
+    const toGm = nextMessage(gm);
 
     const answer = await whisper(ash, ids.mara, ' Meet me by the well ', 'w-1');
 
@@ -126,7 +126,7 @@ describe('a whisper', () => {
 
     expect(await send(ash, { content: 'Hello, all' })).toMatchObject({ ok: true });
     expect((await toCole).content).toBe('Hello, all');
-    expect((await toDm).content).toBe('Hello, all');
+    expect((await toGm).content).toBe('Hello, all');
   });
 
   it('reaches the sender\'s other tab, with the clientId', async () => {
@@ -154,17 +154,17 @@ describe('a whisper', () => {
     expect((await elsewhere).content).toBe('Over here');
   });
 
-  it('from the DM is a whisper, whatever type they ask for, and the other players are not sent it', async () => {
-    const dm = await connect('dm');
+  it('from the GM is a whisper, whatever type they ask for, and the other players are not sent it', async () => {
+    const gm = await connect('gm');
     const ash = await connect('ash');
     const cole = await connect('cole');
     const toAsh = nextMessage(ash);
     const toCole = nextMessage(cole);
 
-    expect(await send(dm, { content: 'Roll a save, quietly', type: 'DM', recipientId: ids.ash })).toMatchObject({ ok: true });
+    expect(await send(gm, { content: 'Roll a save, quietly', type: 'GM', recipientId: ids.ash })).toMatchObject({ ok: true });
 
-    expect(await toAsh).toMatchObject({ type: 'WHISPER', userId: ids.dm, recipientId: ids.ash, recipientName: 'Ash' });
-    expect(await send(dm, { content: 'Everyone, roll initiative' })).toMatchObject({ ok: true });
+    expect(await toAsh).toMatchObject({ type: 'WHISPER', userId: ids.gm, recipientId: ids.ash, recipientName: 'Ash' });
+    expect(await send(gm, { content: 'Everyone, roll initiative' })).toMatchObject({ ok: true });
     expect((await toCole).content).toBe('Everyone, roll initiative');
   });
 
@@ -237,7 +237,7 @@ describe('a whisper that is refused, and not stored', () => {
   });
 
   it('as a failure to send, not a missing recipient, when the campaign is deleted while it is being written', async () => {
-    const doomedId = (await prisma.campaign.create({ data: { name: `Doomed ${runId}`, ownerId: ids.dm, vibeSettings: {} } })).id;
+    const doomedId = (await prisma.campaign.create({ data: { name: `Doomed ${runId}`, ownerId: ids.gm, vibeSettings: {} } })).id;
     await prisma.campaignMembership.createMany({
       data: [
         { userId: ids.ash, campaignId: doomedId, role: 'PLAYER', characterIds: [] },

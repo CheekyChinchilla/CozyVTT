@@ -125,11 +125,11 @@ export function createRepeatPacer(intervalMs: number): RepeatPacer {
 }
 
 /**
- * Who a shortcut does anything for: everyone; the DM alone; or whoever has a
- * token to act on, which is the DM on any token the map shows them and a
+ * Who a shortcut does anything for: everyone; the GM alone; or whoever has a
+ * token to act on, which is the GM on any token the map shows them and a
  * player on their own.
  */
-export type ShortcutAudience = 'everyone' | 'actors' | 'dm';
+export type ShortcutAudience = 'everyone' | 'actors' | 'gm';
 
 export interface MapShortcut {
   /** Each key or chord, spelled as the guides spell it; any one of them does it. */
@@ -142,7 +142,7 @@ export interface MapShortcut {
  * Every key the map takes, for the ? window. The arrows are here twice, for
  * a token and for walls. The guides' Keyboard Shortcuts tables list the same
  * keys, spelled the same way: the player guide everything that is not the
- * DM's, the DM guide the DM's. A backend check reads this list as text, one
+ * GM's, the GM guide the GM's. A backend check reads this list as text, one
  * shortcut per line, and fails when a table disagrees.
  */
 export const MAP_SHORTCUTS: readonly MapShortcut[] = [
@@ -156,37 +156,37 @@ export const MAP_SHORTCUTS: readonly MapShortcut[] = [
   { keys: ['Double tap'], does: 'Ping the map, on a touch screen, where there is no token or door and no tool is up', who: 'everyone' },
   { keys: ['Alt + click'], does: 'Place a spell area off the grid, with the AoE tool', who: 'everyone' },
   { keys: ['?'], does: 'Show these shortcuts', who: 'everyone' },
-  { keys: ['Arrow keys'], does: 'Nudge the selected walls one pixel', who: 'dm' },
-  { keys: ['Shift + arrow keys'], does: 'Nudge the selected walls one square', who: 'dm' },
-  { keys: ['Ctrl + A'], does: 'Select every wall, in Select mode', who: 'dm' },
-  { keys: ['Shift + click'], does: 'Add a wall to the selection, or take it out', who: 'dm' },
-  { keys: ['Delete', 'Backspace'], does: 'Delete the selected walls', who: 'dm' },
-  { keys: ['Double-click'], does: 'Finish a wall line', who: 'dm' },
-  { keys: ['Ctrl + Z'], does: 'Undo the last wall change', who: 'dm' },
-  { keys: ['Ctrl + Y', 'Ctrl + Shift + Z'], does: 'Redo a wall change', who: 'dm' },
-  { keys: ['S'], does: 'Select part of the picture, while Mapmaker is on', who: 'dm' },
-  { keys: ['B'], does: 'Paint with the brush, while Mapmaker is on', who: 'dm' },
-  { keys: ['E'], does: 'Erase to the map\'s own colour, while Mapmaker is on', who: 'dm' },
-  { keys: ['L'], does: 'Paint a line, while Mapmaker is on', who: 'dm' },
-  { keys: ['R'], does: 'Paint a rectangle, while Mapmaker is on', who: 'dm' },
-  { keys: ['O'], does: 'Paint an ellipse, while Mapmaker is on', who: 'dm' },
-  { keys: ['G'], does: 'Paint a polygon, corner by corner, while Mapmaker is on', who: 'dm' },
-  { keys: ['C'], does: 'Paint a curve, bent by a second drag, while Mapmaker is on', who: 'dm' },
-  { keys: ['Enter'], does: 'Close a polygon or paint a curve as it is, while Mapmaker is on', who: 'dm' },
-  { keys: ['Backspace'], does: 'Take a polygon\'s last corner back, while Mapmaker is on', who: 'dm' },
-  { keys: ['M'], does: 'Paint a room, whose walls are added when it is saved, while Mapmaker is on', who: 'dm' },
-  { keys: ['P'], does: 'Paint a stamp into a square, while Mapmaker is on', who: 'dm' },
-  { keys: ['F'], does: 'Fill an area, while Mapmaker is on', who: 'dm' },
-  { keys: ['T'], does: 'Paint a line of text, while Mapmaker is on', who: 'dm' },
-  { keys: ['I'], does: 'Take a colour from the picture, while Mapmaker is on', who: 'dm' },
-  { keys: ['Ctrl + C', 'Ctrl + X', 'Ctrl + V'], does: 'Copy, cut or paste the selection, while Mapmaker is on', who: 'dm' },
-  { keys: ['Ctrl + A'], does: 'Select the whole picture, while Mapmaker is on', who: 'dm' },
-  { keys: ['Delete', 'Backspace'], does: 'Erase the selection to the map\'s own colour, while Mapmaker is on', who: 'dm' },
-  { keys: ['Enter'], does: 'Put the selection down, while Mapmaker is on', who: 'dm' },
-  { keys: ['Shift + drag'], does: 'Keep a painted line to 15 degree steps', who: 'dm' },
-  { keys: ['[', ']'], does: 'Make the brush narrower or wider, while Mapmaker is on', who: 'dm' },
-  { keys: ['Ctrl + Z'], does: 'Undo the last change to the picture, while Mapmaker is on', who: 'dm' },
-  { keys: ['Ctrl + Y', 'Ctrl + Shift + Z'], does: 'Redo a change to the picture, while Mapmaker is on', who: 'dm' },
+  { keys: ['Arrow keys'], does: 'Nudge the selected walls one pixel', who: 'gm' },
+  { keys: ['Shift + arrow keys'], does: 'Nudge the selected walls one square', who: 'gm' },
+  { keys: ['Ctrl + A'], does: 'Select every wall, in Select mode', who: 'gm' },
+  { keys: ['Shift + click'], does: 'Add a wall to the selection, or take it out', who: 'gm' },
+  { keys: ['Delete', 'Backspace'], does: 'Delete the selected walls', who: 'gm' },
+  { keys: ['Double-click'], does: 'Finish a wall line', who: 'gm' },
+  { keys: ['Ctrl + Z'], does: 'Undo the last wall change', who: 'gm' },
+  { keys: ['Ctrl + Y', 'Ctrl + Shift + Z'], does: 'Redo a wall change', who: 'gm' },
+  { keys: ['S'], does: 'Select part of the picture, while Mapmaker is on', who: 'gm' },
+  { keys: ['B'], does: 'Paint with the brush, while Mapmaker is on', who: 'gm' },
+  { keys: ['E'], does: 'Erase to the map\'s own colour, while Mapmaker is on', who: 'gm' },
+  { keys: ['L'], does: 'Paint a line, while Mapmaker is on', who: 'gm' },
+  { keys: ['R'], does: 'Paint a rectangle, while Mapmaker is on', who: 'gm' },
+  { keys: ['O'], does: 'Paint an ellipse, while Mapmaker is on', who: 'gm' },
+  { keys: ['G'], does: 'Paint a polygon, corner by corner, while Mapmaker is on', who: 'gm' },
+  { keys: ['C'], does: 'Paint a curve, bent by a second drag, while Mapmaker is on', who: 'gm' },
+  { keys: ['Enter'], does: 'Close a polygon or paint a curve as it is, while Mapmaker is on', who: 'gm' },
+  { keys: ['Backspace'], does: 'Take a polygon\'s last corner back, while Mapmaker is on', who: 'gm' },
+  { keys: ['M'], does: 'Paint a room, whose walls are added when it is saved, while Mapmaker is on', who: 'gm' },
+  { keys: ['P'], does: 'Paint a stamp into a square, while Mapmaker is on', who: 'gm' },
+  { keys: ['F'], does: 'Fill an area, while Mapmaker is on', who: 'gm' },
+  { keys: ['T'], does: 'Paint a line of text, while Mapmaker is on', who: 'gm' },
+  { keys: ['I'], does: 'Take a colour from the picture, while Mapmaker is on', who: 'gm' },
+  { keys: ['Ctrl + C', 'Ctrl + X', 'Ctrl + V'], does: 'Copy, cut or paste the selection, while Mapmaker is on', who: 'gm' },
+  { keys: ['Ctrl + A'], does: 'Select the whole picture, while Mapmaker is on', who: 'gm' },
+  { keys: ['Delete', 'Backspace'], does: 'Erase the selection to the map\'s own colour, while Mapmaker is on', who: 'gm' },
+  { keys: ['Enter'], does: 'Put the selection down, while Mapmaker is on', who: 'gm' },
+  { keys: ['Shift + drag'], does: 'Keep a painted line to 15 degree steps', who: 'gm' },
+  { keys: ['[', ']'], does: 'Make the brush narrower or wider, while Mapmaker is on', who: 'gm' },
+  { keys: ['Ctrl + Z'], does: 'Undo the last change to the picture, while Mapmaker is on', who: 'gm' },
+  { keys: ['Ctrl + Y', 'Ctrl + Shift + Z'], does: 'Redo a change to the picture, while Mapmaker is on', who: 'gm' },
 ];
 
 /**
@@ -198,7 +198,7 @@ export const MAP_KEYS_HINT = 'Click a token, or press full stop or comma, to sel
 
 /** The shortcuts that do something for a viewer of this role. */
 export function shortcutsFor(role: string | null | undefined): MapShortcut[] {
-  if (role === 'DM') return [...MAP_SHORTCUTS];
-  if (role === 'PLAYER') return MAP_SHORTCUTS.filter((s) => s.who !== 'dm');
+  if (role === 'GM') return [...MAP_SHORTCUTS];
+  if (role === 'PLAYER') return MAP_SHORTCUTS.filter((s) => s.who !== 'gm');
   return MAP_SHORTCUTS.filter((s) => s.who === 'everyone');
 }

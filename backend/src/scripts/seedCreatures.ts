@@ -13,7 +13,7 @@ const prisma = createPrismaClient();
 
 async function main() {
   console.log('CozyVTT Creature Library Seeder');
-  console.log('Fetching D&D 5e SRD creatures from Open5e API...\n');
+  console.log('Fetching 5E SRD creatures from Open5e API...\n');
 
   const result = await seedSrdCreatures(prisma);
 

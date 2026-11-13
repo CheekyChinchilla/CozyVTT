@@ -26,7 +26,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
   };
   const handlers = new Map<string, Set<(data: never) => void>>();
@@ -78,7 +78,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -196,12 +196,12 @@ beforeEach(() => {
   h.sent.length = 0;
   h.handlers.clear();
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: largestMap() });
+  h.set({ userRole: 'GM', currentMap: largestMap() });
 });
 
-// ── The DM's fog box ────────────────────────────────────────────────────────
+// ── The GM's fog box ────────────────────────────────────────────────────────
 
-describe("the DM's fog box on the largest map", () => {
+describe("the GM's fog box on the largest map", () => {
   /** Open the map with its fog all hidden, and take up a fog box. */
   function shown(box: 'Fog reveal box' | 'Fog hide box') {
     render(<MapCanvas />);

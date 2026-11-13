@@ -9,29 +9,30 @@
  */
 
 import {
-  migrateDnD5e,
-  migratePathfinder2e,
-  migrateCallOfCthulhu,
+  migrateFifthEdition,
+  migrateFantasyD20,
+  migrateHorrorD100,
   migrateLegacySheetFields,
 } from '../sheetFieldMigrations';
+import { RETIRED_GAME_SYSTEM } from '../../__tests__/helpers/retiredGameSystem';
 
 /** Run a transform and return just the sheet. */
 const run = (fn: (s: Record<string, unknown>, n: string[]) => Record<string, unknown>) =>
   (sheet: Record<string, unknown>) => fn(sheet, []);
 
-const dnd = run(migrateDnD5e);
-const pf2e = run(migratePathfinder2e);
-const coc = run(migrateCallOfCthulhu);
+const fifthEdition = run(migrateFifthEdition);
+const fantasyD20 = run(migrateFantasyD20);
+const horrorD100 = run(migrateHorrorD100);
 
-describe('D&D 5e', () => {
+describe('5E', () => {
   it('keeps a hand-typed feature list and appends what was hidden', () => {
-    const out = dnd({
-      featuresAndTraits: ['NakuDama-Amphibious', 'Aspiring Shadow Warrior'],
+    const out = fifthEdition({
+      featuresAndTraits: ['MarshKin-Amphibious', 'Aspiring Shadow Warrior'],
       features: [{ name: 'Second Wind', description: 'Regain 1d10.' }],
     });
 
     expect(out.featuresAndTraits).toEqual([
-      { name: 'NakuDama-Amphibious', description: '' },
+      { name: 'MarshKin-Amphibious', description: '' },
       { name: 'Aspiring Shadow Warrior', description: '' },
       { name: 'Second Wind', description: 'Regain 1d10.' },
     ]);
@@ -39,7 +40,7 @@ describe('D&D 5e', () => {
   });
 
   it('never splits a typed name to invent a description', () => {
-    const out = dnd({ featuresAndTraits: ['Fighting Style: Defense', 'Rage (2/day)'] });
+    const out = fifthEdition({ featuresAndTraits: ['Fighting Style: Defense', 'Rage (2/day)'] });
     expect(out.featuresAndTraits).toEqual([
       { name: 'Fighting Style: Defense', description: '' },
       { name: 'Rage (2/day)', description: '' },
@@ -47,7 +48,7 @@ describe('D&D 5e', () => {
   });
 
   it('folds proficiencies and languages into one list without duplicating', () => {
-    const out = dnd({
+    const out = fifthEdition({
       proficiencies: ['All armor', 'Simple weapons'],
       languages: ['Common', 'Dwarvish'],
       proficienciesAndLanguages: ['All armor'],
@@ -74,7 +75,7 @@ describe('D&D 5e', () => {
    * these entries exist nowhere else afterwards.
    */
   it('keeps a new language when the destination already holds a duplicate', () => {
-    const out = dnd({
+    const out = fifthEdition({
       proficienciesAndLanguages: ['Common', 'common'],
       proficiencies: ['Elvish'],
     });
@@ -84,7 +85,7 @@ describe('D&D 5e', () => {
   });
 
   it('keeps a new language when the destination holds something malformed', () => {
-    const out = dnd({
+    const out = fifthEdition({
       proficienciesAndLanguages: [{ not: 'a string' }, 'Common'],
       languages: ['Draconic'],
     });
@@ -98,7 +99,7 @@ describe('D&D 5e', () => {
   it('keeps a source entry it cannot merge rather than dropping it', () => {
     // A non-string in the source has nowhere to go in a list of strings. It
     // stays put instead of vanishing.
-    const out = dnd({ languages: [{ tongue: 'Druidic' }] });
+    const out = fifthEdition({ languages: [{ tongue: 'Druidic' }] });
     expect(out.languages).toEqual([{ tongue: 'Druidic' }]);
   });
 
@@ -107,7 +108,7 @@ describe('D&D 5e', () => {
     // left the old `languages` beside them. The boxes are what the sheet shows,
     // so a language only in the flat list would be invisible, then gone at the
     // next save, which rebuilds the flat list from the boxes.
-    const out = dnd({
+    const out = fifthEdition({
       proficiencies: { armor: '', weapons: '', tools: '', languages: 'Elvish' },
       languages: ['Common', 'elvish'],
       proficienciesAndLanguages: ['Elvish'],
@@ -123,13 +124,13 @@ describe('D&D 5e', () => {
     // into proficienciesAndLanguages itself on save. Only the flat template
     // array is the migration's business.
     const structured = { armor: 'Plate', weapons: 'Longsword', tools: '', languages: 'Common' };
-    const out = dnd({ proficiencies: structured });
+    const out = fifthEdition({ proficiencies: structured });
     expect(out.proficiencies).toEqual(structured);
   });
 
   it('does not overwrite personality the player has already written, and keeps the older text after it', () => {
     const notes: string[] = [];
-    const out = migrateDnD5e({
+    const out = migrateFifthEdition({
       personalityTraits: 'From the template.',
       ideals: 'Template ideal.',
       bonds: 'Same text.',
@@ -146,25 +147,25 @@ describe('D&D 5e', () => {
   });
 
   it('does not overwrite an allies entry the player has written, and keeps the older text after it', () => {
-    const out = dnd({
+    const out = fifthEdition({
       allies: 'Template allies',
-      alliesAndOrganizations: { name: 'The Harpers', description: 'Old friends' },
+      alliesAndOrganizations: { name: 'The Lamplighters', description: 'Old friends' },
     });
     expect(out.alliesAndOrganizations).toEqual({
-      name: 'The Harpers',
+      name: 'The Lamplighters',
       description: 'Old friends\n\nTemplate allies',
     });
     expect(out).not.toHaveProperty('allies');
   });
 
   it('drops an allies entry the sheet already holds', () => {
-    const out = dnd({ allies: 'The Harpers', alliesAndOrganizations: { name: 'the harpers' } });
-    expect(out.alliesAndOrganizations).toEqual({ name: 'the harpers' });
+    const out = fifthEdition({ allies: 'The Lamplighters', alliesAndOrganizations: { name: 'the lamplighters' } });
+    expect(out.alliesAndOrganizations).toEqual({ name: 'the lamplighters' });
     expect(out).not.toHaveProperty('allies');
   });
 
   it('keeps template features whose description differs from the player\'s', () => {
-    const out = dnd({
+    const out = fifthEdition({
       featuresAndTraits: [{ name: 'Second Wind', description: 'My note.' }],
       features: [{ name: 'Second Wind', description: 'Regain 1d10 + level.' }],
     });
@@ -177,34 +178,34 @@ describe('D&D 5e', () => {
 
   it('keeps a features field holding an entry it cannot read', () => {
     const notes: string[] = [];
-    const out = migrateDnD5e({ features: [{ name: 'Second Wind' }, { description: 'No name, but text.' }] }, notes);
+    const out = migrateFifthEdition({ features: [{ name: 'Second Wind' }, { description: 'No name, but text.' }] }, notes);
     expect(out.featuresAndTraits).toEqual([{ name: 'Second Wind', description: '' }]);
     expect(out.features).toEqual([{ name: 'Second Wind' }, { description: 'No name, but text.' }]);
     expect(notes.join('; ')).toMatch(/kept 'features'/);
   });
 
   it('leaves a sheet with nothing to move untouched', () => {
-    const sheet = { characterName: 'Nakudama', level: 3 };
-    expect(dnd(sheet)).toEqual(sheet);
+    const sheet = { characterName: 'Marshkin', level: 3 };
+    expect(fifthEdition(sheet)).toEqual(sheet);
   });
 
   it('is idempotent', () => {
-    const once = dnd({
-      featuresAndTraits: ['NakuDama-Frog Leap'],
+    const once = fifthEdition({
+      featuresAndTraits: ['MarshKin-Frog Leap'],
       features: [{ name: 'Second Wind', description: 'Regain 1d10.' }],
       proficiencies: ['All armor'],
       languages: ['Common'],
       personalityTraits: 'Brave.',
       allies: 'The unit',
     });
-    expect(dnd(once)).toEqual(once);
-    expect(dnd(dnd(once))).toEqual(once);
+    expect(fifthEdition(once)).toEqual(once);
+    expect(fifthEdition(fifthEdition(once))).toEqual(once);
   });
 });
 
-describe('Pathfinder 2e', () => {
+describe('Fantasy d20', () => {
   it('moves attacks to strikes, mapping the melee/ranged word to type', () => {
-    const out = pf2e({
+    const out = fantasyD20({
       attacks: [
         { name: 'Warhammer', range: 'melee', attackBonus: 7, damageRoll: '1d8+3' },
         { name: 'Crossbow', range: 'ranged', attackBonus: 5, damageRoll: '1d8' },
@@ -221,7 +222,7 @@ describe('Pathfinder 2e', () => {
   it('keeps the strikes the player already has and adds the template attacks after them', () => {
     const notes: string[] = [];
     const mine = [{ name: 'Longsword', type: 'melee', attackBonus: 8 }];
-    const out = migratePathfinder2e({
+    const out = migrateFantasyD20({
       strikes: mine,
       attacks: [
         { name: 'longsword', range: 'melee', attackBonus: 7 },
@@ -236,20 +237,20 @@ describe('Pathfinder 2e', () => {
   it('keeps attacks it cannot move', () => {
     const notes: string[] = [];
     const attacks = [{ name: 'Warhammer', range: 'melee' }, 'Kick', { damageRoll: '1d4' }];
-    const out = migratePathfinder2e({ strikes: [{ name: 'Fist' }], attacks }, notes);
+    const out = migrateFantasyD20({ strikes: [{ name: 'Fist' }], attacks }, notes);
     expect(out.strikes).toEqual([{ name: 'Fist' }, { name: 'Warhammer', type: 'melee' }]);
     expect(out.attacks).toEqual(attacks);
     expect(notes.join('; ')).toMatch(/kept 'attacks'/);
   });
 
   it('keeps a specialAbilities field that is not a list', () => {
-    const out = pf2e({ specialAbilities: 'Shield Block' });
+    const out = fantasyD20({ specialAbilities: 'Shield Block' });
     expect(out.specialAbilities).toBe('Shield Block');
   });
 
   it('adds a top-level sense, resistance or immunity the nested list lacks before dropping it', () => {
     const notes: string[] = [];
-    const out = migratePathfinder2e({
+    const out = migrateFantasyD20({
       senses: ['Darkvision (60 feet)', 'darkvision'],
       resistances: ['cold 5'],
       hp: { maximum: 21, resistances: [], immunities: [] },
@@ -262,27 +263,27 @@ describe('Pathfinder 2e', () => {
   });
 
   it('keeps a top-level list with nowhere to go', () => {
-    const out = pf2e({ senses: ['Darkvision'] });
+    const out = fantasyD20({ senses: ['Darkvision'] });
     expect(out.senses).toEqual(['Darkvision']);
   });
 
   it('moves special abilities into class features, keeping descriptions', () => {
-    const out = pf2e({
+    const out = fantasyD20({
       specialAbilities: [
-        { name: 'Attack of Opportunity', description: 'Strike a creature that moves past.' },
+        { name: 'Opening Strike', description: 'Strike a creature that moves past.' },
       ],
       classFeatures: ['Bravery'],
     });
 
     expect(out.classFeatures).toEqual([
       { name: 'Bravery', description: '' },
-      { name: 'Attack of Opportunity', description: 'Strike a creature that moves past.' },
+      { name: 'Opening Strike', description: 'Strike a creature that moves past.' },
     ]);
     expect(out).not.toHaveProperty('specialAbilities');
   });
 
   it('adds only the special abilities class features do not already hold', () => {
-    const out = pf2e({
+    const out = fantasyD20({
       specialAbilities: [{ name: 'Shield Block', description: '' }, { name: 'Bravery', description: 'Will save +1.' }],
       classFeatures: [{ name: 'Shield Block', description: 'Mine.' }, 'Bravery'],
     });
@@ -290,7 +291,7 @@ describe('Pathfinder 2e', () => {
   });
 
   it('drops the stray top-level copies but keeps the nested ones', () => {
-    const out = pf2e({
+    const out = fantasyD20({
       senses: ['Darkvision'],
       resistances: ['fire 5'],
       immunities: ['poison'],
@@ -306,67 +307,67 @@ describe('Pathfinder 2e', () => {
   });
 
   it('is idempotent', () => {
-    const once = pf2e({
+    const once = fantasyD20({
       attacks: [{ name: 'Warhammer', range: 'melee' }],
       specialAbilities: [{ name: 'Shield Block', description: 'Prevent damage.' }],
       senses: ['Darkvision'],
     });
-    expect(pf2e(once)).toEqual(once);
+    expect(fantasyD20(once)).toEqual(once);
   });
 });
 
-describe('Call of Cthulhu 7e', () => {
+describe('Horror d100', () => {
   it('moves player to playerName', () => {
-    const out = coc({ player: 'Tyke' });
+    const out = horrorD100({ player: 'Tyke' });
     expect(out.playerName).toBe('Tyke');
     expect(out).not.toHaveProperty('player');
   });
 
   it('does not overwrite a playerName that is already set, and keeps the other name', () => {
     const notes: string[] = [];
-    const out = migrateCallOfCthulhu({ player: 'Old', playerName: 'Current' }, notes);
+    const out = migrateHorrorD100({ player: 'Old', playerName: 'Current' }, notes);
     expect(out.playerName).toBe('Current');
     expect(out.player).toBe('Old');
     expect(notes.join('; ')).toMatch(/kept 'player'/);
   });
 
   it('drops a player that matches playerName', () => {
-    const out = coc({ player: 'tyke', playerName: 'Tyke' });
+    const out = horrorD100({ player: 'tyke', playerName: 'Tyke' });
     expect(out).not.toHaveProperty('player');
   });
 
   it('drops a blank player rather than writing an empty name', () => {
     // The schema requires a non-empty name when the field is present, so an
     // empty string here would make the sheet fail to save.
-    const out = coc({ player: '' });
+    const out = horrorD100({ player: '' });
     expect(out).not.toHaveProperty('player');
     expect(out).not.toHaveProperty('playerName');
   });
 
   it('is idempotent', () => {
-    const once = coc({ player: 'Tyke' });
-    expect(coc(once)).toEqual(once);
+    const once = horrorD100({ player: 'Tyke' });
+    expect(horrorD100(once)).toEqual(once);
   });
 });
 
 describe('migrateLegacySheetFields', () => {
   it('returns a sheet with no older fields as it was sent', () => {
     const sheet = { characterName: 'Aldra', featuresAndTraits: ['  Second Wind  '] };
-    expect(migrateLegacySheetFields('DND_5E', sheet)).toBe(sheet);
+    expect(migrateLegacySheetFields('FIFTH_EDITION', sheet)).toBe(sheet);
   });
 
   it('moves the older fields of the system it is given', () => {
-    expect(migrateLegacySheetFields('CALL_OF_CTHULHU_7E', { player: 'Pat' })).toEqual({ playerName: 'Pat' });
-    expect(migrateLegacySheetFields('PATHFINDER_2E', { attacks: [{ name: 'Bow', range: 'ranged' }] })).toEqual({
+    expect(migrateLegacySheetFields('HORROR_D100', { player: 'Pat' })).toEqual({ playerName: 'Pat' });
+    expect(migrateLegacySheetFields('FANTASY_D20', { attacks: [{ name: 'Bow', range: 'ranged' }] })).toEqual({
       strikes: [{ name: 'Bow', type: 'ranged' }],
     });
   });
 
   it('leaves anything that is not a sheet, or has no system, alone', () => {
-    expect(migrateLegacySheetFields('DND_5E', null)).toBeNull();
-    expect(migrateLegacySheetFields('DND_5E', ['features'])).toEqual(['features']);
+    expect(migrateLegacySheetFields('FIFTH_EDITION', null)).toBeNull();
+    expect(migrateLegacySheetFields('FIFTH_EDITION', ['features'])).toEqual(['features']);
     const sheet = { player: 'Pat' };
     expect(migrateLegacySheetFields(null, sheet)).toBe(sheet);
-    expect(migrateLegacySheetFields('SHADOWRUN_6E', sheet)).toBe(sheet);
+    expect(migrateLegacySheetFields(RETIRED_GAME_SYSTEM, sheet)).toBe(sheet);
   });
 });

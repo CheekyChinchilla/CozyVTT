@@ -3,7 +3,7 @@
  *
  * Notes a player keeps for themselves, written in Markdown. Private is the
  * whole feature: unlike `Session.notes`, which the campaign reads together, and
- * unlike a secret dice roll, which the DM sees so disputes can be settled,
+ * unlike a secret dice roll, which the GM sees so disputes can be settled,
  * nothing about a personal note needs another pair of eyes.
  *
  * So the tests that matter most are the negative ones. Every route scopes its
@@ -45,13 +45,13 @@ interface NoteSummary {
 }
 
 describe('personal notes', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let strangerId: string;
   let campaignId: string;
   let otherCampaignId: string;
 
-  let dm: ReturnType<typeof request.agent>;
+  let gm: ReturnType<typeof request.agent>;
   let player: ReturnType<typeof request.agent>;
   let stranger: ReturnType<typeof request.agent>;
 
@@ -64,27 +64,27 @@ describe('personal notes', () => {
 
   beforeAll(async () => {
     const stamp = Date.now();
-    const dmEmail = `pn_dm_${stamp}@test.invalid`;
+    const gmEmail = `pn_dm_${stamp}@test.invalid`;
     const playerEmail = `pn_pl_${stamp}@test.invalid`;
     const strangerEmail = `pn_st_${stamp}@test.invalid`;
 
-    dmId = (await createTestUser({ email: dmEmail, isApproved: true })).id;
+    gmId = (await createTestUser({ email: gmEmail, isApproved: true })).id;
     playerId = (await createTestUser({ email: playerEmail, isApproved: true })).id;
     strangerId = (await createTestUser({ email: strangerEmail, isApproved: true })).id;
 
-    campaignId = (await createTestCampaign(dmId, { name: `Notes ${stamp}` })).id;
-    otherCampaignId = (await createTestCampaign(dmId, { name: `Other ${stamp}` })).id;
+    campaignId = (await createTestCampaign(gmId, { name: `Notes ${stamp}` })).id;
+    otherCampaignId = (await createTestCampaign(gmId, { name: `Other ${stamp}` })).id;
 
     await prisma.campaignMembership.createMany({
       data: [
-        { campaignId, userId: dmId, role: 'DM', characterIds: [] },
+        { campaignId, userId: gmId, role: 'GM', characterIds: [] },
         { campaignId, userId: playerId, role: 'PLAYER', characterIds: [] },
-        { campaignId: otherCampaignId, userId: dmId, role: 'DM', characterIds: [] },
+        { campaignId: otherCampaignId, userId: gmId, role: 'GM', characterIds: [] },
         { campaignId: otherCampaignId, userId: playerId, role: 'PLAYER', characterIds: [] },
       ],
     });
 
-    dm = await login(dmEmail);
+    gm = await login(gmEmail);
     player = await login(playerEmail);
     stranger = await login(strangerEmail);
   });
@@ -96,9 +96,9 @@ describe('personal notes', () => {
   });
 
   afterAll(async () => {
-    await prisma.personalNote.deleteMany({ where: { userId: { in: [dmId, playerId, strangerId] } } });
+    await prisma.personalNote.deleteMany({ where: { userId: { in: [gmId, playerId, strangerId] } } });
     await cleanupCampaigns([campaignId, otherCampaignId]);
-    await cleanupUsers([dmId, playerId, strangerId]);
+    await cleanupUsers([gmId, playerId, strangerId]);
     await prisma.$disconnect();
   });
 
@@ -180,34 +180,34 @@ describe('personal notes', () => {
       noteId = made.body.note.id;
     });
 
-    // The DM runs the campaign; that does not extend to reading a player's own
-    // notes. A secret roll is DM-visible because disputes need settling —
+    // The GM runs the campaign; that does not extend to reading a player's own
+    // notes. A secret roll is GM-visible because disputes need settling —
     // nothing here does.
-    it('the DM of the campaign cannot read a player\'s note', async () => {
-      const res = await dm.get(`${notesUrl()}/${noteId}`);
+    it('the GM of the campaign cannot read a player\'s note', async () => {
+      const res = await gm.get(`${notesUrl()}/${noteId}`);
       expect(res.status).toBe(404);
       expect(JSON.stringify(res.body)).not.toContain('secret plan');
     });
 
-    it('the DM cannot update it', async () => {
-      expect((await dm.put(`${notesUrl()}/${noteId}`).send({ content: 'tampered' })).status).toBe(404);
+    it('the GM cannot update it', async () => {
+      expect((await gm.put(`${notesUrl()}/${noteId}`).send({ content: 'tampered' })).status).toBe(404);
       const still = await prisma.personalNote.findUnique({ where: { id: noteId } });
       expect(still?.content).toBe('my secret plan');
     });
 
-    it('the DM cannot delete it', async () => {
-      expect((await dm.delete(`${notesUrl()}/${noteId}`)).status).toBe(404);
+    it('the GM cannot delete it', async () => {
+      expect((await gm.delete(`${notesUrl()}/${noteId}`)).status).toBe(404);
       expect(await prisma.personalNote.findUnique({ where: { id: noteId } })).not.toBeNull();
     });
 
-    it("the DM's own list does not include it", async () => {
-      const res = await dm.get(notesUrl());
+    it("the GM's own list does not include it", async () => {
+      const res = await gm.get(notesUrl());
       expect((res.body.notes as NoteSummary[]).some((n) => n.id === noteId)).toBe(false);
     });
 
     // 404 rather than 403 on purpose: a 403 would confirm the id exists.
     it('answers 404 rather than 403, so existence is not confirmed', async () => {
-      expect((await dm.get(`${notesUrl()}/${noteId}`)).status).toBe(404);
+      expect((await gm.get(`${notesUrl()}/${noteId}`)).status).toBe(404);
     });
 
     it('someone outside the campaign is refused outright', async () => {

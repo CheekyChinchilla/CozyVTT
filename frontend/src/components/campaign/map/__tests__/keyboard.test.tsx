@@ -217,7 +217,7 @@ describe("Mapmaker's tool keys", () => {
   it('are each listed in the shortcuts window, and no two tools share one', () => {
     const tools = Object.keys(PAINT_TOOL_KEYS) as PaintTool[];
     for (const tool of tools) {
-      expect(MAP_SHORTCUTS.filter((row) => row.who === 'dm' && row.keys.length === 1 && row.keys[0] === PAINT_TOOL_KEYS[tool] && row.does.endsWith('while Mapmaker is on'))).toHaveLength(1);
+      expect(MAP_SHORTCUTS.filter((row) => row.who === 'gm' && row.keys.length === 1 && row.keys[0] === PAINT_TOOL_KEYS[tool] && row.does.endsWith('while Mapmaker is on'))).toHaveLength(1);
     }
     expect(new Set(tools.map((tool) => PAINT_TOOL_KEYS[tool])).size).toBe(tools.length);
   });

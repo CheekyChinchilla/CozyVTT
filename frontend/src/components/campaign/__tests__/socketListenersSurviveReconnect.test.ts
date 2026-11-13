@@ -6,7 +6,7 @@
  * server-side disconnect), and puts back only the listeners registered
  * through its own table. A listener a component bound straight to
  * `getSocket()` died with the old socket and was never rebound: after any
- * such reconnect a player stopped receiving map changes, so the DM's Hide and
+ * such reconnect a player stopped receiving map changes, so the GM's Hide and
  * Obscure never reached them, and spirit-plane and vibe changes went the same
  * way.
  *
@@ -113,7 +113,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
   const value = {
     currentMap: MAP, setCurrentMap: noop, ...mapActions, userRole: 'PLAYER', campaign, updateCampaignSpiritLayer: noop,
     viewedMap: MAP,
-    dmViewBothPlanes: false, playerSpiritVisible: false, setPlayerSpiritVisible: noop, activeVibeEffect: null,
+    gmViewBothPlanes: false, playerSpiritVisible: false, setPlayerSpiritVisible: noop, activeVibeEffect: null,
     updateVibe: noop, activeAtmosphereEffect: null, characterHpCache: {},
   };
   return { useCampaign: () => value };

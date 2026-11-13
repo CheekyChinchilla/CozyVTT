@@ -29,9 +29,9 @@ import { WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE } from '../../valid
 jest.setTimeout(30000);
 
 const app = createTestApp();
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 // The adds tell open pages of each change, so they need a socket server.
 let server: WsTestServer;
 
@@ -89,11 +89,11 @@ async function changeMapWhileWaiting(
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
   const user = await createTestUser({ email: `addslock-${stamp}@test.cozyvtt.local` });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Adds under lock ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Adds under lock ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
@@ -101,18 +101,18 @@ afterAll(async () => {
   await server?.close();
   await prisma.map.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
 // At x = 10,000 px a wall or light fits the margin at a 50 px grid (26,000)
 // and not at a 10 px one (5,200).
-describe('an add while the DM cuts the grid size from 50 to 10', () => {
+describe('an add while the GM cuts the grid size from 50 to 10', () => {
   it('refuses a wall the new grid puts too far off the map', async () => {
     const mapId = await newMap();
     const res = await changeMapWhileWaiting(
       mapId,
-      () => dm.post(`${base(mapId)}/walls`).send({ x1: 100, y1: 100, x2: 10000, y2: 100, type: 'wall' }).then((r) => r),
+      () => gm.post(`${base(mapId)}/walls`).send({ x1: 100, y1: 100, x2: 10000, y2: 100, type: 'wall' }).then((r) => r),
       { gridSize: 10 }
     );
     expect(res.status).toBe(400);
@@ -124,7 +124,7 @@ describe('an add while the DM cuts the grid size from 50 to 10', () => {
     const mapId = await newMap();
     const res = await changeMapWhileWaiting(
       mapId,
-      () => dm.post(`${base(mapId)}/lights`).send({ x: 10000, y: 100, brightRadius: 2, dimRadius: 4, color: '#ffcc66', enabled: true }).then((r) => r),
+      () => gm.post(`${base(mapId)}/lights`).send({ x: 10000, y: 100, brightRadius: 2, dimRadius: 4, color: '#ffcc66', enabled: true }).then((r) => r),
       { gridSize: 10 }
     );
     expect(res.status).toBe(400);
@@ -133,12 +133,12 @@ describe('an add while the DM cuts the grid size from 50 to 10', () => {
   });
 });
 
-describe('a token added while the DM narrows the map from 20 squares to 5', () => {
+describe('a token added while the GM narrows the map from 20 squares to 5', () => {
   it('is refused past the new edge', async () => {
     const mapId = await newMap();
     const res = await changeMapWhileWaiting(
       mapId,
-      () => dm.post(`${base(mapId)}/tokens`).send({ name: 'Ogre', position: { x: 12, y: 1 } }).then((r) => r),
+      () => gm.post(`${base(mapId)}/tokens`).send({ name: 'Ogre', position: { x: 12, y: 1 } }).then((r) => r),
       { width: 5 }
     );
     expect(res.status).toBe(400);
@@ -150,7 +150,7 @@ describe('a token added while the DM narrows the map from 20 squares to 5', () =
     const mapId = await newMap();
     const res = await changeMapWhileWaiting(
       mapId,
-      () => dm.post(`${base(mapId)}/tokens`).send({ name: 'Ogre', position: { x: 4, y: 1 }, size: { width: 2, height: 2 } }).then((r) => r),
+      () => gm.post(`${base(mapId)}/tokens`).send({ name: 'Ogre', position: { x: 4, y: 1 }, size: { width: 2, height: 2 } }).then((r) => r),
       { width: 5 }
     );
     expect(res.status).toBe(201);

@@ -91,7 +91,7 @@ describe('saving a map with no drawn picture', () => {
   });
 
   it('deletes the new upload again when the map will not take it, and says why', async () => {
-    const refused = { isAxiosError: true, response: { status: 403, data: { message: 'Only the DM can do that' } } };
+    const refused = { isAxiosError: true, response: { status: 403, data: { message: 'Only the GM can do that' } } };
     steps.pointMapAt = vi.fn(async () => { throw refused; });
     await expect(savePaint({ ...steps, previous: '' })).rejects.toBe(refused);
     expect(order).toEqual(['png', 'upload', 'delete new-picture']);

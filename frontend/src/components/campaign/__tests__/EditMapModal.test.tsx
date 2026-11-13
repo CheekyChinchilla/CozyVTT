@@ -1,11 +1,11 @@
 /**
- * Edit Map keeps the map's spirit layer picture unless the DM changes it.
+ * Edit Map keeps the map's spirit layer picture unless the GM changes it.
  *
  * The dialog is opened from the Map Library's list. When that list carried
  * no spirit layer picture, the dialog showed none and sent
  * `spiritLayerUrl: null` with every save, so changing only a map's name
- * removed its spirit layer. It sends only what the DM changed; and since the
- * DM's list carries the picture, it shows it without reading the whole map,
+ * removed its spirit layer. It sends only what the GM changed; and since the
+ * GM's list carries the picture, it shows it without reading the whole map,
  * tokens, walls and fog included, for that one field.
  */
 
@@ -43,7 +43,7 @@ import EditMapModal from '../EditMapModal';
 
 const SPIRIT = 'Spirit Layer Image (optional)';
 
-/** A map as the Map Library's list returns it to the DM. */
+/** A map as the Map Library's list returns it to the GM. */
 const listed = {
   id: 'map-1',
   name: 'The Sunken Crown',
@@ -106,7 +106,7 @@ describe('Edit Map and the spirit layer', () => {
     expect(sent()).not.toHaveProperty('spiritLayerUrl');
   });
 
-  it('clears the spirit layer when the DM clears it', async () => {
+  it('clears the spirit layer when the GM clears it', async () => {
     open();
     await screen.findByText(`${SPIRIT}: spirit-asset`);
     fireEvent.click(screen.getByText(`Clear ${SPIRIT}`));
@@ -116,7 +116,7 @@ describe('Edit Map and the spirit layer', () => {
     expect(sent()).toEqual({ spiritLayerUrl: null });
   });
 
-  it('sends the picture the DM picks', async () => {
+  it('sends the picture the GM picks', async () => {
     open();
     await screen.findByText(`${SPIRIT}: spirit-asset`);
     fireEvent.click(screen.getByText(`Pick ${SPIRIT}`));
@@ -126,7 +126,7 @@ describe('Edit Map and the spirit layer', () => {
     expect(sent()).toEqual({ spiritLayerUrl: 'picked-asset' });
   });
 
-  it('sends the fields the DM changed, and only those', async () => {
+  it('sends the fields the GM changed, and only those', async () => {
     open();
     await screen.findByText(`${SPIRIT}: spirit-asset`);
     fireEvent.click(screen.getByLabelText('Fog of war on this map'));
@@ -199,5 +199,17 @@ describe('Edit Map\'s size boxes', () => {
     for (const name of ['Width (grid squares)', 'Height (grid squares)', 'Grid Size (px/square)']) {
       expect(screen.getByRole('spinbutton', { name })).toBeInTheDocument();
     }
+  });
+});
+
+describe('Edit Map and the diagonal rules', () => {
+  it('names the game system whose default the flat rule is by its short name', async () => {
+    open();
+    expect(await screen.findByText('5E default')).toBeInTheDocument();
+  });
+
+  it('names the game system whose default the alternating rule is by its short name', async () => {
+    open();
+    expect(await screen.findByText('ORC d20 default')).toBeInTheDocument();
   });
 });

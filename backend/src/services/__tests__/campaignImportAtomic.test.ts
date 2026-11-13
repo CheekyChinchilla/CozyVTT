@@ -43,11 +43,11 @@ async function archive(maps: object[]): Promise<string> {
       name: 'manifest.json',
       data: JSON.stringify({
         formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT test', campaignName: 'Atomic',
-        gameSystem: 'DND_5E', mapCount: maps.length, tokenCount: maps.length, creatureCount: 0, tokenTemplateCount: 0,
+        gameSystem: 'FIFTH_EDITION', mapCount: maps.length, tokenCount: maps.length, creatureCount: 0, tokenTemplateCount: 0,
         assetCount: 1, includesAudio: false, totalSizeBytes: PNG.length,
       }),
     },
-    { name: 'campaign.json', data: JSON.stringify({ name: 'Atomic', gameSystem: 'DND_5E' }) },
+    { name: 'campaign.json', data: JSON.stringify({ name: 'Atomic', gameSystem: 'FIFTH_EDITION' }) },
     {
       name: 'assets/asset-manifest.json',
       data: JSON.stringify({ [PICTURE_ID]: { originalName: 'cave.png', mimeType: 'image/png', type: 'MAP', fileSize: PNG.length } }),
@@ -139,7 +139,7 @@ describe('a campaign import whose pictures cannot be moved into place', () => {
         name: 'manifest.json',
         data: JSON.stringify({
           formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT test', campaignName: 'Moved',
-          gameSystem: 'DND_5E', mapCount: 1, tokenCount: 1, creatureCount: 0, tokenTemplateCount: 0, assetCount: 2,
+          gameSystem: 'FIFTH_EDITION', mapCount: 1, tokenCount: 1, creatureCount: 0, tokenTemplateCount: 0, assetCount: 2,
           includesAudio: false, totalSizeBytes: PNG.length * 2,
         }),
       },

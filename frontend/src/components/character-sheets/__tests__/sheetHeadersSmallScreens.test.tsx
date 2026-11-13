@@ -9,23 +9,25 @@
  * `sm` the Edit button now sits in the flow above the name, the right-hand
  * block goes under it, the editors' portrait is 96 px above the name with its
  * caption under it, and lines of details wrap. From `sm` up the classes that
- * drew the old layout are all still there, behind `sm:`. jsdom evaluates no
- * media query, so the classes are asserted; the matrix shows the layout.
+ * drew the old layout are all still there, behind `sm:`, except the
+ * caption's: it stays in the flow under the portrait at every width. jsdom
+ * evaluates no media query, so the classes are asserted; the matrix shows the
+ * layout.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { Character } from '@/types';
-import { DnD5eCharacterView } from '../dnd5e/DnD5eCharacterView';
-import { DnD5eCharacterEditor } from '../dnd5e/DnD5eCharacterEditor';
-import { Pathfinder2eCharacterView } from '../pathfinder2e/Pathfinder2eCharacterView';
-import { Pathfinder2eCharacterEditor } from '../pathfinder2e/Pathfinder2eCharacterEditor';
-import { CallOfCthulhu7eCharacterView } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterView';
-import { CallOfCthulhu7eCharacterEditor } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
+import { FifthEditionCharacterView } from '../fifth-edition/FifthEditionCharacterView';
+import { FifthEditionCharacterEditor } from '../fifth-edition/FifthEditionCharacterEditor';
+import { FantasyD20CharacterView } from '../fantasy-d20/FantasyD20CharacterView';
+import { FantasyD20CharacterEditor } from '../fantasy-d20/FantasyD20CharacterEditor';
+import { HorrorD100CharacterView } from '../horror-d100/HorrorD100CharacterView';
+import { HorrorD100CharacterEditor } from '../horror-d100/HorrorD100CharacterEditor';
 import { FlexibleCharacterSheetEdit } from '../flexible/FlexibleCharacterSheetEdit';
 import { FlexibleCharacterSheetView } from '../flexible/FlexibleCharacterSheetView';
-import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
-import { cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
+import { fifthEditionCharacter } from '../fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
+import { horrorD100Character } from '../horror-d100/__tests__/sheetFixture';
 
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
@@ -46,9 +48,9 @@ const stacksOnAPhone = (row: Element) => {
 };
 
 describe.each([
-  ['D&D 5e', () => render(<DnD5eCharacterView character={dnd5eCharacter()} onEdit={vi.fn()} />), 'Experience'],
-  ['Pathfinder 2e', () => render(<Pathfinder2eCharacterView character={pf2eCharacter()} onEdit={vi.fn()} />), 'Experience Points'],
-  ['Call of Cthulhu', () => render(<CallOfCthulhu7eCharacterView character={cocCharacter({ playerName: 'Mara' })} onEdit={vi.fn()} />), 'Player'],
+  ['5E', () => render(<FifthEditionCharacterView character={fifthEditionCharacter()} onEdit={vi.fn()} />), 'Experience'],
+  ['Fantasy d20', () => render(<FantasyD20CharacterView character={fantasyD20Character()} onEdit={vi.fn()} />), 'Experience Points'],
+  ['Horror d100', () => render(<HorrorD100CharacterView character={horrorD100Character({ playerName: 'Mara' })} onEdit={vi.fn()} />), 'Player'],
 ])('the %s read-only header', (_system, show, aside) => {
   it('puts Edit in the flow on a phone and in the corner from sm up', () => {
     show();
@@ -67,22 +69,22 @@ describe.each([
 });
 
 describe('the read-only headers\' lines of details', () => {
-  it('wrap on the D&D 5e sheet', () => {
-    render(<DnD5eCharacterView character={dnd5eCharacter({ alignment: 'Lawful Good', background: 'Sage' })} />);
-    expect(classes(screen.getByText('• Sage').parentElement)).toContain('flex-wrap');
+  it('wrap on the 5E sheet', () => {
+    render(<FifthEditionCharacterView character={fifthEditionCharacter({ alignment: 'Lawful Good', background: 'Acolyte' })} />);
+    expect(classes(screen.getByText('• Acolyte').parentElement)).toContain('flex-wrap');
   });
 
-  it('wrap on the Call of Cthulhu sheet', () => {
-    render(<CallOfCthulhu7eCharacterView character={cocCharacter({ occupation: 'Antiquarian', era: '1920s', age: 41, sex: 'F', birthplace: 'Arkham' })} />);
+  it('wrap on the Horror d100 sheet', () => {
+    render(<HorrorD100CharacterView character={horrorD100Character({ profession: 'Archivist', era: '1920s', age: 41, sex: 'F', birthplace: 'Fallowmere' })} />);
     expect(classes(screen.getByText('• 1920s').parentElement)).toContain('flex-wrap');
-    expect(classes(screen.getByText('• Born in Arkham').parentElement)).toContain('flex-wrap');
+    expect(classes(screen.getByText('• Born in Fallowmere').parentElement)).toContain('flex-wrap');
   });
 });
 
 describe.each([
-  ['D&D 5e', () => render(<DnD5eCharacterEditor character={dnd5eCharacter()} onSave={noop} onCancel={vi.fn()} />), 'Character name', 'Experience Points', true],
-  ['Pathfinder 2e', () => render(<Pathfinder2eCharacterEditor character={pf2eCharacter()} onSave={noop} onCancel={vi.fn()} />), 'Character name', 'Experience Points', true],
-  ['Call of Cthulhu', () => render(<CallOfCthulhu7eCharacterEditor character={cocCharacter()} onSave={noop} onCancel={vi.fn()} />), 'Investigator name', null, false],
+  ['5E', () => render(<FifthEditionCharacterEditor character={fifthEditionCharacter()} onSave={noop} onCancel={vi.fn()} />), 'Character name', 'Experience Points', true],
+  ['Fantasy d20', () => render(<FantasyD20CharacterEditor character={fantasyD20Character()} onSave={noop} onCancel={vi.fn()} />), 'Character name', 'Experience Points', true],
+  ['Horror d100', () => render(<HorrorD100CharacterEditor character={horrorD100Character()} onSave={noop} onCancel={vi.fn()} />), 'Character name', null, false],
 ] as const)('the %s editor header', (_system, show, name, aside, bigPortrait) => {
   const picture = (container: HTMLElement) => {
     const input = container.querySelector('input[type="file"]');
@@ -112,20 +114,12 @@ describe.each([
     });
   }
 
-  it('puts the caption under the portrait in the flow on a phone', () => {
-    show();
-    // Placed by the box holding the notes under the portrait (PortraitNotes).
-    const caption = classes(screen.getByText('Saves as personal token').parentElement);
-    expect(caption).not.toContain('absolute');
-    expect(caption).not.toContain('whitespace-nowrap');
-    expect(caption).toEqual(expect.arrayContaining(['sm:absolute', 'sm:top-full', 'sm:whitespace-nowrap']));
-  });
 });
 
-describe('the Call of Cthulhu editor header', () => {
+describe('the Horror d100 editor header', () => {
   it('stacks its boxes on a phone', () => {
-    render(<CallOfCthulhu7eCharacterEditor character={cocCharacter()} onSave={noop} onCancel={vi.fn()} />);
-    expect(classes(screen.getByLabelText('Occupation').parentElement)).toEqual(expect.arrayContaining(['grid-cols-1', 'sm:grid-cols-3']));
+    render(<HorrorD100CharacterEditor character={horrorD100Character()} onSave={noop} onCancel={vi.fn()} />);
+    expect(classes(screen.getByLabelText('Profession').parentElement)).toEqual(expect.arrayContaining(['grid-cols-1', 'sm:grid-cols-3']));
     expect(classes(screen.getByLabelText('Age').parentElement)).toEqual(expect.arrayContaining(['grid-cols-2', 'sm:grid-cols-4']));
   });
 });
@@ -142,23 +136,48 @@ describe('the flexible read-only header', () => {
   });
 });
 
-describe('the flexible editor header', () => {
-  const flexible = {
-    id: 'flex-1', userId: 'user-1', name: 'Freeform', gameSystem: null, campaignId: null, tokenImageUrl: null,
-    data: { sections: [] }, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
-  } as unknown as Character;
+/** A flexible character in no campaign, for its editor. */
+const freeform = {
+  id: 'flex-1', userId: 'user-1', name: 'Freeform', gameSystem: null, campaignId: null, tokenImageUrl: null,
+  data: { sections: [] }, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+} as unknown as Character;
 
+describe('the flexible editor header', () => {
   it('puts Save and Cancel under the name where they do not fit beside it', () => {
-    render(<FlexibleCharacterSheetEdit character={flexible} onSave={noop} onCancel={vi.fn()} />);
+    render(<FlexibleCharacterSheetEdit character={freeform} onSave={noop} onCancel={vi.fn()} />);
     const row = around(screen.getByRole('heading', { name: /Editing:/ }), screen.getByRole('button', { name: 'Cancel' }));
     expect(classes(row)).toEqual(expect.arrayContaining(['flex', 'flex-wrap']));
   });
+});
 
-  it('puts the caption under the portrait in the flow on a phone', () => {
-    render(<FlexibleCharacterSheetEdit character={flexible} onSave={noop} onCancel={vi.fn()} />);
-    // Placed by the box holding the notes under the portrait (PortraitNotes).
-    const caption = classes(screen.getByText('Saves as personal token').parentElement);
-    expect(caption).not.toContain('absolute');
-    expect(caption).toEqual(expect.arrayContaining(['sm:absolute', 'sm:top-full', 'sm:whitespace-nowrap']));
+/** The utility applies at some width: bare, or behind any breakpoint. */
+const atSomeWidth = (list: string[], utility: string) => list.some((c) => c === utility || c.endsWith(`:${utility}`));
+/** The width classes, bare and behind a breakpoint, such as `w-24 sm:w-40`. */
+const widths = (element: Element | null) => classes(element).filter((c) => /^(?:[a-z0-9-]+:)?w-/.test(c)).sort();
+
+describe.each([
+  ['5E', () => render(<FifthEditionCharacterEditor character={fifthEditionCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+  ['Fantasy d20', () => render(<FantasyD20CharacterEditor character={fantasyD20Character()} onSave={noop} onCancel={vi.fn()} />)],
+  ['Horror d100', () => render(<HorrorD100CharacterEditor character={horrorD100Character()} onSave={noop} onCancel={vi.fn()} />)],
+  ['Flexible', () => render(<FlexibleCharacterSheetEdit character={freeform} onSave={noop} onCancel={vi.fn()} />)],
+] as const)('the %s editor\'s portrait caption', (_system, show) => {
+  // From sm up the caption was hung under the portrait out of the flow, on
+  // one line, and ran into the field beside it. jsdom lays nothing out, so
+  // the classes that decide its width are asserted; the browser shows it.
+  it('stays in the portrait\'s column at every width, as wide as the portrait, and wraps', () => {
+    show();
+    // The box holding the notes under the portrait (PortraitNotes).
+    const box = screen.getByText('Saves as personal token').parentElement;
+    const column = box?.parentElement ?? null;
+    if (!column) throw new Error('no portrait column');
+    expect(column.querySelector('input[type="file"]')).not.toBeNull();
+    const circle = column.querySelector('label > :first-child');
+    expect(widths(column).length).toBeGreaterThan(0);
+    expect(widths(column)).toEqual(widths(circle));
+    for (const list of [classes(box), classes(column)]) {
+      for (const utility of ['absolute', 'fixed', 'whitespace-nowrap', 'w-max', 'w-fit']) {
+        expect(atSomeWidth(list, utility), `${utility} in "${list.join(' ')}"`).toBe(false);
+      }
+    }
   });
 });

@@ -21,7 +21,7 @@ const socket = {
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'c1', memberships: [] }, currentMap: null, viewedMap: null, userRole: 'DM' }),
+  useCampaign: () => ({ campaign: { id: 'c1', memberships: [] }, currentMap: null, viewedMap: null, userRole: 'GM' }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm' } }) }));
@@ -33,7 +33,7 @@ vi.mock('@/services/api', () => {
 import CampaignRoster from '../CampaignRoster';
 
 const member = (userId: string, userName: string, hp: number | null = null): RosterMember => ({
-  userId, userName, userAvatar: null, role: userId === 'dm' ? CampaignRole.DM : CampaignRole.PLAYER, joinedAt: '2026-10-01T00:00:00.000Z',
+  userId, userName, userAvatar: null, role: userId === 'dm' ? CampaignRole.GM : CampaignRole.PLAYER, joinedAt: '2026-10-01T00:00:00.000Z',
   characters: hp === null ? [] : [{ id: `${userId}-char`, name: `${userName}'s hero`, tokenImageUrl: null, gameSystem: null, userId, hp: { current: hp, max: 10, temp: 0 } }],
 });
 

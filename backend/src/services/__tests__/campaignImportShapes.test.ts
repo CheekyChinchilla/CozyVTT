@@ -4,7 +4,8 @@
  *
  * The importer took any text as a game system and handed it to the
  * database, which refused it, so an archive whose creature named its system
- * "dnd5e" stopped the import part-way with the database's own message. It
+ * in a spelling of its own stopped the import part-way with the database's
+ * own message. It
  * held stat blocks to looser limits than the creature editor and the token
  * routes, so an imported creature could be stored that could then neither be
  * placed on a map nor saved. It stored a map's fog as it arrived, and it
@@ -26,11 +27,12 @@ import { importCampaign, jsonNestsDeeperThan, jsonListCut, jsonHoldsMoreValuesTh
 import { NpcStatBlockSchema } from '../../validators/statBlock';
 import { prisma, createTestUser, cleanupUsers } from '../../__tests__/helpers/db';
 import { writeZip, type FixtureEntry } from '../../__tests__/helpers/zipFixtures';
+import { RETIRED_GAME_SYSTEM } from '../../__tests__/helpers/retiredGameSystem';
 
 const statBlock = (fields: Record<string, unknown> = {}) => ({
   ac: 12, speed: '30 ft.', abilities: { str: 11, dex: 12, con: 12, int: 10, wis: 10, cha: 10 }, ...fields,
 });
-const creature = (fields: Record<string, unknown> = {}) => ({ name: 'Bandit', gameSystem: 'DND_5E', statBlock: statBlock(), ...fields });
+const creature = (fields: Record<string, unknown> = {}) => ({ name: 'Bandit', gameSystem: 'FIFTH_EDITION', statBlock: statBlock(), ...fields });
 const template = (fields: Record<string, unknown> = {}) => ({ name: 'Guard', type: 'npc', statBlock: statBlock(), ...fields });
 const token = (fields: Record<string, unknown> = {}) => ({ name: 'Goblin', position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, ...fields });
 const map = (fields: Record<string, unknown> = {}) => ({ name: 'Cellar', width: 10, height: 10, gridSize: 50, feetPerSquare: 5, tokens: [], ...fields });
@@ -50,10 +52,10 @@ async function archive(contents: Contents): Promise<string> {
   const files: Record<string, string> = {
     'manifest.json': JSON.stringify({
       formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT v1.5.0', campaignName: 'Shapes',
-      gameSystem: 'DND_5E', mapCount: maps.length, tokenCount: 0, creatureCount: contents.creatures?.length ?? 0,
+      gameSystem: 'FIFTH_EDITION', mapCount: maps.length, tokenCount: 0, creatureCount: contents.creatures?.length ?? 0,
       tokenTemplateCount: contents.templates?.length ?? 0, assetCount: 0, includesAudio: false, totalSizeBytes: 0,
     }),
-    'campaign.json': JSON.stringify({ name: 'Shapes', gameSystem: 'DND_5E', ...contents.campaign }),
+    'campaign.json': JSON.stringify({ name: 'Shapes', gameSystem: 'FIFTH_EDITION', ...contents.campaign }),
   };
   maps.forEach((m, i) => { files[`maps/map-${i}.json`] = JSON.stringify(m); });
   if (contents.creatures) files['creatures/creatures.json'] = JSON.stringify(contents.creatures);
@@ -80,22 +82,38 @@ afterAll(async () => {
 describe('a game system the server does not know', () => {
   it('on a creature, imports the creature with none, and the rest of the archive', async () => {
     const result = await importCampaign(
-      await archive({ maps: [map()], creatures: [creature({ gameSystem: 'dnd5e' }), creature({ name: 'Wolf' })] }),
+      await archive({ maps: [map()], creatures: [creature({ gameSystem: 'fifthedition' }), creature({ name: 'Wolf' })] }),
       userId
     );
 
     expect(result).toMatchObject({ mapCount: 1, creatureCount: 2 });
     const creatures = await prisma.creatureTemplate.findMany({ where: { campaignId: result.campaignId }, orderBy: { name: 'asc' } });
-    expect(creatures.map((c) => [c.name, c.gameSystem])).toEqual([['Bandit', null], ['Wolf', 'DND_5E']]);
-    expect(result.warnings).toEqual(['Creature "Bandit": its game system "dnd5e" is not one this server knows, so it was imported with none.']);
+    expect(creatures.map((c) => [c.name, c.gameSystem])).toEqual([['Bandit', null], ['Wolf', 'FIFTH_EDITION']]);
+    expect(result.warnings).toEqual(['Creature "Bandit": its game system "fifthedition" is not one this server knows, so it was imported with none.']);
   });
 
-  it("on the campaign, imports the campaign with none", async () => {
-    const result = await importCampaign(await archive({ campaign: { gameSystem: 'STARFINDER' }, maps: [map()] }), userId);
+  it('on a creature, imports it with none when it is the value of a system CozyVTT no longer supports', async () => {
+    const result = await importCampaign(await archive({ creatures: [creature({ gameSystem: RETIRED_GAME_SYSTEM })] }), userId);
+
+    const creatures = await prisma.creatureTemplate.findMany({ where: { campaignId: result.campaignId } });
+    expect(creatures.map((c) => [c.name, c.gameSystem])).toEqual([['Bandit', null]]);
+    expect(result.warnings).toEqual(['Creature "Bandit": its game system is no longer supported, so it was imported with none.']);
+  });
+
+  it('on the campaign, imports it with none when it is the value of a system CozyVTT no longer supports, without repeating it', async () => {
+    const result = await importCampaign(await archive({ campaign: { gameSystem: RETIRED_GAME_SYSTEM }, maps: [map()] }), userId);
 
     const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: result.campaignId } });
     expect(campaign.gameSystem).toBeNull();
-    expect(result.warnings).toEqual(['The campaign\'s game system "STARFINDER" is not one this server knows, so it was imported with none.']);
+    expect(result.warnings).toEqual(["The archive's game system is no longer supported, so the campaign has none."]);
+  });
+
+  it("on the campaign, imports the campaign with none", async () => {
+    const result = await importCampaign(await archive({ campaign: { gameSystem: 'NOT_A_SYSTEM' }, maps: [map()] }), userId);
+
+    const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: result.campaignId } });
+    expect(campaign.gameSystem).toBeNull();
+    expect(result.warnings).toEqual(['The campaign\'s game system "NOT_A_SYSTEM" is not one this server knows, so it was imported with none.']);
   });
 });
 

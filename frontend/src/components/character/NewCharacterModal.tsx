@@ -7,7 +7,7 @@ import { useState, FormEvent, useEffect, useRef } from 'react';
 import { Loader2, User, Sparkles } from 'lucide-react';
 import { Modal } from '@/components/ui';
 import { Character, GameSystem, Campaign } from '@/types';
-import { GAME_SYSTEM_OPTIONS, gameSystemName } from '@/constants/game-systems';
+import { GAME_SYSTEM_OPTIONS, gameSystemName, playedGameSystem } from '@/constants/game-systems';
 import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
 import api from '@/services/api';
 import Button from '@/components/ui/Button';
@@ -42,7 +42,7 @@ interface TemplateOption {
 }
 
 const TEMPLATE_OPTIONS_BY_SYSTEM: Record<string, TemplateOption[]> = {
-  [GameSystem.DND_5E]: [
+  [GameSystem.FIFTH_EDITION]: [
     {
       value: 'blank',
       label: 'Blank Character Sheet',
@@ -54,7 +54,7 @@ const TEMPLATE_OPTIONS_BY_SYSTEM: Record<string, TemplateOption[]> = {
       description: 'A pre-built Fighter with standard array stats',
     },
   ],
-  [GameSystem.PATHFINDER_2E]: [
+  [GameSystem.FANTASY_D20]: [
     {
       value: 'blank',
       label: 'Blank Character Sheet',
@@ -66,27 +66,15 @@ const TEMPLATE_OPTIONS_BY_SYSTEM: Record<string, TemplateOption[]> = {
       description: 'A pre-built Dwarf Fighter',
     },
   ],
-  [GameSystem.SHADOWRUN_6E]: [
+  [GameSystem.HORROR_D100]: [
     {
       value: 'blank',
       label: 'Blank Character Sheet',
       description: 'Start with an empty character',
     },
     {
-      value: 'streetsamurai',
-      label: 'Street Samurai (Example)',
-      description: 'A combat-focused runner with cyberware',
-    },
-  ],
-  [GameSystem.CALL_OF_CTHULHU_7E]: [
-    {
-      value: 'blank',
-      label: 'Blank Investigator Sheet',
-      description: 'Start with an empty investigator',
-    },
-    {
       value: 'privateinvestigator',
-      label: 'Private Investigator (Example)',
+      label: 'Private Detective (Example)',
       description: 'A gritty private eye ready for mysteries',
     },
   ],
@@ -104,7 +92,7 @@ export default function NewCharacterModal({
     campaign?.id || null
   );
   const [gameSystem, setGameSystem] = useState<GameSystem | null>(
-    preselectedGameSystem || campaign?.gameSystem || null
+    preselectedGameSystem || playedGameSystem(campaign?.gameSystem)
   );
   const [selectedTemplate, setSelectedTemplate] = useState<string>('blank');
   const [availableCampaigns, setAvailableCampaigns] = useState<Campaign[]>([]);
@@ -120,13 +108,14 @@ export default function NewCharacterModal({
   }, [isOpen, campaign]);
 
   // The game system follows the chosen campaign's, Flexible for a campaign
-  // with none: a D&D campaign and then a Flexible one left D&D chosen, with
-  // nothing locking it. A new system starts from its blank sheet.
+  // with none: a 5E campaign and then a Flexible one left 5E chosen, with
+  // nothing locking it. A new system starts from its blank sheet. A campaign
+  // of a system CozyVTT no longer supports is one with none.
   const chooseCampaign = (campaignId: string | null) => {
     setSelectedCampaignId(campaignId);
     const chosen = availableCampaigns.find((c) => c.id === campaignId);
     if (!chosen) return;
-    const system = chosen.gameSystem ?? null;
+    const system = playedGameSystem(chosen.gameSystem);
     if (system !== gameSystem) {
       setGameSystem(system);
       setSelectedTemplate('blank');
@@ -250,7 +239,7 @@ export default function NewCharacterModal({
       // Reset form
       setName('');
       setSelectedCampaignId(campaign?.id || null);
-      setGameSystem(preselectedGameSystem || campaign?.gameSystem || null);
+      setGameSystem(preselectedGameSystem || playedGameSystem(campaign?.gameSystem));
       setSelectedTemplate('blank');
 
       // Notify parent
@@ -283,7 +272,7 @@ export default function NewCharacterModal({
     if (!loading) {
       setName('');
       setSelectedCampaignId(campaign?.id || null);
-      setGameSystem(preselectedGameSystem || campaign?.gameSystem || null);
+      setGameSystem(preselectedGameSystem || playedGameSystem(campaign?.gameSystem));
       setSelectedTemplate('blank');
       setError('');
       onClose();

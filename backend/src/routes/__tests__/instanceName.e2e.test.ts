@@ -39,10 +39,10 @@ afterAll(async () => {
 });
 
 it('is in the appearance every page reads, signed in or not', async () => {
-  expect((await admin.put('/api/admin/settings').send({ instanceName: 'The Hearthstone Tavern' })).status).toBe(200);
+  expect((await admin.put('/api/admin/settings').send({ instanceName: 'The Mossy Lantern' })).status).toBe(200);
 
   const res = await request(app).get('/api/auth/appearance');
 
   expect(res.status).toBe(200);
-  expect(res.body.instanceName).toBe('The Hearthstone Tavern');
+  expect(res.body.instanceName).toBe('The Mossy Lantern');
 });

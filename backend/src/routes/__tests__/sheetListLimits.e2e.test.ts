@@ -14,7 +14,7 @@ import type { Prisma } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { getBlankCharacterTemplate } from '../../validators/game-systems';
-import { PF2E_ITEM_BONUS_MAX, SHEET_LIST_MAX, SPELL_SLOTS_MAX } from '../../validators/game-systems/sheetLimits';
+import { FANTASY_D20_ITEM_BONUS_MAX, SHEET_LIST_MAX, SPELL_SLOTS_MAX } from '../../validators/game-systems/sheetLimits';
 import { GameSystem } from '../../game-systems';
 
 const app = createTestApp();
@@ -40,8 +40,8 @@ const named = (body: { validationErrors: Array<{ path: string; message: string }
 
 const refusal = (path: string) => [`${path}: Can hold at most ${SHEET_LIST_MAX} entries`];
 
-describe('a D&D 5e sheet', () => {
-  const gameSystem = GameSystem.DND_5E;
+describe('a 5E sheet', () => {
+  const gameSystem = GameSystem.FIFTH_EDITION;
   const blank = () => getBlankCharacterTemplate(gameSystem) as Record<string, unknown>;
   const rows = (count: number) => Array.from({ length: count }, (_unused, i) => ({ name: `Item ${i}` }));
 
@@ -97,12 +97,12 @@ describe('a D&D 5e sheet', () => {
   });
 });
 
-describe('a Pathfinder 2e sheet', () => {
-  const gameSystem = GameSystem.PATHFINDER_2E;
+describe('a Fantasy d20 sheet', () => {
+  const gameSystem = GameSystem.FANTASY_D20;
   const blank = () => getBlankCharacterTemplate(gameSystem) as Record<string, unknown>;
 
   async function create(): Promise<string> {
-    const res = await agent.post('/api/characters').send({ name: 'Seelah', gameSystem, data: blank() });
+    const res = await agent.post('/api/characters').send({ name: 'Maren', gameSystem, data: blank() });
     expect(res.status).toBe(201);
     return res.body.character.id as string;
   }
@@ -115,7 +115,7 @@ describe('a Pathfinder 2e sheet', () => {
       spellcasting?: unknown;
     };
     sheet.languages = Array.from({ length: SHEET_LIST_MAX + 1 }, () => 'Common');
-    sheet.savingThrows = { ...sheet.savingThrows, will: { ...sheet.savingThrows.will, itemBonus: PF2E_ITEM_BONUS_MAX + 1 } };
+    sheet.savingThrows = { ...sheet.savingThrows, will: { ...sheet.savingThrows.will, itemBonus: FANTASY_D20_ITEM_BONUS_MAX + 1 } };
     const slots = Object.fromEntries(
       ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'].map((rank) => [rank, { total: 0, expended: 0 }])
     );
@@ -149,12 +149,12 @@ describe('a Pathfinder 2e sheet', () => {
   });
 });
 
-describe('a Call of Cthulhu sheet', () => {
-  const gameSystem = GameSystem.CALL_OF_CTHULHU_7E;
+describe('a Horror d100 sheet', () => {
+  const gameSystem = GameSystem.HORROR_D100;
   const blank = () => getBlankCharacterTemplate(gameSystem) as Record<string, unknown>;
 
   async function create(): Promise<string> {
-    const res = await agent.post('/api/characters').send({ name: 'Armitage', gameSystem, data: blank() });
+    const res = await agent.post('/api/characters').send({ name: 'Vane', gameSystem, data: blank() });
     expect(res.status).toBe(201);
     return res.body.character.id as string;
   }
@@ -163,11 +163,11 @@ describe('a Call of Cthulhu sheet', () => {
     const id = await create();
     const many = (count: number) => Array.from({ length: count }, (_unused, i) => ({ name: `Thing ${i}` }));
     const res = await agent.put(`/api/characters/${id}`).send({
-      data: { ...blank(), possessions: many(SHEET_LIST_MAX + 1), combat: { weapons: many(SHEET_LIST_MAX + 1) } },
+      data: { ...blank(), possessions: many(SHEET_LIST_MAX + 1), weapons: many(SHEET_LIST_MAX + 1) },
     });
 
     expect(res.status).toBe(400);
-    expect(named(res.body).sort()).toEqual([...refusal('combat.weapons'), ...refusal('possessions')].sort());
+    expect(named(res.body).sort()).toEqual([...refusal('weapons'), ...refusal('possessions')].sort());
   });
 
   it(`takes ${SHEET_LIST_MAX} possessions`, async () => {

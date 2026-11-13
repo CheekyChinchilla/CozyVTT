@@ -4,15 +4,15 @@
  * A map token keeps its own COPY of the character's image, taken when it was
  * placed — there is no Token table, tokens are JSON on the map. Changing the
  * image on a character sheet therefore left every placed token showing the old
- * picture until the DM removed and re-added it.
+ * picture until the GM removed and re-added it.
  *
  * Two things are pinned here:
  *
  *  - The sync has to run **server-side on the character update**, because
- *    `imageUrl` is a DM-only field on the token route. A player editing their
+ *    `imageUrl` is a GM-only field on the token route. A player editing their
  *    own character could not push this from the client — hence the player case
  *    below, which is the one that matters.
- *  - The token's **name is deliberately not synced**. A DM may have renamed a
+ *  - The token's **name is deliberately not synced**. A GM may have renamed a
  *    token, and losing that on the player's next sheet save would be its own
  *    bug report.
  *
@@ -33,7 +33,7 @@ import {
 const app = createTestApp();
 
 describe('character token image sync', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let campaignId: string;
   let characterId: string;
@@ -52,7 +52,7 @@ describe('character token image sync', () => {
       {
         id: `${label}-bound`,
         characterId,
-        name: 'Aldra (charmed)', // a DM rename that must survive
+        name: 'Aldra (charmed)', // a GM rename that must survive
         imageUrl: OLD_IMAGE,
         position: { x: 1, y: 1 },
         size: { width: 1, height: 1 },
@@ -99,16 +99,16 @@ describe('character token image sync', () => {
 
   beforeAll(async () => {
     const stamp = Date.now();
-    const dm = await createTestUser({ email: `tok_dm_${stamp}@test.invalid`, isApproved: true });
+    const gm = await createTestUser({ email: `tok_dm_${stamp}@test.invalid`, isApproved: true });
     const player = await createTestUser({ email: `tok_pl_${stamp}@test.invalid`, isApproved: true });
-    dmId = dm.id;
+    gmId = gm.id;
     playerId = player.id;
 
-    const campaign = await createTestCampaign(dmId, { name: `Token Sync ${stamp}` });
+    const campaign = await createTestCampaign(gmId, { name: `Token Sync ${stamp}` });
     campaignId = campaign.id;
     await prisma.campaignMembership.createMany({
       data: [
-        { campaignId, userId: dmId, role: 'DM', characterIds: [] },
+        { campaignId, userId: gmId, role: 'GM', characterIds: [] },
         { campaignId, userId: playerId, role: 'PLAYER', characterIds: [] },
       ],
     });
@@ -128,7 +128,7 @@ describe('character token image sync', () => {
         data: { userId: owner, campaignId, name, tokenImageUrl: OLD_IMAGE, data: {} },
       });
     characterId = (await mkChar(playerId, 'Aldra')).id;
-    otherCharacterId = (await mkChar(dmId, 'Bystander')).id;
+    otherCharacterId = (await mkChar(gmId, 'Bystander')).id;
 
     const agent = request.agent(app);
     const res = await agent
@@ -146,7 +146,7 @@ describe('character token image sync', () => {
   afterAll(async () => {
     await prisma.character.deleteMany({ where: { campaignId } });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId]);
+    await cleanupUsers([gmId, playerId]);
     await prisma.$disconnect();
   });
 
@@ -161,7 +161,7 @@ describe('character token image sync', () => {
    *    exactly where they were;
    *  - `campaignId` is a single column, so a character with tokens in two
    *    campaigns can only ever point at one of them;
-   *  - a DM may place any player's character on a map, which writes the token's
+   *  - a GM may place any player's character on a map, which writes the token's
    *    `characterId` without touching the character at all.
    *
    * The symptom in every case is the one this whole file exists to prevent: the
@@ -195,7 +195,7 @@ describe('character token image sync', () => {
       expect(other!.imageUrl).toBe(OLD_IMAGE);
     });
 
-    it('still leaves a DM rename alone', async () => {
+    it('still leaves a GM rename alone', async () => {
       await playerAgent.put(`/api/characters/${characterId}`).send({ tokenImageUrl: NEW_IMAGE });
       const bound = (await tokensOf(mapAId)).find((t) => t.characterId === characterId);
       expect(bound!.name).toBe('Aldra (charmed)');
@@ -254,14 +254,14 @@ describe('character token image sync', () => {
 });
 
 /**
- * A DM may change the picture of a player's character in the campaign they
+ * A GM may change the picture of a player's character in the campaign they
  * run, and the character's tokens follow it. The tokens it left in a
- * campaign the player played before belong to that campaign: its own DM
- * placed them, and another DM's choice of picture is not theirs to make. A
- * DM's change now repaints tokens only in campaigns that DM runs; the
+ * campaign the player played before belong to that campaign: its own GM
+ * placed them, and another GM's choice of picture is not theirs to make. A
+ * GM's change now repaints tokens only in campaigns that GM runs; the
  * owner's own change still repaints every token bound to the character.
  */
-describe('a DM changing a player character\'s token picture', () => {
+describe('a GM changing a player character\'s token picture', () => {
   const OLD_IMAGE = '/api/assets/tokens/00000000-0000-4000-8000-00000000c01d';
   const NEW_IMAGE = '/api/assets/tokens/00000000-0000-4000-8000-00000000d3e7';
   const userIds: string[] = [];
@@ -269,7 +269,7 @@ describe('a DM changing a player character\'s token picture', () => {
   let characterId: string;
   let mapInA: string;
   let mapInB: string;
-  let dmA: ReturnType<typeof request.agent>;
+  let gmA: ReturnType<typeof request.agent>;
 
   const boundToken = (characterId: string, controlledBy: string) => ({
     id: `bound-${characterId}`, characterId, name: 'Wren', imageUrl: OLD_IMAGE,
@@ -294,9 +294,9 @@ describe('a DM changing a player character\'s token picture', () => {
     campaignIds.push(a.id, b.id);
     await prisma.campaignMembership.createMany({
       data: [
-        { campaignId: a.id, userId: ownerOfA.id, role: 'DM', characterIds: [] },
+        { campaignId: a.id, userId: ownerOfA.id, role: 'GM', characterIds: [] },
         { campaignId: a.id, userId: player.id, role: 'PLAYER', characterIds: [] },
-        { campaignId: b.id, userId: ownerOfB.id, role: 'DM', characterIds: [] },
+        { campaignId: b.id, userId: ownerOfB.id, role: 'GM', characterIds: [] },
         { campaignId: b.id, userId: player.id, role: 'PLAYER', characterIds: [] },
       ],
     });
@@ -311,8 +311,8 @@ describe('a DM changing a player character\'s token picture', () => {
     mapInA = (await mapFor(a.id, 'A map')).id;
     mapInB = (await mapFor(b.id, 'B map')).id;
 
-    dmA = request.agent(app);
-    expect((await dmA.post('/api/auth/login').send({ email: `tok2_dma_${stamp}@test.invalid`, password: TEST_PASSWORD })).status).toBe(200);
+    gmA = request.agent(app);
+    expect((await gmA.post('/api/auth/login').send({ email: `tok2_dma_${stamp}@test.invalid`, password: TEST_PASSWORD })).status).toBe(200);
   });
 
   afterAll(async () => {
@@ -323,7 +323,7 @@ describe('a DM changing a player character\'s token picture', () => {
   });
 
   it('repaints the tokens in the campaign they run and leaves another campaign\'s alone', async () => {
-    const res = await dmA.put(`/api/characters/${characterId}`).send({ tokenImageUrl: NEW_IMAGE });
+    const res = await gmA.put(`/api/characters/${characterId}`).send({ tokenImageUrl: NEW_IMAGE });
     expect(res.status).toBe(200);
 
     expect(await imageOn(mapInA)).toBe(NEW_IMAGE);

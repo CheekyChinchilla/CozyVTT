@@ -3,7 +3,7 @@
 //
 // The band holds the toolbar and, on the right, the spirit realm label. With
 // a mouse the toolbar is one row of 34-pixel buttons, and the AoE panel, the
-// Put back bar and the DM's tool stack keep the places the stylesheet gives
+// Put back bar and the GM's tool stack keep the places the stylesheet gives
 // them. On a touch screen the buttons are 44 pixels, and on a narrow map the
 // toolbar wraps onto a second row, and the label under it: the panels then
 // start under the band's bottom edge, so none lies over a button. While a
@@ -67,7 +67,7 @@ export function underBand(band: TopBand | null, coarse: boolean): number | null 
 }
 
 /**
- * The top of the DM's tool stack in its corner, `stackWidth` wide and
+ * The top of the GM's tool stack in its corner, `stackWidth` wide and
  * `rightGap` in from the map's right edge: null keeps its place beside the
  * toolbar; it starts under the band when the band wraps, or when the
  * toolbar's buttons reach under its corner.

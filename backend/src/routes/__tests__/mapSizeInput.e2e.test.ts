@@ -42,14 +42,14 @@ const UVTT = Buffer.from(
   })
 );
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let mapId: string;
 let imageUrl: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const importUvtt = (gridSize?: string) => {
-  const req = dm.post(`/api/campaigns/${campaignId}/maps/import-uvtt`).attach('file', UVTT, 'size.uvtt');
+  const req = gm.post(`/api/campaigns/${campaignId}/maps/import-uvtt`).attach('file', UVTT, 'size.uvtt');
   if (gridSize !== undefined) req.field('gridSize', gridSize);
   return req;
 };
@@ -57,11 +57,11 @@ const importUvtt = (gridSize?: string) => {
 beforeAll(async () => {
   const stamp = Date.now();
   const user = await createTestUser({ email: `mapsize-${stamp}@test.cozyvtt.local` });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Map size ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Map size ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
 
   const imported = await importUvtt();
   expect(imported.status).toBe(201);
@@ -70,15 +70,15 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
 describe('POST /api/campaigns/:campaignId/maps', () => {
   const create = (body: Record<string, unknown>) =>
-    dm.post(`/api/campaigns/${campaignId}/maps`).send({ name: 'Sized', imageUrl, width: 20, height: 20, ...body });
+    gm.post(`/api/campaigns/${campaignId}/maps`).send({ name: 'Sized', imageUrl, width: 20, height: 20, ...body });
 
   it.each([['width', 10.5], ['height', 7.25], ['width', 3e9]])('refuses %s %s with 400', async (field, value) => {
     const res = await create({ [field]: value });
@@ -97,14 +97,14 @@ describe('POST /api/campaigns/:campaignId/maps', () => {
 
 describe('PUT /api/campaigns/:campaignId/maps/:id', () => {
   it.each([['width', 10.5], ['height', 0.5], ['gridSize', 52.5]])('refuses %s %s with 400', async (field, value) => {
-    const res = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ [field]: value });
+    const res = await gm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ [field]: value });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Validation Error');
   });
 
   it('accepts whole numbers', async () => {
-    const res = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ width: 12, height: 9, gridSize: 64 });
+    const res = await gm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ width: 12, height: 9, gridSize: 64 });
 
     expect(res.status).toBe(200);
   });

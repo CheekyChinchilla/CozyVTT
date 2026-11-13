@@ -4,7 +4,7 @@
  *
  * A map holds at most 5,000 wall segments and 200 light sources. The tools
  * drew a wall or a light as they sent it, and kept it when the server
- * refused it, so the DM's map showed walls and lights the table did not
+ * refused it, so the GM's map showed walls and lights the table did not
  * have. Now a tool refuses at the cap before it draws and says why, and an
  * add or a list of walls the server answers with a refusal is taken back,
  * with the server's reason.
@@ -26,7 +26,7 @@ import { NO_ANSWER_MESSAGE, WALL_LIGHT_ANSWER_TIMEOUT_MS } from '../map/wallLigh
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
-  const state = { userRole: 'DM' as string, currentMap: null as unknown };
+  const state = { userRole: 'GM' as string, currentMap: null as unknown };
   const handlers = new Map<string, Set<(data: never) => void>>();
   const sent: Array<{ event: string; payload: unknown; answer?: (reply: unknown) => void }> = [];
   const raw = {
@@ -76,7 +76,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -189,7 +189,7 @@ beforeEach(() => {
   h.sent.length = 0;
   h.handlers.clear();
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: mapWith() });
+  h.set({ userRole: 'GM', currentMap: mapWith() });
 });
 
 // ── At the cap ──────────────────────────────────────────────────────────────

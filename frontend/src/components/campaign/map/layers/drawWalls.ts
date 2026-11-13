@@ -1,6 +1,6 @@
 // ============================================
 // Wall layer — wall/door/window segments, door state indicators,
-// DM endpoint/junction nodes, player line-of-sight door filtering.
+// GM endpoint/junction nodes, player line-of-sight door filtering.
 // Pure: no React, no component closures.
 // ============================================
 
@@ -9,8 +9,8 @@ import type { Viewport } from './types';
 
 export interface WallsDrawState {
   wallSegments: readonly WallSegment[];
-  isDM: boolean;
-  /** DM-selected color for plain walls (doors/windows use fixed colors). */
+  isGM: boolean;
+  /** GM-selected color for plain walls (doors/windows use fixed colors). */
   wallColor: string;
   hoveredWallId: string | null;
   selectedWallIds: ReadonlySet<string>;
@@ -51,7 +51,7 @@ export function drawWallSegment(
     ctx.setLineDash([5 / zoom, 5 / zoom]);
   } else {
     ctx.setLineDash([]);
-    // DM-selected color for walls; fixed colors for doors/windows (functional indicators)
+    // GM-selected color for walls; fixed colors for doors/windows (functional indicators)
     switch (seg.type) {
       case 'wall':        ctx.strokeStyle = hexToRgba(wallColor, isHovered ? 1 : 0.9); break;
       case 'door-closed': ctx.strokeStyle = isHovered ? 'rgba(196, 181, 253, 1)' : 'rgba(167, 139, 250, 0.9)'; break;
@@ -113,8 +113,8 @@ export function drawWalls(
   ctx.save();
   ctx.lineCap = 'round';
 
-  if (state.isDM) {
-    // DM sees all walls
+  if (state.isGM) {
+    // GM sees all walls
     for (const seg of state.wallSegments) {
       drawWallSegment(ctx, seg, zoom, state.wallColor, seg.id === state.hoveredWallId || state.selectedWallIds.has(seg.id));
     }

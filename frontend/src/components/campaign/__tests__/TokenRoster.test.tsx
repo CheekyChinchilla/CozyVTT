@@ -22,7 +22,7 @@ const emitMapChange = vi.fn();
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', memberships: [] },
-    // The table is on another map than the one on screen (the DM prepares
+    // The table is on another map than the one on screen (the GM prepares
     // map-1), so a request naming the table's map is caught.
     currentMap: { id: 'map-table', width: 20, height: 20 },
     viewedMap: { id: 'map-1', width: 20, height: 20 },
@@ -37,7 +37,7 @@ const api = vi.hoisted(() => ({ deleteToken: vi.fn(), updateToken: vi.fn(), addT
 vi.mock('@/services/api', () => ({ api, default: api }));
 
 const goblin: Token = {
-  id: 'goblin', name: 'Goblin Boss', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
+  id: 'goblin', name: 'Goblin', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
   layer: TokenLayer.TOKEN, visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {},
   type: TokenType.NPC, disposition: null, hp: null, showHpBar: false, notes: '', initiative: null, obscured: false,
 };
@@ -52,10 +52,10 @@ beforeEach(() => {
 describe('removing a token from the roster', () => {
   it('asks first, naming the token, and Cancel keeps it', async () => {
     render(<TokenRoster />);
-    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin Boss from map' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin from map' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Remove token' });
-    expect(dialog).toHaveTextContent('Goblin Boss');
+    expect(dialog).toHaveTextContent('Goblin');
     expect(api.deleteToken).not.toHaveBeenCalled();
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
@@ -65,7 +65,7 @@ describe('removing a token from the roster', () => {
 
   it('removes the token once confirmed', async () => {
     render(<TokenRoster />);
-    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin Boss from map' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin from map' }));
     await userEvent.click(within(await screen.findByRole('dialog', { name: 'Remove token' })).getByRole('button', { name: 'Remove' }));
 
     await waitFor(() => expect(api.deleteToken).toHaveBeenCalledWith('campaign-1', 'map-1', 'goblin'));
@@ -75,12 +75,12 @@ describe('removing a token from the roster', () => {
   });
 
   it('says so when the server refuses, and keeps the token', async () => {
-    api.deleteToken.mockRejectedValue({ response: { status: 403, data: { message: 'Only the DM can remove tokens' } } });
+    api.deleteToken.mockRejectedValue({ response: { status: 403, data: { message: 'Only the GM can remove tokens' } } });
     render(<TokenRoster />);
-    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin Boss from map' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin from map' }));
     await userEvent.click(within(await screen.findByRole('dialog', { name: 'Remove token' })).getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Only the DM can remove tokens', 'error'));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Only the GM can remove tokens', 'error'));
     expect(useGameStore.getState().tokens['goblin']).toBeDefined();
   });
 });
@@ -88,7 +88,7 @@ describe('removing a token from the roster', () => {
 describe('the roster row actions', () => {
   it('are shown while a button in the strip has keyboard focus, and on a screen with no hover', () => {
     render(<TokenRoster />);
-    const strip = screen.getByRole('button', { name: 'Remove Goblin Boss from map' }).parentElement;
+    const strip = screen.getByRole('button', { name: 'Remove Goblin from map' }).parentElement;
     expect(strip).not.toBeNull();
     const classes = (strip as HTMLElement).className.split(/\s+/);
     expect(classes).toContain('group-hover:opacity-100');
@@ -103,14 +103,14 @@ describe('the roster row actions', () => {
   it('are big enough for a finger on a touch screen, and go under the name when the row is too narrow', () => {
     render(<TokenRoster onEditToken={() => undefined} />);
     const names = [
-      'Edit Goblin Boss', 'Hide Goblin Boss from players', 'Obscure identity of Goblin Boss',
-      'Duplicate Goblin Boss', 'Remove Goblin Boss from map',
+      'Edit Goblin', 'Hide Goblin from players', 'Obscure identity of Goblin',
+      'Duplicate Goblin', 'Remove Goblin from map',
     ];
     for (const name of names) {
       expect(screen.getByRole('button', { name }).className.split(/\s+/))
         .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
     }
-    const strip = screen.getByRole('button', { name: 'Remove Goblin Boss from map' }).parentElement as HTMLElement;
+    const strip = screen.getByRole('button', { name: 'Remove Goblin from map' }).parentElement as HTMLElement;
     expect(strip.className.split(/\s+/))
       .toEqual(expect.arrayContaining(['pointer-coarse:shrink', 'pointer-coarse:flex-wrap', 'pointer-coarse:justify-end', 'pointer-coarse:ml-auto']));
     expect((strip.parentElement as HTMLElement).className.split(/\s+/)).toContain('pointer-coarse:flex-wrap');
@@ -119,7 +119,7 @@ describe('the roster row actions', () => {
   it('report a failed hide', async () => {
     api.updateToken.mockRejectedValue({ response: { status: 400, data: { message: 'Token could not be changed' } } });
     render(<TokenRoster />);
-    await userEvent.click(screen.getByRole('button', { name: 'Hide Goblin Boss from players' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Hide Goblin from players' }));
 
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('Token could not be changed', 'error'));
   });
@@ -127,7 +127,7 @@ describe('the roster row actions', () => {
   it('report a failed identity change', async () => {
     api.updateToken.mockRejectedValue(new Error('network'));
     render(<TokenRoster />);
-    await userEvent.click(screen.getByRole('button', { name: 'Obscure identity of Goblin Boss' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Obscure identity of Goblin' }));
 
     await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/identity/i), 'error'));
   });

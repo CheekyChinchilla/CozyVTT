@@ -4,10 +4,10 @@
  * Layout: the Restore Defaults, Cancel and Save Periods buttons must stay on
  * screen while the period list scrolls. They used to sit below the list
  * inside one scrolling body, so on an ordinary window they were off the
- * bottom with nothing saying the dialog scrolls, and a DM reported the
+ * bottom with nothing saying the dialog scrolls, and a GM reported the
  * editor had no save button at all.
  *
- * Audio: each period offers the tracks this DM may open to the table and
+ * Audio: each period offers the tracks this GM may open to the table and
  * nothing else, an old free-text note shows and saves as no audio, and a
  * chosen track's id is what the save sends.
  */
@@ -100,7 +100,7 @@ describe('ConfigureVibeModal', () => {
     expect(nameInput.closest('.overflow-y-auto')).not.toBeNull();
   });
 
-  it('offers No audio plus only the tracks this DM may set', async () => {
+  it('offers No audio plus only the tracks this GM may set', async () => {
     render(<ConfigureVibeModal onClose={vi.fn()} />);
     const picker = await screen.findByLabelText('Audio track for Day');
     await waitFor(() => expect(picker).not.toBeDisabled());
@@ -148,7 +148,7 @@ describe('ConfigureVibeModal', () => {
     expect(putVibe.mock.calls[0][1].periods[0].audio).toBe(OWN.id);
   });
 
-  // A rename or delete of the period in force ends the vibe; the DM's page
+  // A rename or delete of the period in force ends the vibe; the GM's page
   // takes that from the answer, as everyone else's does from the broadcast.
   it('takes the vibe the save leaves in force', async () => {
     putVibe.mockResolvedValue({ vibeSettings: { enabled: true, periods: [{ ...day, name: 'Noon' }] }, currentVibe: null });

@@ -32,6 +32,7 @@ import { writeAdminLog } from '../services/systemLog';
 import { clearSignInLock } from '../middleware/authLimiters';
 import { hashingPerAddress } from '../middleware/hashingPerAddress';
 import { toJson } from '../utils/prisma-json';
+import { convertStoredHorrorD100Sheets } from '../legacy/storedHorrorD100Sheets';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { SERVER_BUILT_PATH, UPLOAD_LIMITS, getUploadsDirectory } from '../utils/fileUtils';
@@ -1469,6 +1470,53 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
         message:
           'The backup was restored, but bringing its database up to this version failed. ' +
           'Restart the backend (docker compose restart backend), which runs migrations on start, then check the server logs. ' +
+          (filesError
+            ? `Copying the uploaded files failed too (${filesError}); once the backend is up, restore again or copy the archive's uploads folder in by hand. `
+            : '') +
+          undo,
+      });
+    }
+
+    // 8b. Convert the Horror d100 sheets of a backup from before 1.7.0, as
+    // the server does before it listens, so the restored instance answers no
+    // old sheet and needs no restart. Requests are still refused until the
+    // restore ends. A run that fails is answered as a failed migration run
+    // is: a restart runs it again, and until then a sheet not converted is
+    // still answered converted (legacy/sheetConversion.ts).
+    let sheetsNotConverted = 0;
+    try {
+      sheetsNotConverted = (await convertStoredHorrorD100Sheets(prisma)).failed.length;
+    } catch (conversionError: unknown) {
+      logger.error('Converting the Horror d100 sheets after restore failed', {
+        code: errorCode(conversionError),
+        detail: conversionError instanceof Error ? conversionError.message : String(conversionError),
+      });
+      await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', {
+        safetyBackup,
+        sheetConversionFailed: true,
+      }).catch(() => {});
+      return res.status(500).json({
+        error: 'Restore Incomplete',
+        message:
+          'The backup was restored and brought up to this version, but converting its Horror d100 character sheets to the rebuilt sheet failed. ' +
+          'Restart the backend (docker compose restart backend), which converts them on start, then check the server logs. ' +
+          (filesError
+            ? `Copying the uploaded files failed too (${filesError}); once the backend is up, restore again or copy the archive's uploads folder in by hand. `
+            : '') +
+          undo,
+      });
+    }
+
+    // A sheet that could not be converted is left as it was and named in the
+    // server log; the restore says how many, and is not complete.
+    if (sheetsNotConverted > 0) {
+      await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', { safetyBackup, sheetsNotConverted }).catch(() => {});
+      const sheets = sheetsNotConverted === 1 ? '1 of its Horror d100 character sheets' : `${sheetsNotConverted} of its Horror d100 character sheets`;
+      return res.status(500).json({
+        error: 'Restore Incomplete',
+        message:
+          `The backup was restored and brought up to this version, but ${sheets} could not be converted to the rebuilt sheet; the server log names each. ` +
+          'They are still shown in the rebuilt shape, and the backend tries them again each time it starts: restart it (docker compose restart backend) and check the server logs. ' +
           (filesError
             ? `Copying the uploaded files failed too (${filesError}); once the backend is up, restore again or copy the archive's uploads folder in by hand. `
             : '') +

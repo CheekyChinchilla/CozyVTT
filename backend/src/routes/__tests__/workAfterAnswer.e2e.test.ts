@@ -25,16 +25,16 @@ import {
 const app = createTestApp();
 
 describe('the end of a test file, after a token change', () => {
-  let dmId: string;
+  let gmId: string;
   let campaignId: string;
   let mapId: string;
-  let dm: ReturnType<typeof request.agent>;
+  let gm: ReturnType<typeof request.agent>;
 
   beforeAll(async () => {
-    const dmUser = await createTestUser({ displayName: 'Late Work DM' });
-    dmId = dmUser.id;
-    campaignId = (await createTestCampaign(dmId, { name: 'Late Work' })).id;
-    await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+    const gmUser = await createTestUser({ displayName: 'Late Work GM' });
+    gmId = gmUser.id;
+    campaignId = (await createTestCampaign(gmId, { name: 'Late Work' })).id;
+    await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
     mapId = (await prisma.map.create({
       data: {
         campaignId,
@@ -49,21 +49,21 @@ describe('the end of a test file, after a token change', () => {
       },
     })).id;
 
-    dm = request.agent(app);
-    const res = await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD });
+    gm = request.agent(app);
+    const res = await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD });
     expect(res.status).toBe(200);
   });
 
   afterAll(async () => {
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId]);
+    await cleanupUsers([gmId]);
   });
 
   it('lets the map re-send run first, and leaves nothing to run after it', async () => {
     // The re-send reads the map as it stands when it goes.
     const reads = jest.spyOn(appPrisma.map, 'findUnique');
     try {
-      const res = await dm
+      const res = await gm
         .post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens`)
         .send({ name: 'Late', position: { x: 1, y: 1 }, type: 'player' });
       expect(res.status).toBe(201);

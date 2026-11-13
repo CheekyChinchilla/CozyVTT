@@ -5,7 +5,7 @@
  * them change it: no share picker, no unshare button. The server refuses those
  * anyway, but offering controls that will be refused is its own kind of wrong.
  *
- * And the DM's picker offers only what is not already shared, so sharing is
+ * And the GM's picker offers only what is not already shared, so sharing is
  * never a no-op and the list cannot show duplicates.
  */
 
@@ -53,9 +53,9 @@ const shared = (id: string, name: string, originalName: string, filename = `${id
   mimeType: 'application/pdf',
   fileSize: 1024,
   createdAt: '2026-01-01T00:00:00.000Z',
-  uploadedBy: { id: 'dm', displayName: 'The DM' },
+  uploadedBy: { id: 'dm', displayName: 'The GM' },
   linkedAt: '2026-01-02T00:00:00.000Z',
-  linkedBy: { id: 'dm', displayName: 'The DM' },
+  linkedBy: { id: 'dm', displayName: 'The GM' },
   shared: true,
   canEdit: true,
 });
@@ -95,32 +95,32 @@ beforeEach(() => {
 describe('CampaignDocumentsModal', () => {
   describe('as a player', () => {
     it('lists what is shared', async () => {
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM={false} />);
       expect(await screen.findByText('Core Rules')).toBeInTheDocument();
-      expect(screen.getByText(/shared by The DM/)).toBeInTheDocument();
+      expect(screen.getByText(/shared by The GM/)).toBeInTheDocument();
     });
 
     // The server serves a document by its stored name, which the upload sets
     // from what the bytes are; the name it was uploaded under can say otherwise.
     it('labels a document as what it is stored as', async () => {
       listCampaignDocuments.mockResolvedValue({ documents: [shared('d9', 'Handout', 'handout.txt', 'd9.pdf')] });
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
-      expect(await screen.findByText(/^PDF · shared by The DM/)).toBeInTheDocument();
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM={false} />);
+      expect(await screen.findByText(/^PDF · shared by The GM/)).toBeInTheDocument();
     });
 
     it('offers no way to share or unshare', async () => {
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM={false} />);
       await screen.findByText('Core Rules');
       expect(screen.queryByText(/share a document/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/stop sharing/i)).not.toBeInTheDocument();
-      // And does not even ask for the DM's private list.
+      // And does not even ask for the GM's private list.
       expect(listAssets).not.toHaveBeenCalled();
     });
 
     // A deleted account's uploads stay, with no uploader.
     it('lists a document whose uploader has deleted their account', async () => {
       listCampaignDocuments.mockResolvedValue({ documents: [{ ...shared('d2', 'Old Handout', 'old.pdf'), uploadedBy: null }] });
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM={false} />);
       fireEvent.click(await screen.findByText('Old Handout'));
       expect(await screen.findAllByText('Old Handout')).not.toHaveLength(0);
     });
@@ -131,20 +131,20 @@ describe('CampaignDocumentsModal', () => {
       listCampaignDocuments.mockResolvedValue({
         documents: [{ ...own('d5', 'Orphaned Notes', 'notes.md'), uploadedBy: null, linkedBy: null }],
       });
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM={false} />);
       expect(await screen.findByText('Orphaned Notes')).toBeInTheDocument();
       expect(screen.getByText(/shared by a deleted account/)).toBeInTheDocument();
     });
 
     it('offers no way to delete a document', async () => {
       listCampaignDocuments.mockResolvedValue({ documents: [own('d5', 'Campaign Notes', 'notes.md')] });
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM={false} />);
       await screen.findByText('Campaign Notes');
       expect(screen.queryByLabelText(/^delete /i)).not.toBeInTheDocument();
     });
 
     it('offers a way to open each document in a new tab', async () => {
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM={false} />);
       await screen.findByText('Core Rules');
       const link = screen.getByLabelText('Open Core Rules in a new tab');
       expect(link).toHaveAttribute('href', '/api/assets/documents/d1');
@@ -153,20 +153,20 @@ describe('CampaignDocumentsModal', () => {
     });
   });
 
-  describe('as the DM', () => {
+  describe('as the GM', () => {
     // The share list fetched the newest 100 documents and no more.
     it('offers a document from a later page of the library', async () => {
       listAssets.mockImplementation(async (params: { page?: number }) => (params.page === 2
         ? { assets: [mine('d7', 'Old Handout', 'old.md')], pagination: { page: 2, limit: 100, total: 101, totalPages: 2 } }
         : { assets: [mine('d1', 'Core Rules', 'rules.pdf')], pagination: { page: 1, limit: 100, total: 101, totalPages: 2 } }));
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
       await screen.findByText('Core Rules');
       fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
       expect(await screen.findByText('Old Handout')).toBeInTheDocument();
     });
 
     it('offers only documents not already shared', async () => {
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
       await screen.findByText('Core Rules');
       fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
 
@@ -176,8 +176,8 @@ describe('CampaignDocumentsModal', () => {
       expect(shareButtons).toHaveLength(1);
     });
 
-    it('offers only what the DM may share: their own documents and global ones', async () => {
-      // The asset list also returns documents from other campaigns the DM is a
+    it('offers only what the GM may share: their own documents and global ones', async () => {
+      // The asset list also returns documents from other campaigns the GM is a
       // member of, and documents other people uploaded. The server refuses to
       // pass those on, so the picker must not offer them.
       const theirs = { ...mine('d3', 'Someone Else\'s Handout', 'handout.md'), uploadedById: 'other', scope: AssetScope.CAMPAIGN } as Asset;
@@ -186,7 +186,7 @@ describe('CampaignDocumentsModal', () => {
         assets: [mine('d2', 'House Rules', 'house.md'), theirs, global],
         pagination: { page: 1, limit: 100, total: 3 },
       });
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
       await screen.findByText('Core Rules');
       fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
 
@@ -195,7 +195,7 @@ describe('CampaignDocumentsModal', () => {
       expect(screen.queryByText("Someone Else's Handout")).toBeNull();
     });
 
-    it('offers a DM who is a server admin no one else\'s private document either', async () => {
+    it('offers a GM who is a server admin no one else\'s private document either', async () => {
       // An admin can read every file, and the server still refuses to let an
       // admin share someone else's private document into their table.
       auth.platformRole = 'ADMIN';
@@ -205,7 +205,7 @@ describe('CampaignDocumentsModal', () => {
           assets: [mine('d2', 'House Rules', 'house.md'), theirs],
           pagination: { page: 1, limit: 100, total: 2 },
         });
-        render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+        render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
         await screen.findByText('Core Rules');
         fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
 
@@ -224,7 +224,7 @@ describe('CampaignDocumentsModal', () => {
           documents: [shared('d1', 'Core Rules', 'rules.pdf'), shared('d2', 'House Rules', 'house.md')],
         });
 
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
       await screen.findByText('Core Rules');
       fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
       fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
@@ -235,7 +235,7 @@ describe('CampaignDocumentsModal', () => {
 
     it('asks before unsharing, then unshares', async () => {
       unlinkCampaignDocument.mockResolvedValue({ message: 'ok' });
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
       await screen.findByText('Core Rules');
 
       fireEvent.click(screen.getByLabelText('Stop sharing Core Rules'));
@@ -247,7 +247,7 @@ describe('CampaignDocumentsModal', () => {
       await waitFor(() => expect(screen.queryByText('Core Rules')).not.toBeInTheDocument());
     });
 
-    // The server lets the DM delete the campaign's own assets; this is the one
+    // The server lets the GM delete the campaign's own assets; this is the one
     // place the app offers it, and the only way to remove a document whose
     // uploader has gone.
     it('asks before deleting one of the campaign\'s own documents, then deletes it', async () => {
@@ -258,7 +258,7 @@ describe('CampaignDocumentsModal', () => {
           { ...own('d5', 'Orphaned Notes', 'notes.md'), uploadedBy: null, linkedBy: null },
         ],
       });
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
       await screen.findByText('Orphaned Notes');
       // A shared document is someone's own file: it is unshared, never deleted here.
       expect(screen.queryByLabelText('Delete Core Rules')).not.toBeInTheDocument();
@@ -283,7 +283,7 @@ describe('CampaignDocumentsModal', () => {
             data: {
               code: 'ASSET_IN_USE',
               message: 'This asset is still in use.',
-              usage: [{ kind: 'map', name: 'Library', campaignId: 'c1', campaignName: 'Lost Mine', count: 1 }],
+              usage: [{ kind: 'map', name: 'Library', campaignId: 'c1', campaignName: 'The Hollow Crown', count: 1 }],
               omitted: 0,
             },
           },
@@ -292,13 +292,13 @@ describe('CampaignDocumentsModal', () => {
       listCampaignDocuments.mockResolvedValue({
         documents: [{ ...own('d5', 'Orphaned Notes', 'notes.md'), uploadedBy: null, linkedBy: null }],
       });
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
       await screen.findByText('Orphaned Notes');
 
       fireEvent.click(screen.getByLabelText('Delete Orphaned Notes'));
       fireEvent.click(await screen.findByRole('button', { name: /^delete$/i }));
 
-      expect(await screen.findByText(/Map "Library" \(Lost Mine\)/)).toBeInTheDocument();
+      expect(await screen.findByText(/Map "Library" \(The Hollow Crown\)/)).toBeInTheDocument();
       expect(deleteAsset).toHaveBeenCalledTimes(1);
       expect(screen.getByText('Orphaned Notes', { selector: 'button' })).toBeInTheDocument();
 
@@ -312,7 +312,7 @@ describe('CampaignDocumentsModal', () => {
       listCampaignDocuments.mockResolvedValue({
         documents: [{ ...own('d5', 'Orphaned Notes', 'notes.md'), uploadedBy: null, linkedBy: null }],
       });
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
       await screen.findByText('Orphaned Notes');
 
       fireEvent.click(screen.getByLabelText('Delete Orphaned Notes'));
@@ -326,30 +326,30 @@ describe('CampaignDocumentsModal', () => {
         assets: [mine('d1', 'Core Rules', 'rules.pdf')],
         pagination: { page: 1, limit: 100, total: 1 },
       });
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
       await screen.findByText('Core Rules');
       fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
       expect(screen.getByText(/everything you can share is already shared/i)).toBeInTheDocument();
     });
 
-    it('points at the Documents page when the DM has nothing at all', async () => {
+    it('points at the Documents page when the GM has nothing at all', async () => {
       listCampaignDocuments.mockResolvedValue({ documents: [] });
       listAssets.mockResolvedValue({ assets: [], pagination: { page: 1, limit: 100, total: 0 } });
-      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
       await screen.findByText(/nothing shared yet/i);
       fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
       expect(screen.getByText(/upload one from documents on your dashboard/i)).toBeInTheDocument();
     });
   });
 
-  it('offers Write and Upload to the DM and not to a player', async () => {
-    const { unmount } = render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+  it('offers Write and Upload to the GM and not to a player', async () => {
+    const { unmount } = render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
     await screen.findByText('Core Rules');
     expect(screen.getByRole('button', { name: /^write$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^upload$/i })).toBeInTheDocument();
     unmount();
 
-    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM={false} />);
     await screen.findByText('Core Rules');
     expect(screen.queryByRole('button', { name: /^write$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^upload$/i })).not.toBeInTheDocument();
@@ -359,7 +359,7 @@ describe('CampaignDocumentsModal', () => {
     listCampaignDocuments.mockResolvedValue({
       documents: [{ ...shared('own', 'Table Notes', 'notes.txt'), shared: false }],
     });
-    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
     await screen.findByText('Table Notes');
     expect(screen.queryByLabelText('Stop sharing Table Notes')).not.toBeInTheDocument();
   });
@@ -369,7 +369,7 @@ describe('CampaignDocumentsModal', () => {
       isAxiosError: true,
       response: { data: { error: 'Not Found', message: 'Document not found' } },
     });
-    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
     await screen.findByText('Core Rules');
     fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
     fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
@@ -392,16 +392,16 @@ describe('who is offered Edit', () => {
 
   const byCoHost = { id: 'cohost', displayName: 'Co-host' };
 
-  it('offers the DM Edit on the campaign\'s own document, whoever wrote it', async () => {
+  it('offers the GM Edit on the campaign\'s own document, whoever wrote it', async () => {
     listCampaignDocuments.mockResolvedValue({ documents: [{ ...own('d6', 'Co-host Rules', 'rules.md'), uploadedBy: byCoHost }] });
-    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
     fireEvent.click(await screen.findByText('Co-host Rules'));
     expect(await screen.findByRole('button', { name: /^edit$/i })).toBeInTheDocument();
   });
 
-  it('does not offer the DM Edit on a document someone else shared in', async () => {
+  it('does not offer the GM Edit on a document someone else shared in', async () => {
     listCampaignDocuments.mockResolvedValue({ documents: [{ ...shared('d7', 'Linked Lore', 'lore.md'), uploadedBy: byCoHost, canEdit: false }] });
-    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
     fireEvent.click(await screen.findByText('Linked Lore'));
     await waitFor(() => expect(screen.getAllByText('Linked Lore').length).toBeGreaterThan(1));
     expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
@@ -409,7 +409,7 @@ describe('who is offered Edit', () => {
 
   it('does not offer a player Edit on the campaign\'s own document', async () => {
     listCampaignDocuments.mockResolvedValue({ documents: [{ ...own('d8', 'Table Rules', 'table.md'), uploadedBy: byCoHost, canEdit: false }] });
-    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM={false} />);
     fireEvent.click(await screen.findByText('Table Rules'));
     await waitFor(() => expect(screen.getAllByText('Table Rules').length).toBeGreaterThan(1));
     expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
@@ -418,7 +418,7 @@ describe('who is offered Edit', () => {
   // The server answers 404 to such a save.
   it('does not offer Edit on a global document to its uploader once they may no longer edit it', async () => {
     listCampaignDocuments.mockResolvedValue({ documents: [{ ...shared('d9', 'Global Rules', 'global.md'), canEdit: false }] });
-    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM />);
     fireEvent.click(await screen.findByText('Global Rules'));
     await waitFor(() => expect(screen.getAllByText('Global Rules').length).toBeGreaterThan(1));
     expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
@@ -426,7 +426,7 @@ describe('who is offered Edit', () => {
 
   it('offers Edit on a document someone else shared in when the server says this user may edit it', async () => {
     listCampaignDocuments.mockResolvedValue({ documents: [{ ...shared('d10', 'Admin Copy', 'admin.md'), uploadedBy: byCoHost, canEdit: true }] });
-    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isGM={false} />);
     fireEvent.click(await screen.findByText('Admin Copy'));
     expect(await screen.findByRole('button', { name: /^edit$/i })).toBeInTheDocument();
   });

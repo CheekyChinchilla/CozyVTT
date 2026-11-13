@@ -10,11 +10,11 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { DnD5eCharacterEditor } from '../dnd5e/DnD5eCharacterEditor';
-import { Pathfinder2eCharacterEditor } from '../pathfinder2e/Pathfinder2eCharacterEditor';
-import { CallOfCthulhu7eCharacterEditor } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
-import { cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
+import { FifthEditionCharacterEditor } from '../fifth-edition/FifthEditionCharacterEditor';
+import { FantasyD20CharacterEditor } from '../fantasy-d20/FantasyD20CharacterEditor';
+import { HorrorD100CharacterEditor } from '../horror-d100/HorrorD100CharacterEditor';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
+import { horrorD100Character } from '../horror-d100/__tests__/sheetFixture';
 import type { Character, CharacterData } from '../../../types';
 
 vi.mock('@/hooks/queries', () => ({
@@ -23,12 +23,12 @@ vi.mock('@/hooks/queries', () => ({
 
 const ability = { score: 10, modifier: 0 };
 
-function dndCharacter(overrides: Record<string, unknown> = {}): Character {
+function fifthEditionCharacter(overrides: Record<string, unknown> = {}): Character {
   return {
     id: 'char-1',
     userId: 'user-1',
     name: 'Aldra',
-    gameSystem: 'DND_5E',
+    gameSystem: 'FIFTH_EDITION',
     campaignId: null,
     tokenImageUrl: null,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -55,9 +55,9 @@ type EditorProps = {
 };
 
 const EDITORS: { system: string; Editor: React.FC<EditorProps>; character: (o?: Record<string, unknown>) => Character }[] = [
-  { system: 'D&D 5e', Editor: DnD5eCharacterEditor, character: dndCharacter },
-  { system: 'Pathfinder 2e', Editor: Pathfinder2eCharacterEditor, character: pf2eCharacter },
-  { system: 'Call of Cthulhu 7e', Editor: CallOfCthulhu7eCharacterEditor, character: cocCharacter },
+  { system: '5E', Editor: FifthEditionCharacterEditor, character: fifthEditionCharacter },
+  { system: 'Fantasy d20', Editor: FantasyD20CharacterEditor, character: fantasyD20Character },
+  { system: 'Horror d100', Editor: HorrorD100CharacterEditor, character: horrorD100Character },
 ];
 
 function open({ Editor, character }: (typeof EDITORS)[number], sheet: Record<string, unknown> = {}) {

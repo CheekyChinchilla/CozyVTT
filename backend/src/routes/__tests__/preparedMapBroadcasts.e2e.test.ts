@@ -1,10 +1,10 @@
 /**
- * A map the DM is preparing is theirs alone, and so are its live edits.
+ * A map the GM is preparing is theirs alone, and so are its live edits.
  *
  * Walls, lights, fog, pings, the explored-memory reset and the map's
  * settings were broadcast to the whole campaign for any map, so a player's
  * socket was sent the layout of a map it may not fetch. They now go to
- * everyone only for the map the campaign is showing, and to the DM's sockets
+ * everyone only for the map the campaign is showing, and to the GM's sockets
  * for any other, over the socket events and the REST routes alike.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -21,25 +21,25 @@ jest.setTimeout(30000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let shownId: string;
 let preparedId: string;
 let rest: ReturnType<typeof request.agent>;
-let dm: ClientSocket;
+let gm: ClientSocket;
 let player: ClientSocket;
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `pmb-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gmUser = await createTestUser({ email: `pmb-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const playerUser = await createTestUser({ email: `pmb-player-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Prepared broadcasts ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Prepared broadcasts ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -51,17 +51,17 @@ beforeAll(async () => {
   preparedId = (await prisma.map.create({ data: { ...base, name: 'Prepared' } })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: shownId } });
   rest = request.agent(app);
-  expect((await rest.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  expect((await rest.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
 beforeEach(async () => {
-  dm = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  gm = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
   player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
 });
 
 afterEach(() => {
-  dm.disconnect();
+  gm.disconnect();
   player.disconnect();
 });
 
@@ -69,7 +69,7 @@ afterAll(async () => {
   await server.close();
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
@@ -88,52 +88,53 @@ async function withLight<T extends { id: string }>(mapId: string, light: T): Pro
   return light;
 }
 
-/** Each source of a map's live edit: what the DM does, and what it sends. */
+/** Each source of a map's live edit: what the GM does, and what it sends. */
 const SOURCES: Array<[string, string, string, (mapId: string) => Promise<unknown> | void]> = [
-  ['wall:add', 'wall:added', 'DM', (mapId) => { dm.emit('wall:add', { mapId, segment: wallFor() }); }],
-  ['light:add', 'light:added', 'DM', (mapId) => { dm.emit('light:add', { mapId, light: lightFor() }); }],
-  ['fog:operation', 'fog:cells', 'fog:updated', (mapId) => { dm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0] } }); }],
-  ['map.ping', 'map.pinged', 'DM', (mapId) => { dm.emit('map.ping', { mapId, x: 10, y: 10 }); }],
-  ['exploration:reset', 'exploration:state', 'DM', (mapId) => { dm.emit('exploration:reset', { mapId }); }],
-  ['POST lights', 'light:added', 'DM', (mapId) => rest.post(`/api/campaigns/${campaignId}/maps/${mapId}/lights`).send(lightFor())],
-  ['PUT map settings', 'map:settings:updated', 'DM', (mapId) => rest.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ fogEnabled: true, globalIllumination: false })],
-  ['wall:remove', 'wall:removed', 'DM', async (mapId) => {
+  ['wall:add', 'wall:added', 'GM', (mapId) => { gm.emit('wall:add', { mapId, segment: wallFor() }); }],
+  ['light:add', 'light:added', 'GM', (mapId) => { gm.emit('light:add', { mapId, light: lightFor() }); }],
+  ['fog:operation', 'fog:cells', 'fog:updated', (mapId) => { gm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0] } }); }],
+  ['map.ping', 'map.pinged', 'GM', (mapId) => { gm.emit('map.ping', { mapId, x: 10, y: 10 }); }],
+  ['exploration:reset', 'exploration:state', 'GM', (mapId) => { gm.emit('exploration:reset', { mapId }); }],
+  ['POST lights', 'light:added', 'GM', (mapId) => rest.post(`/api/campaigns/${campaignId}/maps/${mapId}/lights`).send(lightFor())],
+  ['PUT map settings', 'map:settings:updated', 'GM', (mapId) => rest.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ fogEnabled: true, globalIllumination: false })],
+  ['wall:remove', 'wall:removed', 'GM', async (mapId) => {
     const wall = await withWall(mapId, wallFor());
-    dm.emit('wall:remove', { mapId, segmentId: wall.id });
+    gm.emit('wall:remove', { mapId, segmentId: wall.id });
   }],
-  ["wall:update, the DM's door", 'wall:updated', 'DM', async (mapId) => {
+  ["wall:update, the GM's door", 'wall:updated', 'GM', async (mapId) => {
     const door = await withWall(mapId, doorFor());
-    dm.emit('wall:update', { mapId, segment: { ...door, type: 'door-open' } });
+    gm.emit('wall:update', { mapId, segment: { ...door, type: 'door-open' } });
   }],
-  ['walls:replace', 'walls:replaced', 'DM', (mapId) => { dm.emit('walls:replace', { mapId, segments: [wallFor()] }); }],
-  ['light:update', 'light:updated', 'DM', async (mapId) => {
+  ['walls:replace', 'walls:replaced', 'GM', (mapId) => { gm.emit('walls:replace', { mapId, segments: [wallFor()] }); }],
+  ['light:update', 'light:updated', 'GM', async (mapId) => {
     const light = await withLight(mapId, lightFor());
-    dm.emit('light:update', { mapId, light: { ...light, brightRadius: 2, dimRadius: 3 } });
+    gm.emit('light:update', { mapId, light: { ...light, brightRadius: 2, dimRadius: 3 } });
   }],
-  ['light:remove', 'light:removed', 'DM', async (mapId) => {
+  ['light:remove', 'light:removed', 'GM', async (mapId) => {
     const light = await withLight(mapId, lightFor());
-    dm.emit('light:remove', { mapId, lightId: light.id });
+    gm.emit('light:remove', { mapId, lightId: light.id });
   }],
-  ['lights:replace', 'lights:replaced', 'DM', (mapId) => { dm.emit('lights:replace', { mapId, lights: [lightFor()] }); }],
-  ['PUT walls', 'walls:replaced', 'DM', (mapId) => rest.put(`${maps(mapId)}/walls`).send({ segments: [wallFor()] })],
-  ['POST walls', 'wall:added', 'DM', (mapId) => rest.post(`${maps(mapId)}/walls`).send(wallFor())],
-  ['PATCH walls', 'wall:updated', 'DM', async (mapId) => {
+  ['lights:replace', 'lights:replaced', 'GM', (mapId) => { gm.emit('lights:replace', { mapId, lights: [lightFor()] }); }],
+  ['PUT walls', 'walls:replaced', 'GM', (mapId) => rest.put(`${maps(mapId)}/walls`).send({ segments: [wallFor()] })],
+  ['POST walls', 'wall:added', 'GM', (mapId) => rest.post(`${maps(mapId)}/walls`).send(wallFor())],
+  ['POST walls/batch', 'walls:replaced', 'GM', (mapId) => rest.post(`${maps(mapId)}/walls/batch`).send({ segments: [wallFor()] })],
+  ['PATCH walls', 'wall:updated', 'GM', async (mapId) => {
     const door = await withWall(mapId, doorFor());
     return rest.patch(`${maps(mapId)}/walls/${door.id}`).send({ type: 'door-open' });
   }],
-  ['DELETE walls', 'wall:removed', 'DM', async (mapId) => {
+  ['DELETE walls', 'wall:removed', 'GM', async (mapId) => {
     const wall = await withWall(mapId, wallFor());
     return rest.delete(`${maps(mapId)}/walls/${wall.id}`);
   }],
-  ['PUT lighting', 'map:settings:updated', 'DM', (mapId) => rest.put(`${maps(mapId)}/lighting`).send({ enabled: true })],
+  ['PUT lighting', 'map:settings:updated', 'GM', (mapId) => rest.put(`${maps(mapId)}/lighting`).send({ enabled: true })],
 ];
 
-describe.each(SOURCES)('%s', (_source, event, dmEvent, act) => {
-  const dmHears = dmEvent === 'DM' ? event : dmEvent;
+describe.each(SOURCES)('%s', (_source, event, gmEvent, act) => {
+  const gmHears = gmEvent === 'GM' ? event : gmEvent;
 
-  it('reaches no player for a prepared map, and reaches the DM', async () => {
+  it('reaches no player for a prepared map, and reaches the GM', async () => {
     const quiet = expectNoEvent(player, event, 800);
-    const heard = waitForEvent<{ mapId: string }>(dm, dmHears);
+    const heard = waitForEvent<{ mapId: string }>(gm, gmHears);
     await act(preparedId);
     expect((await heard).mapId).toBe(preparedId);
     await quiet;
@@ -146,10 +147,10 @@ describe.each(SOURCES)('%s', (_source, event, dmEvent, act) => {
   });
 });
 
-// A DM's other tab showing a map being prepared was told nothing when the
+// A GM's other tab showing a map being prepared was told nothing when the
 // map was deleted, and every edit made there failed until a reload.
 describe('deleting a map the table is not on', () => {
-  it("tells the DM's sockets which map went, and no player", async () => {
+  it("tells the GM's sockets which map went, and no player", async () => {
     const doomed = (await prisma.map.create({
       data: {
         campaignId, name: 'Doomed', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x',
@@ -157,7 +158,7 @@ describe('deleting a map the table is not on', () => {
       },
     })).id;
     const quiet = expectNoEvent(player, 'map.deleted', 800);
-    const heard = waitForEvent<{ mapId: string }>(dm, 'map.deleted');
+    const heard = waitForEvent<{ mapId: string }>(gm, 'map.deleted');
     expect((await rest.delete(`/api/campaigns/${campaignId}/maps/${doomed}`)).status).toBe(200);
     expect((await heard).mapId).toBe(doomed);
     await quiet;

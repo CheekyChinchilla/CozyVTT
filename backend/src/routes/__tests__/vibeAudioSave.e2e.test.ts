@@ -3,7 +3,7 @@
  *
  * A period's audio names an asset the whole table will fetch while that
  * period is the vibe, so saving the periods asks the same question the
- * ambient setter asks: may this DM open this track to the room? Without
+ * ambient setter asks: may this GM open this track to the room? Without
  * that, the period editor would be a second door past the check the
  * Atmosphere panel already makes.
  *
@@ -24,11 +24,11 @@ import {
 
 const app = createTestApp();
 
-let dmId: string;
+let gmId: string;
 let outsiderId: string;
 let campaignId: string;
 let otherCampaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let ownTrackId: string;
 let campaignTrackId: string;
 let strangersTrackId: string;
@@ -54,7 +54,7 @@ async function asset(uploaderId: string, type: 'AUDIO' | 'TOKEN', scope: 'USER' 
 }
 
 const save = (audio: string | null) =>
-  dm.put(`/api/campaigns/${campaignId}/vibe`).send({
+  gm.put(`/api/campaigns/${campaignId}/vibe`).send({
     vibeSettings: {
       enabled: true,
       periods: [{ name: 'battle', hue: '#FF9966', filter: 'none', audio }],
@@ -64,36 +64,36 @@ const save = (audio: string | null) =>
 beforeAll(async () => {
   const stamp = Date.now();
   const [d, o] = await Promise.all([
-    createTestUser({ email: `vibesave-dm-${stamp}@test.cozyvtt.local`, displayName: 'VibeSave DM' }),
+    createTestUser({ email: `vibesave-dm-${stamp}@test.cozyvtt.local`, displayName: 'VibeSave GM' }),
     createTestUser({ email: `vibesave-outsider-${stamp}@test.cozyvtt.local`, displayName: 'VibeSave Outsider' }),
   ]);
-  dmId = d.id;
+  gmId = d.id;
   outsiderId = o.id;
 
-  campaignId = (await createTestCampaign(dmId, { name: `VibeSave ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `VibeSave ${stamp}` })).id;
   otherCampaignId = (await createTestCampaign(outsiderId, { name: `VibeSave other ${stamp}` })).id;
   await prisma.campaignMembership.create({
-    data: { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+    data: { userId: gmId, campaignId, role: 'GM', characterIds: [] },
   });
 
-  ownTrackId = await asset(dmId, 'AUDIO', 'USER', null, 'own-drums');
-  campaignTrackId = await asset(dmId, 'AUDIO', 'CAMPAIGN', campaignId, 'table-theme');
+  ownTrackId = await asset(gmId, 'AUDIO', 'USER', null, 'own-drums');
+  campaignTrackId = await asset(gmId, 'AUDIO', 'CAMPAIGN', campaignId, 'table-theme');
   strangersTrackId = await asset(outsiderId, 'AUDIO', 'USER', null, 'private-recording');
   otherCampaignTrackId = await asset(outsiderId, 'AUDIO', 'CAMPAIGN', otherCampaignId, 'their-theme');
-  pictureId = await asset(dmId, 'TOKEN', 'USER', null, 'a-picture');
+  pictureId = await asset(gmId, 'TOKEN', 'USER', null, 'a-picture');
 
-  dm = await login(`vibesave-dm-${stamp}@test.cozyvtt.local`);
+  gm = await login(`vibesave-dm-${stamp}@test.cozyvtt.local`);
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: { in: [dmId, outsiderId] } } });
+  await prisma.asset.deleteMany({ where: { uploadedById: { in: [gmId, outsiderId] } } });
   await cleanupCampaigns([campaignId, otherCampaignId]);
-  await cleanupUsers([dmId, outsiderId]);
+  await cleanupUsers([gmId, outsiderId]);
   await prisma.$disconnect();
 });
 
 describe('saving vibe periods with audio', () => {
-  it("accepts the DM's own track, a campaign track, and no track", async () => {
+  it("accepts the GM's own track, a campaign track, and no track", async () => {
     for (const audio of [ownTrackId, campaignTrackId, null]) {
       const res = await save(audio);
       expect(res.status).toBe(200);
@@ -103,7 +103,7 @@ describe('saving vibe periods with audio', () => {
     expect(periods[0].audio).toBeNull();
   });
 
-  it('refuses a track the DM cannot open to the room, naming the period', async () => {
+  it('refuses a track the GM cannot open to the room, naming the period', async () => {
     for (const audio of [strangersTrackId, otherCampaignTrackId, randomUUID()]) {
       const res = await save(audio);
       expect(res.status).toBe(400);

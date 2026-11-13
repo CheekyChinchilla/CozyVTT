@@ -32,13 +32,13 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-const blank = (): Record<string, unknown> => getBlankTemplate(GameSystem.DND_5E).data;
+const blank = (): Record<string, unknown> => getBlankTemplate(GameSystem.FIFTH_EDITION).data;
 const keyCount = (v: unknown): number => Object.keys(v as object).length;
 
 it('drops a key the schema does not declare when a character is created', async () => {
   const res = await agent
     .post('/api/characters')
-    .send({ name: 'Strip Me', gameSystem: 'DND_5E', data: { ...blank(), injected: 'nope' } });
+    .send({ name: 'Strip Me', gameSystem: 'FIFTH_EDITION', data: { ...blank(), injected: 'nope' } });
   expect(res.status).toBe(201);
 
   const stored = await prisma.character.findUniqueOrThrow({ where: { id: res.body.character.id } });
@@ -49,7 +49,7 @@ it('drops a key the schema does not declare when a character is created', async 
 it('drops a key the schema does not declare when a character is updated', async () => {
   const created = await agent
     .post('/api/characters')
-    .send({ name: 'Strip Me Too', gameSystem: 'DND_5E', data: blank() });
+    .send({ name: 'Strip Me Too', gameSystem: 'FIFTH_EDITION', data: blank() });
   expect(created.status).toBe(201);
   const id: string = created.body.character.id;
 
@@ -66,15 +66,15 @@ it('drops a key the schema does not declare when a character is updated', async 
 
 /**
  * A field the editor writes has to be one the schema declares, or it is lost on
- * the first save. The Pathfinder 2e editor gives every feat a description box.
+ * the first save. The Fantasy d20 editor gives every feat a description box.
  */
-describe('Pathfinder 2e feat descriptions', () => {
-  const pf2e = (): Record<string, unknown> => getBlankTemplate(GameSystem.PATHFINDER_2E).data;
+describe('Fantasy d20 feat descriptions', () => {
+  const fantasyD20 = (): Record<string, unknown> => getBlankTemplate(GameSystem.FANTASY_D20).data;
   const withFeat = (): Record<string, unknown> => ({
-    ...pf2e(),
+    ...fantasyD20(),
     feats: {
       ancestryAndHeritage: [],
-      class: [{ name: 'Power Attack', level: 1, description: 'Two actions, one extra die.' }],
+      class: [{ name: 'Heavy Swing', level: 1, description: 'Two actions, one extra die.' }],
       skill: [],
       general: [],
       bonus: [],
@@ -88,11 +88,11 @@ describe('Pathfinder 2e feat descriptions', () => {
   it('keeps a feat description when a character is created', async () => {
     const res = await agent
       .post('/api/characters')
-      .send({ name: 'Feat Keeper', gameSystem: 'PATHFINDER_2E', data: withFeat() });
+      .send({ name: 'Feat Keeper', gameSystem: 'FANTASY_D20', data: withFeat() });
     expect(res.status).toBe(201);
 
     expect(await storedFeat(res.body.character.id)).toEqual({
-      name: 'Power Attack',
+      name: 'Heavy Swing',
       level: 1,
       description: 'Two actions, one extra die.',
     });
@@ -101,7 +101,7 @@ describe('Pathfinder 2e feat descriptions', () => {
   it('keeps a feat description when a character is updated', async () => {
     const created = await agent
       .post('/api/characters')
-      .send({ name: 'Feat Keeper Too', gameSystem: 'PATHFINDER_2E', data: pf2e() });
+      .send({ name: 'Feat Keeper Too', gameSystem: 'FANTASY_D20', data: fantasyD20() });
     expect(created.status).toBe(201);
     const id: string = created.body.character.id;
 
@@ -109,24 +109,24 @@ describe('Pathfinder 2e feat descriptions', () => {
     expect(res.status).toBe(200);
 
     expect(await storedFeat(id)).toEqual({
-      name: 'Power Attack',
+      name: 'Heavy Swing',
       level: 1,
       description: 'Two actions, one extra die.',
     });
   });
 });
 
-/** A Call of Cthulhu custom skill carries its own name, which the sheet shows. */
-describe('Call of Cthulhu custom skill names', () => {
-  const coc = (): Record<string, unknown> & { skills: Record<string, unknown> } =>
-    getBlankTemplate(GameSystem.CALL_OF_CTHULHU_7E).data as Record<string, unknown> & { skills: Record<string, unknown> };
+/** A Horror d100 skill of the character's own carries its name, which the sheet shows. */
+describe('Horror d100 custom skill names', () => {
+  const horrorD100 = (): Record<string, unknown> & { skills: Record<string, unknown> } =>
+    getBlankTemplate(GameSystem.HORROR_D100).data as Record<string, unknown> & { skills: Record<string, unknown> };
   const withCustomSkill = (): Record<string, unknown> => {
-    const sheet = coc();
+    const sheet = horrorD100();
     return {
       ...sheet,
       skills: {
         ...sheet.skills,
-        customSkills: [{ name: 'Cryptography', baseValue: 1, currentValue: 40, improvementChecked: false }],
+        own: [{ name: 'Cryptography', value: 40, experienceCheck: false }],
       },
     };
   };
@@ -134,7 +134,7 @@ describe('Call of Cthulhu custom skill names', () => {
   it('keeps a custom skill name when a character is updated', async () => {
     const created = await agent
       .post('/api/characters')
-      .send({ name: 'Custom Skill Keeper', gameSystem: 'CALL_OF_CTHULHU_7E', data: coc() });
+      .send({ name: 'Custom Skill Keeper', gameSystem: 'HORROR_D100', data: horrorD100() });
     expect(created.status).toBe(201);
     const id: string = created.body.character.id;
 
@@ -142,8 +142,8 @@ describe('Call of Cthulhu custom skill names', () => {
     expect(res.status).toBe(200);
 
     const stored = await prisma.character.findUniqueOrThrow({ where: { id } });
-    expect((stored.data as { skills: { customSkills: unknown[] } }).skills.customSkills).toEqual([
-      { name: 'Cryptography', baseValue: 1, currentValue: 40, improvementChecked: false },
+    expect((stored.data as { skills: { own: unknown[] } }).skills.own).toEqual([
+      { name: 'Cryptography', value: 40, experienceCheck: false },
     ]);
   });
 });

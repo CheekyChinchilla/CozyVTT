@@ -20,6 +20,9 @@
 import 'dotenv/config';
 import { PrismaClient, GameSystem, type Prisma } from '@prisma/client';
 import { createPrismaClient } from '../config/prismaClient';
+import { sheetAsSent } from '../legacy/sheetConversion';
+import { oldHorrorD100Likeness } from '../legacy/horrorD100Sheet';
+import { toJson } from '../utils/prisma-json';
 
 interface MigrationReport {
   totalCharacters: number;
@@ -66,69 +69,77 @@ function inferGameSystem(rawData: unknown): {
   }
   const data = rawData as ShapeProbe;
 
-  // D&D 5e Detection
+  // 5E Detection
   // Look for: stats.strength.score, stats.dexterity, proficiencyBonus
   if (data.stats?.strength?.score !== undefined &&
       data.stats?.dexterity?.score !== undefined &&
       data.proficiencyBonus !== undefined) {
     return {
-      system: GameSystem.DND_5E,
+      system: GameSystem.FIFTH_EDITION,
       confidence: 'high',
-      reason: 'Has stats.strength.score, stats.dexterity, and proficiencyBonus (D&D 5e signature)'
+      reason: 'Has stats.strength.score, stats.dexterity, and proficiencyBonus (5E signature)'
     };
   }
 
-  // Pathfinder 2e Detection
+  // Fantasy d20 Detection
   // Look for: attributes.strength.score + skills with proficiencyRank
   if (data.attributes?.strength?.score !== undefined &&
       data.attributes?.dexterity?.score !== undefined &&
       (data.skills?.acrobatics?.proficiencyRank !== undefined ||
        data.perception?.proficiencyRank !== undefined)) {
     return {
-      system: GameSystem.PATHFINDER_2E,
+      system: GameSystem.FANTASY_D20,
       confidence: 'high',
-      reason: 'Has attributes.strength.score and proficiencyRank fields (Pathfinder 2e signature)'
+      reason: 'Has attributes.strength.score and proficiencyRank fields (Fantasy d20 signature)'
     };
   }
 
-  // Call of Cthulhu 7e Detection
-  // Look for: characteristics.STR.regular, characteristics.STR.half, characteristics.STR.fifth
-  if (data.characteristics?.STR?.regular !== undefined &&
-      data.characteristics?.STR?.half !== undefined &&
-      data.characteristics?.STR?.fifth !== undefined) {
+  // Horror d100 Detection: the sheet before 1.7.0 kept each characteristic
+  // as a value with its half and fifth, which no other sheet does. The old
+  // sheet's keys are read by the legacy folder alone.
+  const oldHorrorD100 = oldHorrorD100Likeness(rawData);
+  if (oldHorrorD100 === 'signature') {
     return {
-      system: GameSystem.CALL_OF_CTHULHU_7E,
+      system: GameSystem.HORROR_D100,
       confidence: 'high',
-      reason: 'Has characteristics.STR with regular/half/fifth values (Call of Cthulhu 7e signature)'
+      reason: 'Has STR stored as a value with its half and fifth (the Horror d100 sheet before 1.7.0)'
     };
   }
 
   // Additional heuristics for lower confidence detection
 
-  // Check for D&D 5e class-specific fields
+  // Check for 5E class-specific fields
   if (data.class && data.level && data.race && data.stats) {
     return {
-      system: GameSystem.DND_5E,
+      system: GameSystem.FIFTH_EDITION,
       confidence: 'medium',
-      reason: 'Has class, level, race, and stats (likely D&D 5e)'
+      reason: 'Has class, level, race, and stats (likely 5E)'
     };
   }
 
-  // Check for Pathfinder 2e-specific fields
+  // Check for Fantasy d20-specific fields
   if (data.ancestry && data.heritage && data.attributes) {
     return {
-      system: GameSystem.PATHFINDER_2E,
+      system: GameSystem.FANTASY_D20,
       confidence: 'medium',
-      reason: 'Has ancestry, heritage, and attributes (likely Pathfinder 2e)'
+      reason: 'Has ancestry, heritage, and attributes (likely Fantasy d20)'
     };
   }
 
-  // Check for Call of Cthulhu-specific fields
-  if (data.occupation && data.era && data.characteristics) {
+  // Check for Horror d100-specific fields: the rebuilt sheet's, then those of
+  // the sheet before 1.7.0
+  if (data.profession && data.era && data.characteristics) {
     return {
-      system: GameSystem.CALL_OF_CTHULHU_7E,
+      system: GameSystem.HORROR_D100,
       confidence: 'medium',
-      reason: 'Has occupation, era, and characteristics (likely Call of Cthulhu 7e)'
+      reason: 'Has profession, era, and characteristics (likely Horror d100)'
+    };
+  }
+  if (oldHorrorD100 === 'likely') {
+    return {
+      system: GameSystem.HORROR_D100,
+      confidence: 'medium',
+      reason: 'Has a profession, an era and characteristics as the sheet before 1.7.0 named them (likely Horror d100)'
     };
   }
 
@@ -220,9 +231,12 @@ async function migrateCharacters(
 
     if (!dryRun && heldBack === null) {
       // Only while it still has no game system, in case it was given one since.
+      // A Horror d100 sheet, always in the shape before 1.7.0 here, is given
+      // the rebuilt sheet in the same write, as every stored one has.
+      const converted = sheetAsSent(inference.system, character.data);
       await prisma.character.updateMany({
         where: { id: character.id, gameSystem: null },
-        data: { gameSystem: inference.system },
+        data: converted !== character.data ? { gameSystem: inference.system, data: toJson(converted) } : { gameSystem: inference.system },
       });
     }
   }
@@ -316,9 +330,9 @@ Description:
   with the character's id.
 
 Detection Heuristics:
-  - D&D 5e: stats.strength.score + proficiencyBonus
-  - Pathfinder 2e: attributes.strength.score + proficiencyRank fields
-  - Call of Cthulhu 7e: characteristics.STR.regular/half/fifth
+  - 5E: stats.strength.score + proficiencyBonus
+  - Fantasy d20: attributes.strength.score + proficiencyRank fields
+  - Horror d100: STR stored as a value with its half and fifth (the sheet before 1.7.0)
 
 Confidence Levels:
   HIGH:   Strong signature match, applied with --execute

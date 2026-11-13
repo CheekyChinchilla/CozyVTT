@@ -2,10 +2,10 @@
  * A spectator cannot change a character, not even one they own.
  *
  * `character.hp.update` and `character.hitdice.spend` asked only "owner or
- * DM", so a member demoted to spectator could still change the hit points of
+ * GM", so a member demoted to spectator could still change the hit points of
  * a character they had brought while a player, and a token bound to it
  * followed on every screen: its bar, its downed fade, whether it holds its
- * square. Spectators are watching; the DM can still cover for them.
+ * square. Spectators are watching; the GM can still cover for them.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -21,11 +21,11 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `spec-char-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let spectatorId: string;
 let campaignId: string;
 let characterId: string;
-let dmCookie: string;
+let gmCookie: string;
 let spectatorCookie: string;
 
 type Sheet = { hp: { current: number; maximum: number; temporary: number }; hitDice: Array<{ remaining: number }> };
@@ -34,27 +34,27 @@ const stored = async (): Promise<Sheet> =>
   (await prisma.character.findUniqueOrThrow({ where: { id: characterId } })).data as unknown as Sheet;
 
 beforeAll(async () => {
-  const [dm, spectator] = await Promise.all(
+  const [gm, spectator] = await Promise.all(
     ['dm', 'spectator'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Spec ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   spectatorId = spectator.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Spec ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  const campaign = await prisma.campaign.create({ data: { name: `Spec ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   const character = await prisma.character.create({
-    data: { userId: spectatorId, campaignId, name: 'Aldra', gameSystem: 'DND_5E', data: toJson(sheet()) },
+    data: { userId: spectatorId, campaignId, name: 'Aldra', gameSystem: 'FIFTH_EDITION', data: toJson(sheet()) },
   });
   characterId = character.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [characterId] },
     ],
   });
   server = await createWsTestServer();
-  [dmCookie, spectatorCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(spectatorId)]);
+  [gmCookie, spectatorCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(spectatorId)]);
 });
 
 beforeEach(async () => {
@@ -65,23 +65,23 @@ afterAll(async () => {
   await server?.close();
   await prisma.character.deleteMany({ where: { id: characterId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, spectatorId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, spectatorId] } } });
   await prisma.$disconnect();
 });
 
 describe('a spectator and the character they own', () => {
   it('may not change its hit points, and nobody is told anything', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const spectator = await server.connectAndAuth(spectatorCookie, campaignId);
 
     const denial = waitForEvent<{ message: string }>(spectator, 'error');
-    const silence = expectNoEvent(dm, 'character.hp.updated');
+    const silence = expectNoEvent(gm, 'character.hp.updated');
     spectator.emit('character.hp.update', { characterId, delta: -5 });
     expect((await denial).message).toMatch(/spectator/i);
     await silence;
     expect((await stored()).hp.current).toBe(10);
 
-    dm.disconnect();
+    gm.disconnect();
     spectator.disconnect();
   });
 
@@ -96,13 +96,13 @@ describe('a spectator and the character they own', () => {
     spectator.disconnect();
   });
 
-  it('is still the DM\'s to change', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+  it('is still the GM\'s to change', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-    const updated = waitForEvent<{ hp: { current: number } }>(dm, 'character.hp.updated');
-    dm.emit('character.hp.update', { characterId, delta: -5 });
+    const updated = waitForEvent<{ hp: { current: number } }>(gm, 'character.hp.updated');
+    gm.emit('character.hp.update', { characterId, delta: -5 });
     expect((await updated).hp.current).toBe(5);
 
-    dm.disconnect();
+    gm.disconnect();
   });
 });

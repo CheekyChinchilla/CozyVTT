@@ -3,7 +3,7 @@
  *
  * Right-clicking a row offers what right-clicking the token on the map
  * offers about its character: View Character Sheet to any member, Roll... to
- * whoever may roll that character, and the DM a creature's Roll.... Double-
+ * whoever may roll that character, and the GM a creature's Roll.... Double-
  * clicking a character's row opens its sheet. The name is a button, so the
  * menu opens from the keyboard too, and from a click or a tap on it: a
  * single click on the name used to do nothing, which left a touch screen
@@ -20,7 +20,7 @@ import type { CombatantEntry, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 import { characterMenuRows, openCharacterMenu } from '@/test/characterMenuRows';
 
-const seat = vi.hoisted(() => ({ role: 'PLAYER' }));
+const seat = vi.hoisted(() => ({ role: 'PLAYER', gameSystem: 'FIFTH_EDITION' as string | null }));
 const getCharacter = vi.hoisted(() => vi.fn());
 
 vi.mock('@/contexts/CampaignContext', () => ({
@@ -30,7 +30,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
     viewedMap: { id: 'map-1' },
     campaign: {
       id: 'camp-1',
-      gameSystem: 'DND_5E',
+      gameSystem: seat.gameSystem,
       characters: [{ id: 'char-alice', userId: 'alice' }, { id: 'char-bob', userId: 'bob' }],
       memberships: [{ userId: 'alice', role: seat.role }],
     },
@@ -56,15 +56,16 @@ vi.mock('@/components/character/CharacterSheetViewerModal', () => ({
   default: ({ character }: { character: { id: string } }) => <div role="dialog" aria-label={`Sheet of ${character.id}`} />,
 }));
 
-// The pickers say what they were given: whose rolls, and where they stand.
+// The pickers say what they were given: whose rolls, and where they stand,
+// and a creature's by which system's rules.
 vi.mock('@/components/campaign/CharacterRollPicker', () => ({
   default: ({ characterId, anchorX, anchorY }: { characterId: string; anchorX: number; anchorY: number }) =>
     <div data-testid="character-rolls">{`${characterId} at ${anchorX}, ${anchorY}`}</div>,
 }));
 
 vi.mock('@/components/campaign/NpcRollPicker', () => ({
-  default: ({ token, anchorX, anchorY }: { token: { id: string }; anchorX: number; anchorY: number }) =>
-    <div data-testid="creature-rolls">{`${token.id} at ${anchorX}, ${anchorY}`}</div>,
+  default: ({ token, gameSystem, anchorX, anchorY }: { token: { id: string }; gameSystem?: string | null; anchorX: number; anchorY: number }) =>
+    <div data-testid="creature-rolls" data-game-system={String(gameSystem)}>{`${token.id} at ${anchorX}, ${anchorY}`}</div>,
 }));
 
 const token = (id: string, name: string, extra: Partial<Token> = {}): Token => ({
@@ -81,6 +82,7 @@ const entry = (tokenId: string, name: string, type: CombatantEntry['type'], mapI
 
 beforeEach(() => {
   seat.role = 'PLAYER';
+  seat.gameSystem = 'FIFTH_EDITION';
   getCharacter.mockReset();
   getCharacter.mockImplementation(async (id: string) => ({ character: { id } }));
   useGameStore.getState().setTokens([
@@ -127,8 +129,8 @@ describe("a combatant's right-click menu", () => {
     expect(menuItem('Roll...')).not.toBeInTheDocument();
   });
 
-  it("offers the DM a creature's rolls", () => {
-    seat.role = 'DM';
+  it("offers the GM a creature's rolls", () => {
+    seat.role = 'GM';
     render(<InitiativeTracker />);
 
     fireEvent.contextMenu(screen.getByText('Goblin'));
@@ -163,7 +165,7 @@ describe('double-clicking a combatant', () => {
   });
 
   it('does nothing on a creature', () => {
-    seat.role = 'DM';
+    seat.role = 'GM';
     render(<InitiativeTracker />);
 
     fireEvent.doubleClick(screen.getByText('Goblin'));
@@ -171,8 +173,8 @@ describe('double-clicking a combatant', () => {
     expect(getCharacter).not.toHaveBeenCalled();
   });
 
-  it("leaves the DM's initiative value to its own editing", () => {
-    seat.role = 'DM';
+  it("leaves the GM's initiative value to its own editing", () => {
+    seat.role = 'GM';
     render(<InitiativeTracker />);
 
     fireEvent.doubleClick(screen.getByRole('button', { name: 'Initiative for Alice: 10. Edit' }));
@@ -238,7 +240,7 @@ describe('the menu from a click on the name', () => {
 });
 
 // A touch screen has no right button: a finger held on the row opens the
-// same menu, item for item, for a player as for the DM.
+// same menu, item for item, for a player as for the GM.
 describe('the menu from a finger held on the row', () => {
   const labels = () => [...document.querySelectorAll<HTMLElement>('div.fixed.z-50 button')].map((b) => b.textContent);
 
@@ -271,9 +273,9 @@ describe("a combatant's menu, as each viewer is shown it", () => {
   it.each([
     ['PLAYER', 'Alice', ['[eye] View Character Sheet', '[dices] Roll...']],
     ['PLAYER', 'Bob', ['[eye] View Character Sheet']],
-    ['DM', 'Alice', ['[eye] View Character Sheet', '[dices] Roll...']],
-    ['DM', 'Bob', ['[eye] View Character Sheet', '[dices] Roll...']],
-    ['DM', 'Goblin', ['[dices] Roll...']],
+    ['GM', 'Alice', ['[eye] View Character Sheet', '[dices] Roll...']],
+    ['GM', 'Bob', ['[eye] View Character Sheet', '[dices] Roll...']],
+    ['GM', 'Goblin', ['[dices] Roll...']],
     ['SPECTATOR', 'Alice', ['[eye] View Character Sheet']],
   ])('for a %s on %s', (role, name, expected) => {
     seat.role = role;
@@ -295,8 +297,8 @@ describe("a combatant's menu, as each viewer is shown it", () => {
     expect(openCharacterMenu()).toBeNull();
   });
 
-  it('offers the DM nothing on an object', () => {
-    seat.role = 'DM';
+  it('offers the GM nothing on an object', () => {
+    seat.role = 'GM';
     useGameStore.getState().setTokens([token('chest', 'Chest', { type: TokenType.OBJECT })]);
     useGameStore.getState().setCombatState({ active: false, round: 0, currentTokenId: null, combatants: [entry('chest', 'Chest', 'npc')] });
     render(<InitiativeTracker />);
@@ -307,7 +309,7 @@ describe("a combatant's menu, as each viewer is shown it", () => {
 
   it.each([
     ['PLAYER', 'Alice', 'character-rolls', 'char-alice at 40, 60'],
-    ['DM', 'Goblin', 'creature-rolls', 'g at 40, 60'],
+    ['GM', 'Goblin', 'creature-rolls', 'g at 40, 60'],
   ])("opens a %s's Roll... picker on %s where the menu was opened", (role, name, picker, given) => {
     seat.role = role;
     render(<InitiativeTracker />);
@@ -315,6 +317,21 @@ describe("a combatant's menu, as each viewer is shown it", () => {
     fireEvent.click(menuItem('Roll...')!);
 
     expect(screen.getByTestId(picker)).toHaveTextContent(new RegExp(`^${given}$`));
+  });
+
+  // A stat block is read as 5E's when the campaign's system gives no other
+  // rules: one with no system, or one CozyVTT no longer supports.
+  it.each([
+    ['no system', null],
+    ['a system CozyVTT no longer supports', 'SOMETHING_ELSE'],
+  ])("gives a creature's Roll... picker the 5E rules in a campaign with %s", (_case, gameSystem) => {
+    seat.role = 'GM';
+    seat.gameSystem = gameSystem;
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText('Goblin'), { clientX: 40, clientY: 60 });
+    fireEvent.click(menuItem('Roll...')!);
+
+    expect(screen.getByTestId('creature-rolls')).toHaveAttribute('data-game-system', 'FIFTH_EDITION');
   });
 
   it('closes after an item, and on a press elsewhere', async () => {

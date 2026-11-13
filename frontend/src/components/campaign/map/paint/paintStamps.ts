@@ -2,7 +2,7 @@
 // Paint's stamps: a map symbol painted into one square of the grid.
 //
 // Each is drawn by the code, outlined in the colour and filled with the
-// second, so it follows the DM's colours and nothing needs a licence. A
+// second, so it follows the GM's colours and nothing needs a licence. A
 // stamp is drawn about its middle and turned there, in 90 degree steps, as
 // doors and stairs face different ways. On the grid, most sit in the middle
 // of a square; a door sits on a grid line, as a door stands in a wall, and a

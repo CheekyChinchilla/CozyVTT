@@ -51,12 +51,12 @@ async function signedIn(label: string) {
 }
 
 /** A campaign run by `dm`, with `players` in it. */
-async function campaignWith(name: string, dmId: string, playerIds: string[]) {
-  const campaign = await createTestCampaign(dmId, { name });
+async function campaignWith(name: string, gmId: string, playerIds: string[]) {
+  const campaign = await createTestCampaign(gmId, { name });
   campaignIds.push(campaign.id);
   await prisma.campaignMembership.createMany({
     data: [
-      { campaignId: campaign.id, userId: dmId, role: 'DM', characterIds: [] },
+      { campaignId: campaign.id, userId: gmId, role: 'GM', characterIds: [] },
       ...playerIds.map((userId) => ({ campaignId: campaign.id, userId, role: 'PLAYER' as const, characterIds: [] })),
     ],
   });
@@ -70,7 +70,7 @@ afterAll(async () => {
 });
 
 describe('notes and macros from a campaign the person was removed from', () => {
-  let dm: Awaited<ReturnType<typeof signedIn>>;
+  let gm: Awaited<ReturnType<typeof signedIn>>;
   let leaver: Awaited<ReturnType<typeof signedIn>>;
   let stayer: Awaited<ReturnType<typeof signedIn>>;
   let campaignId: string;
@@ -78,19 +78,19 @@ describe('notes and macros from a campaign the person was removed from', () => {
   let stayerNoteId: string;
 
   beforeAll(async () => {
-    dm = await signedIn('Left DM');
+    gm = await signedIn('Left GM');
     leaver = await signedIn('Left Player');
     stayer = await signedIn('Staying Player');
-    campaignId = await campaignWith('Curse of the Left', dm.user.id, [leaver.user.id, stayer.user.id]);
+    campaignId = await campaignWith('Curse of the Left', gm.user.id, [leaver.user.id, stayer.user.id]);
 
     const note = await leaver.agent.post(`/api/campaigns/${campaignId}/notes`).send({ title: 'Suspects', content: '# The baron\n\nLied about the mill.' });
     expect(note.status).toBe(201);
     noteId = note.body.note.id;
     expect((await leaver.agent.post(`/api/campaigns/${campaignId}/macros`)
-      .send({ name: 'Sneak attack', expression: '3d6', characterName: 'Vex', purpose: 'Sneak attack damage' })).status).toBe(201);
+      .send({ name: 'Sneak attack', expression: '3d6', characterName: 'Nesk', purpose: 'Sneak attack damage' })).status).toBe(201);
     stayerNoteId = (await stayer.agent.post(`/api/campaigns/${campaignId}/notes`).send({ title: 'Not yours', content: 'secret' })).body.note.id;
 
-    expect((await dm.agent.delete(`/api/campaigns/${campaignId}/members/${leaver.user.id}`)).status).toBe(200);
+    expect((await gm.agent.delete(`/api/campaigns/${campaignId}/members/${leaver.user.id}`)).status).toBe(200);
   });
 
   it('lists the campaign, with the titles of their notes and their macros', async () => {
@@ -121,10 +121,10 @@ describe('notes and macros from a campaign the person was removed from', () => {
   it('gives each macro its own character and purpose, in the list and for the campaign', async () => {
     const list = await leaver.agent.get('/api/campaigns/left');
     const left = (list.body.campaigns as LeftCampaign[]).find((c) => c.id === campaignId);
-    expect(left!.macros[0]).toMatchObject({ characterName: 'Vex', purpose: 'Sneak attack damage' });
+    expect(left!.macros[0]).toMatchObject({ characterName: 'Nesk', purpose: 'Sneak attack damage' });
 
     const one = await leaver.agent.get(`/api/campaigns/left/${campaignId}`);
-    expect(one.body.macros[0]).toMatchObject({ characterName: 'Vex', purpose: 'Sneak attack damage' });
+    expect(one.body.macros[0]).toMatchObject({ characterName: 'Nesk', purpose: 'Sneak attack damage' });
   });
 
   it('answers the text of one of their notes from that campaign', async () => {
@@ -322,14 +322,14 @@ describe('notes and macros from a campaign the person was removed from', () => {
 });
 
 it('deletes them with the campaign', async () => {
-  const dm = await signedIn('Deleting DM');
+  const gm = await signedIn('Deleting GM');
   const leaver = await signedIn('Removed Before Deletion');
-  const campaignId = await campaignWith('Doomed Table', dm.user.id, [leaver.user.id]);
+  const campaignId = await campaignWith('Doomed Table', gm.user.id, [leaver.user.id]);
   expect((await leaver.agent.post(`/api/campaigns/${campaignId}/notes`).send({ title: 'Gone soon' })).status).toBe(201);
-  expect((await dm.agent.delete(`/api/campaigns/${campaignId}/members/${leaver.user.id}`)).status).toBe(200);
+  expect((await gm.agent.delete(`/api/campaigns/${campaignId}/members/${leaver.user.id}`)).status).toBe(200);
   expect(((await leaver.agent.get('/api/campaigns/left')).body.campaigns as LeftCampaign[]).map((c) => c.id)).toContain(campaignId);
 
-  expect((await dm.agent.delete(`/api/campaigns/${campaignId}`)).status).toBe(200);
+  expect((await gm.agent.delete(`/api/campaigns/${campaignId}`)).status).toBe(200);
 
   expect(((await leaver.agent.get('/api/campaigns/left')).body.campaigns as LeftCampaign[]).map((c) => c.id)).not.toContain(campaignId);
   expect(await prisma.personalNote.count({ where: { campaignId } })).toBe(0);

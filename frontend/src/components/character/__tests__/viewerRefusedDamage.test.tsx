@@ -2,9 +2,9 @@
  * Damage the dice cannot roll, clicked on a sheet at the table, says why and
  * sends nothing.
  *
- * The D&D 5e and Pathfinder 2e sheets offered any damage text as a roll and
+ * The 5E and Fantasy d20 sheets offered any damage text as a roll and
  * sent it, and the server answered "Roll not made: Invalid dice expression:
- * ...", while a Call of Cthulhu weapon's said nothing. Such damage is no
+ * ...", while a Horror d100 weapon's said nothing. Such damage is no
  * longer offered as a roll, and a click on it, the only way to ask on a touch
  * screen, gets the server's answer without anything sent.
  */
@@ -12,9 +12,9 @@ import { it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { Character, CampaignMembership } from '@/types';
 import CharacterSheetViewerModal from '../CharacterSheetViewerModal';
-import { dnd5eCharacter } from '../../character-sheets/dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../../character-sheets/pathfinder2e/__tests__/pf2eFixture';
-import { cocCharacter } from '../../character-sheets/call-of-cthulhu-7e/__tests__/cocFixture';
+import { fifthEditionCharacter } from '../../character-sheets/fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../../character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
+import { horrorD100Character } from '../../character-sheets/horror-d100/__tests__/sheetFixture';
 
 const rollDice = vi.fn().mockResolvedValue({ ok: true, id: 'r' });
 const showToast = vi.fn();
@@ -39,8 +39,8 @@ beforeEach(() => {
   showToast.mockReset();
 });
 
-it("says why a D&D 5e attack's damage does not roll, and sends nothing", async () => {
-  open(dnd5eCharacter({ attacks: [{ name: 'Longsword', attackBonus: 5, damageRoll: '1d8 slashing', damageType: '', range: 5, properties: [], notes: '' }] }));
+it("says why a 5E attack's damage does not roll, and sends nothing", async () => {
+  open(fifthEditionCharacter({ attacks: [{ name: 'Longsword', attackBonus: 5, damageRoll: '1d8 slashing', damageType: '', range: 5, properties: [], notes: '' }] }));
   fireEvent.click(screen.getByRole('tab', { name: 'Combat' }));
   fireEvent.click(screen.getByText('1d8 slashing'));
 
@@ -50,8 +50,8 @@ it("says why a D&D 5e attack's damage does not roll, and sends nothing", async (
   expect(rollDice).not.toHaveBeenCalled();
 });
 
-it("says why a Pathfinder 2e strike's damage does not roll, and sends nothing", async () => {
-  open(pf2eCharacter({ strikes: [{ name: 'Longsword', type: 'melee', attackBonus: 7, damageRoll: '1d8+4 S', damageType: '' }] }));
+it("says why a Fantasy d20 strike's damage does not roll, and sends nothing", async () => {
+  open(fantasyD20Character({ strikes: [{ name: 'Longsword', type: 'melee', attackBonus: 7, damageRoll: '1d8+4 S', damageType: '' }] }));
   fireEvent.click(screen.getByText('1d8+4 S'));
 
   await vi.waitFor(() => expect(showToast).toHaveBeenCalledWith(
@@ -60,8 +60,8 @@ it("says why a Pathfinder 2e strike's damage does not roll, and sends nothing", 
   expect(rollDice).not.toHaveBeenCalled();
 });
 
-it("says why a Call of Cthulhu weapon's damage does not roll, and sends nothing", async () => {
-  open(cocCharacter({ combat: { weapons: [{ name: 'Rock', skill: 'Throw', skillValue: 20, damage: '1d4 thrown', range: 'STR/5 ft', attacks: 1 }] } }));
+it("says why a Horror d100 weapon's damage does not roll, and sends nothing", async () => {
+  open(horrorD100Character({ weapons: [{ name: 'Rock', skill: 'Throw', skillValue: 20, damage: '1d4 thrown', range: 'STR/5 ft', attacks: 1 }] }));
   fireEvent.click(screen.getByRole('tab', { name: 'Combat' }));
   fireEvent.click(screen.getByText('1d4 thrown'));
 

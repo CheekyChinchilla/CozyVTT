@@ -29,13 +29,13 @@ describe('Asset deletion permissions', () => {
   let adminId: string;
   let managerId: string;
   let strangerId: string;
-  let dmId: string;
+  let gmId: string;
   let campaignId: string;
 
   let adminAgent: ReturnType<typeof request.agent>;
   let managerAgent: ReturnType<typeof request.agent>;
   let strangerAgent: ReturnType<typeof request.agent>;
-  let dmAgent: ReturnType<typeof request.agent>;
+  let gmAgent: ReturnType<typeof request.agent>;
 
   async function login(email: string) {
     const agent = request.agent(app);
@@ -73,21 +73,21 @@ describe('Asset deletion permissions', () => {
     const admin = await createTestUser({ email: `ad_${stamp}@test.invalid`, isApproved: true, role: 'ADMIN' });
     const manager = await createTestUser({ email: `mgr_${stamp}@test.invalid`, isApproved: true });
     const stranger = await createTestUser({ email: `str_${stamp}@test.invalid`, isApproved: true });
-    const dm = await createTestUser({ email: `dm_${stamp}@test.invalid`, isApproved: true });
+    const gm = await createTestUser({ email: `dm_${stamp}@test.invalid`, isApproved: true });
 
     adminId = admin.id;
     managerId = manager.id;
     strangerId = stranger.id;
-    dmId = dm.id;
+    gmId = gm.id;
 
     // The permission under test.
     await prisma.user.update({ where: { id: managerId }, data: { globalAssetManager: true } });
 
-    const campaign = await createTestCampaign(dmId);
+    const campaign = await createTestCampaign(gmId);
     campaignId = campaign.id;
     await prisma.campaignMembership.createMany({
       data: [
-        { campaignId, userId: dmId, role: CampaignRole.DM },
+        { campaignId, userId: gmId, role: CampaignRole.GM },
         { campaignId, userId: strangerId, role: CampaignRole.PLAYER },
       ],
     });
@@ -95,15 +95,15 @@ describe('Asset deletion permissions', () => {
     adminAgent = await login(`ad_${stamp}@test.invalid`);
     managerAgent = await login(`mgr_${stamp}@test.invalid`);
     strangerAgent = await login(`str_${stamp}@test.invalid`);
-    dmAgent = await login(`dm_${stamp}@test.invalid`);
+    gmAgent = await login(`dm_${stamp}@test.invalid`);
   });
 
   afterAll(async () => {
     await prisma.asset.deleteMany({
-      where: { uploadedById: { in: [adminId, managerId, strangerId, dmId] } },
+      where: { uploadedById: { in: [adminId, managerId, strangerId, gmId] } },
     });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([adminId, managerId, strangerId, dmId]);
+    await cleanupUsers([adminId, managerId, strangerId, gmId]);
     await prisma.$disconnect();
   });
 
@@ -169,7 +169,7 @@ describe('Asset deletion permissions', () => {
 
     it('refuses another user', async () => {
       const asset = await makeAsset({ scope: AssetScope.USER, uploadedById: strangerId });
-      const res = await dmAgent.delete(`/api/assets/${asset.id}`);
+      const res = await gmAgent.delete(`/api/assets/${asset.id}`);
       expect(res.status).toBe(404);
     });
 
@@ -194,9 +194,9 @@ describe('Asset deletion permissions', () => {
       expect(res.status).toBe(200);
     });
 
-    it('lets the campaign DM delete a member\'s upload', async () => {
+    it('lets the campaign GM delete a member\'s upload', async () => {
       const asset = await makeAsset({ scope: AssetScope.CAMPAIGN, uploadedById: strangerId, campaignId });
-      const res = await dmAgent.delete(`/api/assets/${asset.id}`);
+      const res = await gmAgent.delete(`/api/assets/${asset.id}`);
       expect(res.status).toBe(200);
     });
 

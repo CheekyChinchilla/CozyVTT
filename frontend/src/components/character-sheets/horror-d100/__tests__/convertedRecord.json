@@ -1,0 +1,270 @@
+{
+  "from": 1,
+  "at": "2026-11-12T08:00:00.000Z",
+  "characteristics": {
+    "STR": 60,
+    "CON": 60,
+    "SIZ": 65,
+    "DEX": 70,
+    "CHA": 55,
+    "INT": 70,
+    "POW": 60,
+    "EDU": 65
+  },
+  "hitPoints": {
+    "maximum": 12,
+    "current": 7
+  },
+  "powerPoints": {
+    "maximum": 12,
+    "current": 4
+  },
+  "sanity": {
+    "starting": 60,
+    "maximum": 93,
+    "current": 52
+  },
+  "luck": 41,
+  "damageModifier": "+1d4",
+  "build": 1,
+  "move": 8,
+  "skills": [
+    {
+      "name": "Knowledge (Accounting)",
+      "value": 10
+    },
+    {
+      "name": "Knowledge (Anthropology)",
+      "value": 1
+    },
+    {
+      "name": "Appraise",
+      "value": 5
+    },
+    {
+      "name": "Knowledge (Archaeology)",
+      "value": 1
+    },
+    {
+      "name": "Art or Craft (Photography)",
+      "value": 25
+    },
+    {
+      "name": "Charm",
+      "value": 40
+    },
+    {
+      "name": "Climb",
+      "value": 20
+    },
+    {
+      "name": "Status",
+      "value": 30,
+      "experienceCheck": true
+    },
+    {
+      "name": "Knowledge (Blasphemous Lore)",
+      "value": 4
+    },
+    {
+      "name": "Disguise",
+      "value": 30
+    },
+    {
+      "name": "Dodge",
+      "value": 35
+    },
+    {
+      "name": "Drive (Automobile)",
+      "value": 45
+    },
+    {
+      "name": "Repair (Electrical)",
+      "value": 15
+    },
+    {
+      "name": "Fast Talk",
+      "value": 40
+    },
+    {
+      "name": "Brawl",
+      "value": 50
+    },
+    {
+      "name": "Melee Weapon (Knife)",
+      "value": 40
+    },
+    {
+      "name": "Firearm (Handgun)",
+      "value": 55
+    },
+    {
+      "name": "Firearm (Rifle)",
+      "value": 25
+    },
+    {
+      "name": "Firearm (Shotgun)",
+      "value": 30
+    },
+    {
+      "name": "Firearm (Bow)",
+      "value": 18
+    },
+    {
+      "name": "First Aid",
+      "value": 30
+    },
+    {
+      "name": "Knowledge (History)",
+      "value": 5
+    },
+    {
+      "name": "Intimidate",
+      "value": 45
+    },
+    {
+      "name": "Jump",
+      "value": 20
+    },
+    {
+      "name": "Language (Own)",
+      "value": 65
+    },
+    {
+      "name": "Language (Latin)",
+      "value": 26
+    },
+    {
+      "name": "Knowledge (Law)",
+      "value": 40
+    },
+    {
+      "name": "Research",
+      "value": 50
+    },
+    {
+      "name": "Listen",
+      "value": 50
+    },
+    {
+      "name": "Fine Manipulation",
+      "value": 45
+    },
+    {
+      "name": "Repair (Mechanical)",
+      "value": 10
+    },
+    {
+      "name": "Medicine",
+      "value": 1
+    },
+    {
+      "name": "Knowledge (Natural History)",
+      "value": 30
+    },
+    {
+      "name": "Navigate",
+      "value": 10
+    },
+    {
+      "name": "Knowledge (Occult)",
+      "value": 5
+    },
+    {
+      "name": "Heavy Machine",
+      "value": 1
+    },
+    {
+      "name": "Persuade",
+      "value": 50
+    },
+    {
+      "name": "Pilot (Boat)",
+      "value": 11
+    },
+    {
+      "name": "Psychotherapy",
+      "value": 1
+    },
+    {
+      "name": "Insight",
+      "value": 55
+    },
+    {
+      "name": "Ride",
+      "value": 5
+    },
+    {
+      "name": "Science (Chemistry)",
+      "value": 21
+    },
+    {
+      "name": "Sleight of Hand",
+      "value": 30
+    },
+    {
+      "name": "Spot",
+      "value": 65
+    },
+    {
+      "name": "Stealth",
+      "value": 45
+    },
+    {
+      "name": "Survival",
+      "value": 10
+    },
+    {
+      "name": "Swim",
+      "value": 20
+    },
+    {
+      "name": "Throw",
+      "value": 20
+    },
+    {
+      "name": "Track",
+      "value": 40
+    },
+    {
+      "name": "Lip Reading",
+      "value": 21
+    },
+    {
+      "name": "Knowledge (Blasphemous Lore), as noted beside the spells",
+      "value": 6
+    }
+  ],
+  "kept": [
+    "player: \"Lee\"",
+    "STR: \"sixty\"",
+    "DEX, note: \"steady hands\"",
+    "Characteristics, LUCK: 40",
+    "Hit points, maximum: \"ten\"",
+    "Power points: \"full\"",
+    "Luck: \"lucky\"",
+    "Luck, notes: 7",
+    "Damage modifier: 3",
+    "Strength and size step: \"big\"",
+    "Derived attributes, stamina: 12",
+    "Climb: {\"baseValue\":20,\"currentValue\":\"high\",\"improvementChecked\":\"yes\"}",
+    "Melee Weapon: \"knife\"",
+    "Language (Other): \"Dutch\"",
+    "Spot, flair: \"keen\"",
+    "Spot, specialisation: \"Tracks\"",
+    "Skills, dreaming: {\"currentValue\":33}",
+    "Weapons: \"a club\"",
+    "Weapons, armour: \"leather\"",
+    "Conditions, dying: \"maybe\"",
+    "Long-term insanity: \"sometimes\"",
+    "Conditions, bleeding: true",
+    "Spells: \"none\"",
+    "Knowledge (Blasphemous Lore), as noted beside the spells: \"a little\"",
+    "Spells, tomes: 2",
+    "Wealth: \"comfortable\"",
+    "Background & History: 42",
+    "Story, favouriteFood: \"Soup\"",
+    "background: \"Came from the hills.\"",
+    "experience: [1,2,3]"
+  ]
+}

@@ -3,8 +3,8 @@
  * answer a player only for the campaign's current map.
  *
  * They checked that the map belonged to the campaign and nothing else, so a
- * scripted player could pull the layout of a map the DM had prepared but
- * not shown. The DM is answered for any map of the campaign.
+ * scripted player could pull the layout of a map the GM had prepared but
+ * not shown. The GM is answered for any map of the campaign.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -20,30 +20,30 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `prepared-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let shownId: string;
 let preparedId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 const wall = { id: 'w1', x1: 0, y1: 0, x2: 100, y2: 0, type: 'wall' };
 const lamp = { id: 'l1', x: 50, y: 50, brightRadius: 2, dimRadius: 4, color: '#ffcc88', enabled: true };
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Prepared ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Prepared ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  const campaign = await prisma.campaign.create({ data: { name: `Prepared ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -55,7 +55,7 @@ beforeAll(async () => {
   preparedId = (await prisma.map.create({ data: { ...base, name: 'Prepared' } })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: shownId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 afterAll(async () => {
@@ -63,7 +63,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
@@ -92,16 +92,16 @@ describe.each(REQUESTS)('%s', (request, reply, what) => {
     player.disconnect();
   });
 
-  it(`answers the DM about a prepared map's ${what}`, async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const answered = waitForEvent<{ mapId: string }>(dm, reply === 'fog:cells' ? 'fog:updated' : reply);
-    dm.emit(request, { mapId: preparedId });
+  it(`answers the GM about a prepared map's ${what}`, async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const answered = waitForEvent<{ mapId: string }>(gm, reply === 'fog:cells' ? 'fog:updated' : reply);
+    gm.emit(request, { mapId: preparedId });
     expect((await answered).mapId).toBe(preparedId);
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 
-// A DM staging a prepared map moves tokens on it. The moves went to every
+// A GM staging a prepared map moves tokens on it. The moves went to every
 // player the role filter kept the token for, so their ids and coordinates
 // reached screens that are not sent that map at all.
 describe('a token moved on a prepared map', () => {
@@ -125,7 +125,7 @@ describe('a token moved on a prepared map', () => {
 
   it.each([['an unlit', false], ['a lit', true]])('reaches no player, drag or drop, on %s map', async (_label, lit) => {
     await staged(lit as boolean);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const quiet = Promise.all([
       expectNoEvent(player, 'token.move.start', 800),
@@ -133,28 +133,28 @@ describe('a token moved on a prepared map', () => {
       expectNoEvent(player, 'token:appeared', 800),
       expectNoEvent(player, 'token:disappeared', 800),
     ]);
-    const done = waitForEvent<{ tokenId: string }>(dm, 'token.moved');
-    dm.emit('token.move.start', { tokenId: STAGED, mapId: preparedId });
-    dm.emit('token.move', { tokenId: STAGED, mapId: preparedId, x: 2, y: 1 });
-    dm.emit('token.move.end', { tokenId: STAGED, mapId: preparedId, x: 3, y: 1 });
+    const done = waitForEvent<{ tokenId: string }>(gm, 'token.moved');
+    gm.emit('token.move.start', { tokenId: STAGED, mapId: preparedId });
+    gm.emit('token.move', { tokenId: STAGED, mapId: preparedId, x: 2, y: 1 });
+    gm.emit('token.move.end', { tokenId: STAGED, mapId: preparedId, x: 3, y: 1 });
     expect((await done).tokenId).toBe(STAGED);
     await expect(quiet).resolves.toBeDefined();
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
 
-// A player's writes follow the same rule as their reads: a map the DM has
+// A player's writes follow the same rule as their reads: a map the GM has
 // prepared is not theirs to change until it is shown, even where it holds a
 // token they control or an unlocked door.
-describe('the DM drawing on a prepared map', () => {
+describe('the GM drawing on a prepared map', () => {
   it('reaches no player, stored or as a preview', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const noDrawing = expectNoEvent(player, 'drawing:added', 800);
     const noPreview = expectNoEvent(player, 'drawing:previewed', 800);
-    dm.emit('drawing:preview', { mapId: preparedId, preview: { previewId: 'dm-1', kind: 'pen', color: '#1a1a1a', width: 2, points: [[1, 1]] } });
-    const answer = await dm.timeout(5000).emitWithAck('drawing:add', {
+    gm.emit('drawing:preview', { mapId: preparedId, preview: { previewId: 'dm-1', kind: 'pen', color: '#1a1a1a', width: 2, points: [[1, 1]] } });
+    const answer = await gm.timeout(5000).emitWithAck('drawing:add', {
       mapId: preparedId, drawing: { kind: 'line', color: '#1a1a1a', width: 2, points: [[0, 0], [10, 10]] },
     });
     expect(answer).toMatchObject({ ok: true });
@@ -162,7 +162,7 @@ describe('the DM drawing on a prepared map', () => {
     await noPreview;
     await prisma.mapDrawing.deleteMany({ where: { mapId: preparedId } });
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 
@@ -193,12 +193,12 @@ describe('a player writing to a prepared map', () => {
 
   it('drops their drag frames for a token there', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const quiet = expectNoEvent(dm, 'token.moved', 800);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const quiet = expectNoEvent(gm, 'token.moved', 800);
     player.emit('token.move', { tokenId: SCOUT, mapId: preparedId, x: 4, y: 4 });
     await quiet;
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   // A report of explored cells is sent by the page on its own, not by the
@@ -232,17 +232,17 @@ describe('a player writing to a prepared map', () => {
 
   it('refuses drawing there, and drops their preview of a stroke there', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const answer = await player.timeout(5000).emitWithAck('drawing:add', {
       mapId: preparedId, drawing: { kind: 'line', color: '#1a1a1a', width: 2, points: [[0, 0], [10, 10]] },
     });
     expect(answer).toEqual({ ok: false, error: 'Map not found' });
     expect(await prisma.mapDrawing.count({ where: { mapId: preparedId } })).toBe(0);
-    const quiet = expectNoEvent(dm, 'drawing:previewed', 600);
+    const quiet = expectNoEvent(gm, 'drawing:previewed', 600);
     player.emit('drawing:preview', { mapId: preparedId, preview: { previewId: 'p1', kind: 'pen', color: '#1a1a1a', width: 2, points: [[1, 1]] } });
     await quiet;
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('refuses opening a door there', async () => {

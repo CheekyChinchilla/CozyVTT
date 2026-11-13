@@ -1,0 +1,193 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
+/**
+ * StrikesList Component
+ *
+ * Displays strikes/attacks with traits, proficiency, and damage information.
+ * Fantasy d20 strikes can be melee, ranged, or spells with saving throws.
+ */
+
+import React from 'react';
+import { Sword, Target, Zap, Dices } from 'lucide-react';
+import ProficiencyIndicator, { ProficiencyRank } from './ProficiencyIndicator';
+import { diceExpressionProblem } from '@/utils/diceExpression';
+import { damagePurpose, strikePurpose } from '@/utils/rollPurposes';
+import { notARoll, rollTarget, sheetRoll } from '../../useSheetRolls';
+
+/**
+ * A strike, as the schema actually declares it.
+ *
+ * Only `name` is required. Everything else is optional, and this type used to
+ * insist otherwise — which is how a strike without a `proficiencyRank` took the
+ * whole sheet down with "Cannot read properties of undefined (reading
+ * 'bgColor')", and how a missing reach printed "(undefined ft.)". A sheet from
+ * an older version, an import, or a hand edit can be missing any of these, so
+ * the renderer has to cope rather than the type pretending they are always
+ * there.
+ */
+export interface Strike {
+  name: string;
+  type?: 'melee' | 'ranged';
+  attackBonus?: number | null;
+  damageRoll?: string;
+  damageType?: string;
+  attributeModifier?: string;
+  proficiencyRank?: ProficiencyRank;
+  itemBonus?: number;
+  traits?: string[];
+  range?: number | null;
+  savingThrow?: string;
+  notes?: string;
+}
+
+interface StrikesListProps {
+  strikes: Strike[];
+  /** Click a strike to roll its attack, a d20 test the sheet's Roll mode applies to. */
+  onRollStrike?: (expression: string, purpose: string) => void;
+  /** Click a damage roll to roll it as written. */
+  onRollDamage?: (expression: string, purpose: string) => void;
+}
+
+/**
+ * Format attack bonus with sign
+ */
+const formatBonus = (bonus: number | null | undefined): string => {
+  if (typeof bonus !== 'number') return '—';
+  return bonus >= 0 ? `+${bonus}` : `${bonus}`;
+};
+
+/**
+ * Get icon for strike type
+ */
+const getStrikeIcon = (type: string | undefined, savingThrow?: string) => {
+  if (savingThrow) return Zap; // Spell attack
+  return type === 'melee' ? Sword : Target;
+};
+
+export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike, onRollDamage }) => {
+  if (!strikes || strikes.length === 0) {
+    return (
+      <div className="text-center py-8 text-ink-muted italic">
+        No strikes/attacks recorded
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {strikes.map((strike, index) => {
+        const Icon = getStrikeIcon(strike.type, strike.savingThrow);
+        const isMelee = strike.type === 'melee';
+        // A strike is only rollable once it has a bonus recorded — absent is as
+        // unrollable as null, and used to slip through to produce "1d20+undefined".
+        const bonus = typeof strike.attackBonus === 'number' ? strike.attackBonus : null;
+        const isClickable = !!onRollStrike && bonus !== null && !strike.savingThrow;
+        const attackExpr = bonus !== null
+          ? (bonus >= 0 ? `1d20+${bonus}` : `1d20${bonus}`)
+          : '';
+        const attackPurpose = strikePurpose(strike.name);
+        // Damage the dice cannot roll ("1d8+4 S") is shown and not offered as
+        // a roll: its title gives the parser's reason, and a click on it never
+        // falls through to the strike. The click is handed to the table,
+        // which says why it cannot roll it and sends nothing (useTableRoll).
+        const damageRoll = strike.damageRoll ?? '';
+        const damageProblem = onRollDamage && damageRoll !== '' ? diceExpressionProblem(damageRoll) : null;
+        const rollsDamage = !!onRollDamage && damageRoll !== '' && damageProblem === null;
+
+        return (
+          <div
+            key={`${strike.name}-${index}`}
+            className={`bg-paper border-2 border-ink/10 rounded-lg p-4 shadow-xs transition-shadow group ${isClickable ? 'cursor-pointer hover:not-has-[[data-not-a-roll]:hover]:bg-accent/10 hover:not-has-[[data-not-a-roll]:hover]:border-accent/30 hover:shadow-md select-none [-webkit-touch-callout:none]' : 'hover:shadow-md'}`}
+            onClick={isClickable ? () => onRollStrike?.(attackExpr, attackPurpose) : undefined}
+            {...(isClickable ? rollTarget(attackExpr, attackPurpose, 'FANTASY_D20') : undefined)}
+          >
+            {/* Strike Header */}
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex items-center space-x-2 flex-1">
+                <Icon className={`w-5 h-5 ${isMelee ? 'text-danger-ink' : 'text-accent-ink'}`} />
+                <h4 className="font-bold text-ink text-lg">{strike.name}</h4>
+                <ProficiencyIndicator rank={strike.proficiencyRank} size="sm" />
+                {isClickable && <Dices className="w-4 h-4 text-accent-ink opacity-0 group-hover:not-group-has-[[data-not-a-roll]:hover]:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-ink-muted uppercase tracking-wide">
+                  {strike.type}
+                  {/* `!== null` alone let an absent range through as
+                      "(undefined ft.)". The field is optional on the schema, so
+                      a sheet written by an older version, or converted from one,
+                      simply has no reach recorded. */}
+                  {typeof strike.range === 'number' && ` (${strike.range} ft.)`}
+                </div>
+              </div>
+            </div>
+
+            {/* Strike Stats */}
+            <div className="grid grid-cols-2 gap-4 mb-2">
+              {/* Attack Bonus or Saving Throw */}
+              <div>
+                <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">
+                  {strike.savingThrow ? 'Saving Throw' : 'Attack'}
+                </div>
+                <div className="text-2xl font-bold text-accent-ink">
+                  {strike.savingThrow ? (
+                    <span className="text-lg capitalize">{strike.savingThrow}</span>
+                  ) : (
+                    formatBonus(strike.attackBonus)
+                  )}
+                </div>
+              </div>
+
+              {/* Damage — click separately */}
+              <div
+                className={rollsDamage ? 'cursor-pointer hover:text-danger-ink' : damageProblem ? 'cursor-default' : ''}
+                onClick={onRollDamage && damageRoll !== '' ? (e) => { e.stopPropagation(); onRollDamage(damageRoll, damagePurpose(strike.name)); } : undefined}
+                title={rollsDamage ? `Click to roll damage: ${damageRoll}` : undefined}
+                {...(damageProblem ? notARoll(damageProblem) : undefined)}
+                {...(rollsDamage ? sheetRoll : undefined)}
+              >
+                <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">
+                  Damage
+                </div>
+                <div className="text-xl font-bold text-danger-ink">
+                  {strike.damageRoll}
+                  <span className="text-sm text-ink-secondary ml-1 capitalize">
+                    {strike.damageType}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Traits */}
+            {strike.traits && strike.traits.length > 0 && (
+              <div className="mb-2">
+                <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">
+                  Traits
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {strike.traits.map((trait, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2 py-0.5 bg-accent/15 text-accent-ink text-xs rounded-full font-medium"
+                    >
+                      {trait}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            {strike.notes && (
+              <div className="mt-2 text-sm text-ink-secondary italic border-t border-ink/10 pt-2">
+                {strike.notes}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export default StrikesList;

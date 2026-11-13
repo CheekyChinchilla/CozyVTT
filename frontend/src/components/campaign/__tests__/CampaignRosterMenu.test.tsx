@@ -12,7 +12,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { characterMenuRows, openCharacterMenu } from '@/test/characterMenuRows';
 
 const h = vi.hoisted(() => ({
-  seat: { role: 'DM', userId: 'dm' },
+  seat: { role: 'GM', userId: 'dm' },
   currentMap: { id: 'map-1', width: 20, height: 20 } as { id: string; width: number; height: number } | null,
   api: {
     getCampaignCharacters: vi.fn(),
@@ -54,17 +54,17 @@ import { LayoutProvider } from '@/contexts/LayoutContext';
 
 const member = (userId: string, userName: string, role: CampaignRole): RosterMember => ({
   userId, userName, userAvatar: null, role, joinedAt: '2026-10-01T00:00:00.000Z',
-  characters: role === CampaignRole.DM ? [] : [{
+  characters: role === CampaignRole.GM ? [] : [{
     id: `${userId}-char`, name: `${userName}'s hero`, tokenImageUrl: null, gameSystem: null, userId, hp: { current: 7, max: 10, temp: 0 },
   }],
 });
 
 beforeEach(() => {
-  h.seat.role = 'DM';
+  h.seat.role = 'GM';
   h.seat.userId = 'dm';
   h.currentMap = { id: 'map-1', width: 20, height: 20 };
   h.api.getCampaignCharacters.mockReset().mockResolvedValue({
-    roster: [member('dm', 'Mara', CampaignRole.DM), member('p1', 'Ash', CampaignRole.PLAYER), member('p2', 'Bea', CampaignRole.PLAYER)],
+    roster: [member('dm', 'Mara', CampaignRole.GM), member('p1', 'Ash', CampaignRole.PLAYER), member('p2', 'Bea', CampaignRole.PLAYER)],
   });
   h.api.getCharacter.mockReset().mockImplementation(async (id: string) => ({ character: { id } }));
   h.api.assignCharacterToCampaign.mockReset().mockResolvedValue({});
@@ -85,7 +85,7 @@ const EVERY_ITEM = [
 ];
 
 describe("a roster character's menu", () => {
-  it("offers the DM everything on a player's character", async () => {
+  it("offers the GM everything on a player's character", async () => {
     render(<CampaignRoster />);
     await rightClick("Ash's hero");
 
@@ -93,7 +93,7 @@ describe("a roster character's menu", () => {
     expect(openCharacterMenu()!.getAttribute('style')).toBe('left: 40px; top: 60px; visibility: visible;');
   });
 
-  it('offers the DM no Add to Map with no map showing', async () => {
+  it('offers the GM no Add to Map with no map showing', async () => {
     h.currentMap = null;
     render(<CampaignRoster />);
     await rightClick("Ash's hero");
@@ -182,7 +182,7 @@ describe("a roster character's menu on the compact layout", () => {
 // for a second grant is the dialog's (TemporaryHpDialog.test.tsx).
 describe('Temporary HP... on a roster character', () => {
   const inSystem = (gameSystem: string, temp = 0): RosterMember[] => [
-    member('dm', 'Mara', CampaignRole.DM),
+    member('dm', 'Mara', CampaignRole.GM),
     ...[member('p1', 'Ash', CampaignRole.PLAYER), member('p2', 'Bea', CampaignRole.PLAYER)].map((m) => ({
       ...m, characters: m.characters.map((c) => ({ ...c, gameSystem, hp: { current: 7, max: 10, temp } })),
     })) as RosterMember[],
@@ -191,16 +191,16 @@ describe('Temporary HP... on a roster character', () => {
 
   beforeEach(() => { h.emitCharacterTemporaryHp.mockReset(); });
 
-  it("follows Roll... for the DM and for the character's owner", async () => {
-    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('DND_5E') });
+  it("follows Roll... for the GM and for the character's owner", async () => {
+    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('FIFTH_EDITION') });
     render(<CampaignRoster />);
     await rightClick("Ash's hero");
     expect(characterMenuRows().slice(0, 3)).toEqual(['[eye] View Character Sheet', '[dices] Roll...', TEMPORARY_HP]);
   });
 
-  it("is not offered on another player's character, nor in Call of Cthulhu", async () => {
+  it("is not offered on another player's character, nor in Horror d100", async () => {
     h.seat = { role: 'PLAYER', userId: 'p1' };
-    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('PATHFINDER_2E') });
+    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('FANTASY_D20') });
     const { unmount } = render(<CampaignRoster />);
     await rightClick("Ash's hero");
     expect(characterMenuRows()).toContain(TEMPORARY_HP);
@@ -209,14 +209,14 @@ describe('Temporary HP... on a roster character', () => {
     expect(characterMenuRows()).not.toContain(TEMPORARY_HP);
     unmount();
 
-    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('CALL_OF_CTHULHU_7E') });
+    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('HORROR_D100') });
     render(<CampaignRoster />);
     await rightClick("Ash's hero");
     expect(characterMenuRows()).not.toContain(TEMPORARY_HP);
   });
 
   it('grants them over the socket, asking first when the character has some', async () => {
-    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('DND_5E', 3) });
+    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('FIFTH_EDITION', 3) });
     render(<CampaignRoster />);
     await rightClick("Ash's hero");
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Temporary HP/ })); });

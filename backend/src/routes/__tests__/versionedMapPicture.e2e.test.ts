@@ -27,10 +27,10 @@ import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampai
 const app = createTestApp();
 
 type Agent = ReturnType<typeof request.agent>;
-const users = { dm: '', player: '' };
+const users = { gm: '', player: '' };
 let campaignId = '';
 let pictureId = '';
-let dm: Agent;
+let gm: Agent;
 let player: Agent;
 
 async function login(email: string): Promise<Agent> {
@@ -41,13 +41,13 @@ async function login(email: string): Promise<Agent> {
 
 beforeAll(async () => {
   const stamp = Date.now();
-  const made = await Promise.all((['dm', 'player'] as const).map((who) =>
+  const made = await Promise.all((['gm', 'player'] as const).map((who) =>
     createTestUser({ email: `versioned-${who}-${stamp}@test.cozyvtt.local`, displayName: `Versioned ${who}` })));
-  [users.dm, users.player] = made.map((u) => u.id);
-  campaignId = (await createTestCampaign(users.dm, { name: `Versioned ${stamp}` })).id;
+  [users.gm, users.player] = made.map((u) => u.id);
+  campaignId = (await createTestCampaign(users.gm, { name: `Versioned ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: users.dm, campaignId, role: 'DM', characterIds: [] },
+      { userId: users.gm, campaignId, role: 'GM', characterIds: [] },
       { userId: users.player, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -57,11 +57,11 @@ beforeAll(async () => {
   fs.writeFileSync(filePath, png);
   pictureId = (await prisma.asset.create({
     data: {
-      type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: users.dm, filename, originalName: 'drawn-map.png',
+      type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: users.gm, filename, originalName: 'drawn-map.png',
       mimeType: 'image/png', fileSize: png.length, filePath, name: 'Drawn map', tags: ['cozyvtt-drawn-map'],
     },
   })).id;
-  dm = await login(made[0].email);
+  gm = await login(made[0].email);
   player = await login(made[1].email);
 });
 
@@ -85,11 +85,11 @@ async function storedMap(name: string, imageUrl: string) {
 
 describe('Create Map and Edit Map', () => {
   it('store a map picture address with a version as it is given', async () => {
-    const created = await dm.post(at('/maps')).send({ name: 'Drawn', width: 10, height: 10, gridSize: 50, imageUrl: versioned('1730000000000') });
+    const created = await gm.post(at('/maps')).send({ name: 'Drawn', width: 10, height: 10, gridSize: 50, imageUrl: versioned('1730000000000') });
     expect(created.status).toBe(201);
     expect(created.body.map.imageUrl).toBe(versioned('1730000000000'));
 
-    const edited = await dm.put(at(`/maps/${created.body.map.id}`)).send({ imageUrl: versioned('1730000000001') });
+    const edited = await gm.put(at(`/maps/${created.body.map.id}`)).send({ imageUrl: versioned('1730000000001') });
     expect(edited.status).toBe(200);
     const stored = await prisma.map.findUniqueOrThrow({ where: { id: created.body.map.id } });
     expect([stored.imageUrl, stored.baseLayerUrl]).toEqual([versioned('1730000000001'), versioned('1730000000001')]);
@@ -98,7 +98,7 @@ describe('Create Map and Edit Map', () => {
   it.each(['', '1a', '1&x=2'])('refuse ?v=%s, and any other query', async (v) => {
     const map = await storedMap('Refusing', `/api/assets/maps/${pictureId}`);
     for (const address of [versioned(v), `/api/assets/maps/${pictureId}?w=1`, `/api/assets/maps/${pictureId}#v=1`]) {
-      const res = await dm.put(at(`/maps/${map.id}`)).send({ imageUrl: address });
+      const res = await gm.put(at(`/maps/${map.id}`)).send({ imageUrl: address });
       expect([address, res.status]).toEqual([address, 403]);
     }
     expect((await prisma.map.findUniqueOrThrow({ where: { id: map.id } })).imageUrl).toBe(`/api/assets/maps/${pictureId}`);
@@ -125,7 +125,7 @@ describe('a player at the table', () => {
 describe('a Universal VTT export', () => {
   it('reads the picture a versioned address names', async () => {
     const map = await storedMap('Exported', versioned('1730000000003'));
-    const res = await dm.get(at(`/maps/${map.id}/export-uvtt`));
+    const res = await gm.get(at(`/maps/${map.id}/export-uvtt`));
     expect(res.status).toBe(200);
   });
 });

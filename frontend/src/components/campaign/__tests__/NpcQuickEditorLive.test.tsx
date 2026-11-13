@@ -4,10 +4,10 @@
  * The editor copied the token when it opened and kept the copy, so a change
  * made while it was open (from another tab, a script, or a player on a token
  * they control) did not show, and the editor's next save put the copy's
- * values back over it: a condition the player added was lost when the DM
+ * values back over it: a condition the player added was lost when the GM
  * ticked another. The editor now reads the token from the table, and the
- * DM's own change is shown in its place only until it is saved. Typed text is
- * the exception: what the DM is typing stays in the box until it is saved.
+ * GM's own change is shown in its place only until it is saved. Typed text is
+ * the exception: what the GM is typing stays in the box until it is saved.
  */
 
 import { it, expect, vi, beforeEach } from 'vitest';
@@ -37,7 +37,7 @@ vi.mock('framer-motion', () => {
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: null }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', memberships: [], gameSystem: 'DND_5E' }, currentMap: { id: 'map-1', feetPerSquare: 5 }, viewedMap: { id: 'map-1', feetPerSquare: 5 } }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', memberships: [], gameSystem: 'FIFTH_EDITION' }, currentMap: { id: 'map-1', feetPerSquare: 5 }, viewedMap: { id: 'map-1', feetPerSquare: 5 } }),
 }));
 vi.mock('@/services/api', () => {
   const client = { updateToken: (...args: unknown[]) => updateToken(...args), listAssets: vi.fn().mockResolvedValue({ assets: [], pagination: {} }) };
@@ -76,7 +76,7 @@ it('labels the token name box', () => {
   expect(screen.getByRole('textbox', { name: 'Token name' })).toHaveValue('Cultist');
 });
 
-it('shows a condition added elsewhere, and keeps it when the DM adds another', async () => {
+it('shows a condition added elsewhere, and keeps it when the GM adds another', async () => {
   open();
   changedElsewhere({ conditions: ['Prone'] });
   // Listed, and above the list as a condition the token has.
@@ -113,7 +113,7 @@ it('shows a rename made elsewhere', () => {
   expect(screen.getByDisplayValue('Cult Leader')).toBeInTheDocument();
 });
 
-it('keeps what the DM is typing over a change made elsewhere, until it is saved', async () => {
+it('keeps what the GM is typing over a change made elsewhere, until it is saved', async () => {
   open();
   await waitForDialogFocus();
   const notes = screen.getByPlaceholderText('Guard post, special abilities, loot…');

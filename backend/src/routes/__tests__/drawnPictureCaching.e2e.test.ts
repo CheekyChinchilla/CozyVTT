@@ -28,9 +28,9 @@ import { DRAWN_MAP_TAG } from '../../validators/assetLimits';
 
 const app = createTestApp();
 
-let dmId = '';
+let gmId = '';
 let campaignId = '';
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const picture = (colour: string) => sharp({ create: { width: 40, height: 30, channels: 3, background: colour } }).png().toBuffer();
 
@@ -44,25 +44,25 @@ async function stored(tags: string[]) {
   fs.writeFileSync(thumbnailPath, bytes);
   return prisma.asset.create({
     data: {
-      type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: dmId, filename, originalName: filename,
+      type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: gmId, filename, originalName: filename,
       mimeType: 'image/png', fileSize: bytes.length, filePath, thumbnailPath, name: 'Picture', tags,
     },
   });
 }
 
 beforeAll(async () => {
-  const user = await createTestUser({ displayName: 'Drawn caching DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Drawn caching' })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  const user = await createTestUser({ displayName: 'Drawn caching GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Drawn caching' })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 });
@@ -73,16 +73,16 @@ describe.each([
 ])('a drawn map picture, its %s', (_what, address, fileOf) => {
   it('is revalidated on every request, with an ETag that changes when the file does', async () => {
     const asset = await stored([DRAWN_MAP_TAG]);
-    const first = await dm.get(address(asset.id));
+    const first = await gm.get(address(asset.id));
     expect(first.status).toBe(200);
     expect(first.headers['cache-control']).toBe('private, no-cache');
     const etag = first.headers.etag;
     expect(etag).toMatch(new RegExp(`^"${asset.id}(-thumbnail)?-\\d+-\\d+"$`));
-    expect((await dm.get(address(asset.id)).set('If-None-Match', etag)).status).toBe(304);
+    expect((await gm.get(address(asset.id)).set('If-None-Match', etag)).status).toBe(304);
 
     fs.writeFileSync(fileOf(asset), await picture('#993366'));
     fs.utimesSync(fileOf(asset), new Date(), new Date(Date.now() + 5000));
-    const after = await dm.get(address(asset.id)).set('If-None-Match', etag);
+    const after = await gm.get(address(asset.id)).set('If-None-Match', etag);
     expect(after.status).toBe(200);
     expect(after.headers.etag).not.toBe(etag);
   });
@@ -92,7 +92,7 @@ describe('an uploaded map picture', () => {
   it('is still cached as unchanging, picture and thumbnail', async () => {
     const asset = await stored(['drawn-map']);
     for (const address of [`/api/assets/maps/${asset.id}`, `/api/assets/maps/${asset.id}/thumbnail`]) {
-      const res = await dm.get(address);
+      const res = await gm.get(address);
       expect(res.status).toBe(200);
       expect(res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
     }

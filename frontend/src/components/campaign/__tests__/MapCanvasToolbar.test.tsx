@@ -21,7 +21,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
     playerSpiritVisible: false as boolean,
   };
@@ -77,7 +77,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: h.state.playerSpiritVisible,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -187,7 +187,7 @@ beforeEach(() => {
   h.sent.length = 0;
   h.handlers.clear();
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: mapWith(), playerSpiritVisible: false });
+  h.set({ userRole: 'GM', currentMap: mapWith(), playerSpiritVisible: false });
 });
 
 describe("the toolbar's names", () => {
@@ -270,7 +270,7 @@ describe('the menus on a touch screen', () => {
     for (const item of items) expect(classesOf(item)).toContain('pointer-coarse:min-h-11');
   });
 
-  // At 44 pixels an item, the DM's menu for a player's token runs to about
+  // At 44 pixels an item, the GM's menu for a player's token runs to about
   // 600 pixels, more than a tablet in landscape shows; it went off the
   // bottom of the screen with no way to scroll to its last items. Only there:
   // a scrolling menu would cut the sides off a keyboard's focus ring, and a
@@ -338,7 +338,7 @@ describe('the toolbar on a narrow map', () => {
     expect(classesOf(toolbar)).toContain('flex-wrap');
   });
 
-  // At 44 pixels a button, a DM's toolbar was 3 pixels too wide for one row
+  // At 44 pixels a button, a GM's toolbar was 3 pixels too wide for one row
   // on an iPad Pro 11 in landscape with both side panels at their minimums.
   // Its zoom readout, 64 pixels for at most "300%", is 48 there.
   it('narrows the zoom readout on a touch screen', () => {
@@ -435,7 +435,7 @@ describe('what sits under the toolbar', () => {
   const toolStack = () => screen.getByTitle(/Drag to move the panels/).parentElement!;
   const openAoE = () => fireEvent.click(screen.getByRole('button', { name: 'AoE Shape — area of effect overlay' }));
 
-  /** The DM holds the goblin with a tap of a finger, so the Put back bar shows. */
+  /** The GM holds the goblin with a tap of a finger, so the Put back bar shows. */
   function holdByTap() {
     act(() => { useGameStore.getState().setTokens([token('tok-goblin', 'Goblin', 10, 5)]); });
     const finger = contact('touch', 1);

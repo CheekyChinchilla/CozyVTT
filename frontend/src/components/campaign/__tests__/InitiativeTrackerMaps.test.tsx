@@ -19,7 +19,7 @@ const emitInitiativeRoll = vi.fn();
 const emitInitiativeSet = vi.fn();
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ userRole: 'DM', currentMap: { id: 'map-shown' }, viewedMap: { id: 'map-shown' } }),
+  useCampaign: () => ({ userRole: 'GM', currentMap: { id: 'map-shown' }, viewedMap: { id: 'map-shown' } }),
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({

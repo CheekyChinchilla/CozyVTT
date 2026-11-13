@@ -8,11 +8,11 @@
 // The server refuses by it; the draw tool offers by it, so a stroke the
 // server would refuse is never offered.
 //
-// The DM draws and erases anything, at any time. A player draws while the
+// The GM draws and erases anything, at any time. A player draws while the
 // campaign's Players may draw is on, except while the session is paused or
 // has ended, and erases only their own drawings for everyone, at any time.
 // A spectator does neither. Everyone who may read a map is sent its drawings for
-// everyone; a drawing for the DM alone goes to the DM alone.
+// everyone; a drawing for the GM alone goes to the GM alone.
 // ============================================
 
 /** What the drawing rules read of a campaign. */
@@ -30,42 +30,42 @@ export function sessionLetsPlayersAct(status: string): boolean {
 }
 
 export const DRAW_SPECTATOR_REFUSAL = 'Spectators cannot draw on the map';
-export const DRAW_SETTING_REFUSAL = 'The DM has turned off drawing for players';
+export const DRAW_SETTING_REFUSAL = 'The GM has turned off drawing for players';
 export const DRAW_PAUSED_REFUSAL = 'Players cannot draw while the session is paused or ended';
 export const DRAW_REFUSAL = 'Drawing is not allowed for you right now';
-export const DRAW_LAYER_REFUSAL = 'Only the DM can draw on the ground layer';
+export const DRAW_LAYER_REFUSAL = 'Only the GM can draw on the ground layer';
 export const ERASE_SPECTATOR_REFUSAL = 'Spectators cannot erase drawings';
 export const ERASE_OTHERS_REFUSAL = 'You can erase only your own drawings';
 
 /**
  * May this member draw on the map now: add a drawing, or send a preview of
- * one or the laser pointer. The DM always; a player while the campaign lets
+ * one or the laser pointer. The GM always; a player while the campaign lets
  * players draw and the session lets them act; nobody else.
  */
 export function canDraw(role: string | undefined, campaign: DrawingCampaign): boolean {
-  if (role === 'DM') return true;
+  if (role === 'GM') return true;
   return role === 'PLAYER' && campaign.playersMayDraw && sessionLetsPlayersAct(campaign.status);
 }
 
 /** Why canDraw says no, in the words the member is shown. */
 export function drawRefusal(role: string | undefined, campaign: DrawingCampaign): string {
-  if (role !== 'DM' && role !== 'PLAYER') return DRAW_SPECTATOR_REFUSAL;
+  if (role !== 'GM' && role !== 'PLAYER') return DRAW_SPECTATOR_REFUSAL;
   if (role === 'PLAYER' && !campaign.playersMayDraw) return DRAW_SETTING_REFUSAL;
   if (role === 'PLAYER' && !sessionLetsPlayersAct(campaign.status)) return DRAW_PAUSED_REFUSAL;
   return DRAW_REFUSAL;
 }
 
-/** May this member draw on this layer: the DM on any, anyone else on the markup layer alone. */
+/** May this member draw on this layer: the GM on any, anyone else on the markup layer alone. */
 export function canDrawOnLayer(role: string | undefined, layer: string): boolean {
-  return role === 'DM' || layer === 'MARKUP';
+  return role === 'GM' || layer === 'MARKUP';
 }
 
 /**
- * May this member erase this drawing. The DM any; a player their own that
+ * May this member erase this drawing. The GM any; a player their own that
  * are for everyone; a spectator none, their own from before a demotion
- * included. A drawing for the DM alone goes with the DM's seat, so one who
+ * included. A drawing for the GM alone goes with the GM's seat, so one who
  * has left the seat may not erase those they wrote in it, as they are no
- * longer sent them. A drawing whose author's account is gone is the DM's
+ * longer sent them. A drawing whose author's account is gone is the GM's
  * to erase. Erasing asks nothing of the session or the setting: taking
  * back one's own drawing cannot hurt the table.
  */
@@ -74,7 +74,7 @@ export function canEraseDrawing(
   userId: string | undefined,
   drawing: { authorId: string | null; audience: string }
 ): boolean {
-  if (role === 'DM') return true;
+  if (role === 'GM') return true;
   return role === 'PLAYER' && !!userId && drawing.authorId === userId && drawing.audience === 'ALL';
 }
 
@@ -83,7 +83,7 @@ export function eraseRefusal(role: string | undefined): string {
   return role === 'PLAYER' ? ERASE_OTHERS_REFUSAL : ERASE_SPECTATOR_REFUSAL;
 }
 
-/** Whether a member of this role is sent this drawing: the DM every one, anyone else those for everyone. */
+/** Whether a member of this role is sent this drawing: the GM every one, anyone else those for everyone. */
 export function drawingSentTo(role: string | undefined, drawing: { audience: string }): boolean {
-  return role === 'DM' || drawing.audience === 'ALL';
+  return role === 'GM' || drawing.audience === 'ALL';
 }

@@ -62,7 +62,7 @@ jobs:
       - name: Check that debug logging is stripped from the bundle
         run: |
           status=0
-          for line in 'Received chat message' 'DM received secret roll audit' 'Tokens changed:' 'Picking up token'; do
+          for line in 'Received chat message' 'GM received secret roll audit' 'Tokens changed:' 'Picking up token'; do
             if grep -rqF "$line" dist/assets; then
               echo "::error::'$line' is in the built bundle: console.log calls are no longer removed"
               status=1

@@ -2,14 +2,14 @@
 // What a player is sent of a token: the field rule every token goes through,
 // and the identity mask for an obscured token they do not control.
 // Byte-identical in backend/src/utils and frontend/src/utils
-// (visionParity.test.ts checks), so the DM's Player Preview can show exactly
+// (visionParity.test.ts checks), so the GM's Player Preview can show exactly
 // what the server sends.
 //
 // Both are built from lists of what a recipient may have, never by copying
 // the token and deleting what they may not, so a field added to tokens later
 // is not sent to players until someone adds it to a list.
 //
-// The DM marks a token obscured to say "you can see something is there, but
+// The GM marks a token obscured to say "you can see something is there, but
 // not what". The masked token is built from a list of what a recipient may
 // know, never by copying the token and blanking fields: a field added to
 // tokens later is then left out of the mask by default, where a blanked copy
@@ -109,11 +109,11 @@ export function maskObscuredToken<T extends MaskableToken>(token: T): T {
 /**
  * Every field a player may be sent of a token they may see. The copy a
  * player gets is built from this list, never by copying the token and
- * deleting the DM's fields, so a field added to tokens later is not sent
+ * deleting the GM's fields, so a field added to tokens later is not sent
  * until it is added here. Of these, `hp` goes only to the controller or with
  * the bar on, and `sightRadius` and `creatureTemplateId` only to the
- * controller. Left out: `notes` and `statBlock`, the DM's. `metadata` is
- * sent: only the DM writes it, and a player who may see the token may read it.
+ * controller. Left out: `notes` and `statBlock`, the GM's. `metadata` is
+ * sent: only the GM writes it, and a player who may see the token may read it.
  */
 export const PLAYER_TOKEN_FIELDS = [
   'id',
@@ -141,11 +141,11 @@ export const PLAYER_TOKEN_FIELDS = [
 
 /**
  * The token as a recipient who does or does not control it is sent it: the
- * fields in PLAYER_TOKEN_FIELDS, so never the DM's notes or the stat block,
+ * fields in PLAYER_TOKEN_FIELDS, so never the GM's notes or the stat block,
  * hit points only for their own token or one whose bar is on, darkvision and
  * the creature template link only for their own, and an obscured token they
  * do not control through the mask above. The server applies this before
- * sending; the DM's Player Preview applies it to show the same thing.
+ * sending; the GM's Player Preview applies it to show the same thing.
  */
 export function tokenSentTo<T extends MaskableToken>(token: T, own: boolean): T {
   const listed = PLAYER_TOKEN_FIELDS.filter((field) => field in token).map((field) => [field, token[field]]);
@@ -155,7 +155,7 @@ export function tokenSentTo<T extends MaskableToken>(token: T, own: boolean): T 
   if (!own) {
     delete sent.sightRadius;
     // The link resolves to a library entry, whose stat block and true name
-    // the DM may have renamed the token to hide.
+    // the GM may have renamed the token to hide.
     delete sent.creatureTemplateId;
   }
   return !own && token.obscured === true ? maskObscuredToken(sent) : sent;

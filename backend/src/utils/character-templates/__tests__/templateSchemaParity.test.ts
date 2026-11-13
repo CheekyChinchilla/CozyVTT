@@ -6,7 +6,7 @@
  * routes stored the body as it was sent at the time, so the undeclared fields
  * were saved and then ignored by every reader. What a player saw was a Fighter
  * with a blank Features tab while "Second Wind" sat in the database, and a
- * Pathfinder sheet reading "No strikes/attacks recorded" with a warhammer and a
+ * Fantasy d20 sheet reading "No strikes/attacks recorded" with a warhammer and a
  * crossbow stored on it. The routes now store Zod's parsed sheet, so such a
  * field would instead be dropped on the first save.
  *
@@ -18,33 +18,35 @@
 import { readFileSync } from 'fs';
 import path from 'path';
 import { validateCharacterData } from '../../../validators/game-systems';
-import { GameSystem } from '../../../game-systems';
+import { GameSystem, type SupportedGameSystem } from '../../../game-systems';
 import { builtInTemplates } from '../../../__tests__/helpers/builtInTemplates';
 import {
-  pf2eArmorClass,
-  pf2eClassDC,
-  pf2eSkillTotal,
-  pf2eSaveTotal,
-  pf2ePerceptionTotal,
-  pf2eSpellAttack,
-  pf2eSpellDC,
-  pf2eTotalBulk,
-  pf2eBulkLimits,
-  pf2eMaxHitPoints,
-  pf2eProficiencyBonus,
-} from '../../rules/pathfinder2e';
-import { dnd5eBackfilledSkillOtherBonus, dnd5eBackfilledSaveOtherBonus } from '../../rules/dnd5e';
+  fantasyD20ArmorClass,
+  fantasyD20ClassDC,
+  fantasyD20SkillTotal,
+  fantasyD20SaveTotal,
+  fantasyD20PerceptionTotal,
+  fantasyD20SpellAttack,
+  fantasyD20SpellDC,
+  fantasyD20TotalBulk,
+  fantasyD20BulkLimits,
+  fantasyD20MaxHitPoints,
+  fantasyD20ProficiencyBonus,
+} from '../../rules/fantasyD20';
+import { fifthEditionBackfilledSkillOtherBonus, fifthEditionBackfilledSaveOtherBonus } from '../../rules/fifthEdition';
 import {
-  cocHitPoints,
-  cocMajorWoundThreshold,
-  cocMagicPoints,
-  cocMaxSanity,
-  cocHalfAndFifth,
-  cocDamageBonusAndBuild,
-  cocMoveRate,
-  cocDodgeBase,
-  cocBlankSkills,
-} from '../../rules/callOfCthulhu7e';
+  HORROR_D100_BLASPHEMOUS_LORE,
+  HORROR_D100_FIXED_SKILLS,
+  HORROR_D100_HUMAN_MOVE,
+  horrorD100FixedSkillBase,
+  horrorD100LanguageOwnBase,
+  horrorD100MaximumHitPoints,
+  horrorD100MaximumPowerPoints,
+  horrorD100MaximumSanity,
+  horrorD100NewSkills,
+  type HorrorD100FixedSkillKey,
+} from '../../rules/horrorD100';
+import type { HorrorD100Sheet } from '../../../validators/game-systems/horrorD100Sheet.schema';
 
 /** Top-level keys of a Zod object schema, read from its source. */
 function schemaKeys(file: string, marker: string): Set<string> {
@@ -59,11 +61,10 @@ function schemaKeys(file: string, marker: string): Set<string> {
   return new Set(declared.map((line) => line.trim().replace(':', '')));
 }
 
-const SYSTEMS: { system: GameSystem; file: string; marker: string }[] = [
-  { system: GameSystem.DND_5E, file: 'dnd5e.schema.ts', marker: 'dnd5eCharacterDataSchema = z.object({' },
-  { system: GameSystem.PATHFINDER_2E, file: 'pathfinder2e.schema.ts', marker: 'pathfinder2eCharacterDataSchema = z.object({' },
-  { system: GameSystem.CALL_OF_CTHULHU_7E, file: 'callOfCthulhu7e.schema.ts', marker: 'callOfCthulhu7eCharacterDataSchema = z.object({' },
-  { system: GameSystem.SHADOWRUN_6E, file: 'shadowrun6e.schema.ts', marker: 'shadowrun6eCharacterDataSchema = z.object({' },
+const SYSTEMS: { system: SupportedGameSystem; file: string; marker: string }[] = [
+  { system: GameSystem.FIFTH_EDITION, file: 'fifthEdition.schema.ts', marker: 'fifthEditionCharacterDataSchema = z.object({' },
+  { system: GameSystem.FANTASY_D20, file: 'fantasyD20.schema.ts', marker: 'fantasyD20CharacterDataSchema = z.object({' },
+  { system: GameSystem.HORROR_D100, file: 'horrorD100Sheet.schema.ts', marker: 'HorrorD100SheetSchema = z.object({' },
 ];
 
 describe('built-in templates match their schema', () => {
@@ -105,39 +106,39 @@ describe('built-in templates match their schema', () => {
  * than its own recorded proficiency rank, item bonus and attribute give. The
  * read-only sheet printed the stored number, so those were what a player saw.
  */
-describe('Pathfinder 2e templates agree with the rules maths', () => {
-  for (const template of builtInTemplates(GameSystem.PATHFINDER_2E)) {
+describe('Fantasy d20 templates agree with the rules maths', () => {
+  for (const template of builtInTemplates(GameSystem.FANTASY_D20)) {
     const data = template.data as Record<string, unknown>;
 
     it(`${template.name} stores the Armor Class its own components give`, () => {
       const stored = (data.armorClass as { total?: number } | undefined)?.total;
       if (stored === undefined) return;
-      expect(stored).toBe(pf2eArmorClass(data));
+      expect(stored).toBe(fantasyD20ArmorClass(data));
     });
 
     it(`${template.name} stores the Class DC its own components give`, () => {
       const stored = (data.classDC as { total?: number } | undefined)?.total;
       if (stored === undefined) return;
-      expect(stored).toBe(pf2eClassDC(data));
+      expect(stored).toBe(fantasyD20ClassDC(data));
     });
 
     it(`${template.name} stores the saves and Perception its own components give`, () => {
       const saves = data.savingThrows as Record<'fortitude' | 'reflex' | 'will', { bonus: number }>;
-      for (const save of ['fortitude', 'reflex', 'will'] as const) expect(saves[save].bonus).toBe(pf2eSaveTotal(data, save));
-      expect((data.perception as { bonus: number }).bonus).toBe(pf2ePerceptionTotal(data));
+      for (const save of ['fortitude', 'reflex', 'will'] as const) expect(saves[save].bonus).toBe(fantasyD20SaveTotal(data, save));
+      expect((data.perception as { bonus: number }).bonus).toBe(fantasyD20PerceptionTotal(data));
     });
 
     it(`${template.name} stores the spell attack and spell DC its own components give`, () => {
       const spellcasting = data.spellcasting as { spellAttackBonus: { bonus: number }; spellDC: { dc: number } } | undefined;
       if (!spellcasting) return;
-      expect(spellcasting.spellAttackBonus.bonus).toBe(pf2eSpellAttack(data));
-      expect(spellcasting.spellDC.dc).toBe(pf2eSpellDC(data));
+      expect(spellcasting.spellAttackBonus.bonus).toBe(fantasyD20SpellAttack(data));
+      expect(spellcasting.spellDC.dc).toBe(fantasyD20SpellDC(data));
     });
 
     it(`${template.name} stores the hit points its ancestry, class, level and Constitution give`, () => {
       const hp = data.hp as { maximum: number; current: number; ancestryHp: number; classHpPerLevel: number };
       const con = (data.attributes as { constitution: { modifier: number } }).constitution.modifier;
-      expect(hp.maximum).toBe(pf2eMaxHitPoints(hp.ancestryHp, hp.classHpPerLevel, data.level, con));
+      expect(hp.maximum).toBe(fantasyD20MaxHitPoints(hp.ancestryHp, hp.classHpPerLevel, data.level, con));
       expect(hp.current).toBe(hp.maximum);
     });
 
@@ -148,7 +149,7 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       const attributes = data.attributes as Record<string, { modifier: number }>;
       for (const strike of (data.strikes ?? []) as Strike[]) {
         expect(strike).toMatchObject({ attributeModifier: expect.any(String), proficiencyRank: expect.any(String), itemBonus: expect.any(Number) });
-        const expected = (attributes[strike.attributeModifier!]?.modifier ?? NaN) + pf2eProficiencyBonus(data.level, strike.proficiencyRank) + strike.itemBonus!;
+        const expected = (attributes[strike.attributeModifier!]?.modifier ?? NaN) + fantasyD20ProficiencyBonus(data.level, strike.proficiencyRank) + strike.itemBonus!;
         expect({ strike: strike.name, attackBonus: strike.attackBonus }).toEqual({ strike: strike.name, attackBonus: expected });
       }
     });
@@ -157,8 +158,8 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       const stored = data.bulk as { current: number; encumbered: number; maximum: number } | undefined;
       if (stored === undefined) return;
       const strength = (data.attributes as { strength?: { modifier?: number } } | undefined)?.strength?.modifier ?? 0;
-      const { encumbered, maximum } = pf2eBulkLimits(strength);
-      expect(stored).toEqual({ current: pf2eTotalBulk(data.inventory, data.currency).bulk, encumbered, maximum });
+      const { encumbered, maximum } = fantasyD20BulkLimits(strength);
+      expect(stored).toEqual({ current: fantasyD20TotalBulk(data.inventory, data.currency).bulk, encumbered, maximum });
     });
 
     // The editor looks attributes up by their full name and offers the
@@ -169,8 +170,9 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       const skills = Object.values(data.skills as Record<string, { attribute: string }>).map((s) => s.attribute);
       const lore = ((data.loreSkills ?? []) as { attribute: string }[]).map((l) => l.attribute);
       const spellcasting = data.spellcasting as { tradition: string; type: string; keyAttribute: string };
-      const classDC = data.classDC as { keyAttribute: string };
-      const named = [...skills, ...lore, classDC.keyAttribute, spellcasting.keyAttribute];
+      // The blank template stores no Class DC.
+      const classDC = data.classDC as { keyAttribute: string } | undefined;
+      const named = [...skills, ...lore, ...(classDC ? [classDC.keyAttribute] : []), spellcasting.keyAttribute];
 
       expect(named.filter((name) => !attributes.includes(name))).toEqual([]);
       expect(['arcane', 'divine', 'primal', 'occult']).toContain(spellcasting.tradition);
@@ -179,7 +181,7 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
 
     it(`${template.name} stores the skill and lore totals its own components give`, () => {
       type Skill = { attribute: string; proficiencyRank: string; itemBonus?: number; armorPenalty?: number; bonus: number };
-      const total = (skill: Skill) => pf2eSkillTotal(data, skill);
+      const total = (skill: Skill) => fantasyD20SkillTotal(data, skill);
       const skills = [
         ...Object.values(data.skills as Record<string, Skill>),
         ...((data.loreSkills ?? []) as Skill[]),
@@ -191,64 +193,61 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
 });
 
 /**
- * A D&D 5e template's skill and save totals are the ones its scores give, so a
+ * A 5E template's skill and save totals are the ones its scores give, so a
  * character made from one opens with no other bonus to explain.
  */
-describe('D&D 5e templates agree with the rules maths', () => {
-  for (const template of builtInTemplates(GameSystem.DND_5E)) {
+describe('5E templates agree with the rules maths', () => {
+  for (const template of builtInTemplates(GameSystem.FIFTH_EDITION)) {
     const data = template.data as Record<string, unknown>;
 
     it(`${template.name} stores the skill and save totals its scores give`, () => {
       const skills = Object.keys((data.skills ?? {}) as Record<string, unknown>);
       const saves = Object.keys((data.savingThrows ?? {}) as Record<string, unknown>);
-      expect(skills.filter((key) => dnd5eBackfilledSkillOtherBonus(data, key) !== null)).toEqual([]);
-      expect(saves.filter((key) => dnd5eBackfilledSaveOtherBonus(data, key) !== null)).toEqual([]);
+      expect(skills.filter((key) => fifthEditionBackfilledSkillOtherBonus(data, key) !== null)).toEqual([]);
+      expect(saves.filter((key) => fifthEditionBackfilledSaveOtherBonus(data, key) !== null)).toEqual([]);
     });
   }
 });
 
-// The Call of Cthulhu templates stored a major wound of 1 for 10 hit points,
-// 13 hit points where CON and SIZ give 12, and halves rounded up.
-describe('Call of Cthulhu templates agree with the rules maths', () => {
-  for (const template of builtInTemplates(GameSystem.CALL_OF_CTHULHU_7E)) {
-    const data = template.data as {
-      age?: unknown;
-      characteristics: Record<string, { regular: number; half: number; fifth: number }>;
-      derivedStats: {
-        hp: { maximum: number; current: number; majorWoundThreshold: number };
-        magicPoints: { maximum: number };
-        sanity: { maximum: number };
-        damageBonus: string;
-        build: number;
-        moveRate: number;
-      };
-      skills: { cthulhuMythos: { currentValue: number }; dodge: { baseValue: number } };
-    };
-    const c = (key: string) => data.characteristics[key].regular;
-
-    it(`${template.name} stores each characteristic's half and fifth`, () => {
-      for (const [key, entry] of Object.entries(data.characteristics)) {
-        expect({ key, half: entry.half, fifth: entry.fifth }).toEqual({ key, ...cocHalfAndFifth(entry.regular) });
-      }
-    });
+// The Horror d100 templates once stored a major wound of 1 for 10 hit points,
+// 13 hit points where CON and SIZ gave 12, and halves rounded up. Each now
+// stores what the open d100 rules work out from its characteristics.
+describe('Horror d100 templates agree with the rules maths', () => {
+  for (const template of builtInTemplates(GameSystem.HORROR_D100)) {
+    const result = validateCharacterData(GameSystem.HORROR_D100, template.data);
+    if (!result.success) throw new Error(`${template.name} does not pass its schema`);
+    const data = result.data as HorrorD100Sheet;
+    const c = data.characteristics;
+    const lore = data.skills?.knowledge.find((row) => row.specialty === HORROR_D100_BLASPHEMOUS_LORE)?.value ?? 0;
 
     it(`${template.name} stores the derived attributes its characteristics give`, () => {
-      const hp = cocHitPoints(c('CON'), c('SIZ'));
-      const { damageBonus, build } = cocDamageBonusAndBuild(c('STR'), c('SIZ'));
-      expect(data.derivedStats.hp).toMatchObject({ maximum: hp, current: hp, majorWoundThreshold: cocMajorWoundThreshold(hp) });
-      expect(data.derivedStats.magicPoints.maximum).toBe(cocMagicPoints(c('POW')));
-      expect(data.derivedStats.sanity.maximum).toBe(cocMaxSanity(data.skills.cthulhuMythos.currentValue));
-      expect({ damageBonus: data.derivedStats.damageBonus, build: data.derivedStats.build }).toEqual({ damageBonus, build });
-      expect(data.derivedStats.moveRate).toBe(cocMoveRate(c('STR'), c('DEX'), c('SIZ'), Number(data.age) || 30));
-      expect(data.skills.dodge.baseValue).toBe(cocDodgeBase(c('DEX')));
+      const hitPoints = horrorD100MaximumHitPoints(c.CON, c.SIZ);
+      expect(data.hitPoints).toEqual({ maximum: hitPoints, current: hitPoints });
+      const powerPoints = horrorD100MaximumPowerPoints(c.POW);
+      expect(data.powerPoints).toEqual({ maximum: powerPoints, current: powerPoints });
+      // Sanity starts at five times POW (open d100 rules, p. 16, Sanity Points).
+      expect(data.sanity).toEqual({ starting: c.POW * 5, maximum: horrorD100MaximumSanity(lore), current: c.POW * 5 });
+      expect(data.move).toBe(HORROR_D100_HUMAN_MOVE);
+    });
+
+    it(`${template.name} gives every skill it does not raise its base chance`, () => {
+      const skills = data.skills;
+      if (!skills) throw new Error(`${template.name} has no skills`);
+      for (const key of Object.keys(HORROR_D100_FIXED_SKILLS) as HorrorD100FixedSkillKey[]) {
+        expect({ key, atLeastBase: skills[key].value >= horrorD100FixedSkillBase(key, c) }).toEqual({ key, atLeastBase: true });
+      }
+      expect(skills.languageOwn.value).toBeGreaterThanOrEqual(horrorD100LanguageOwnBase(c.INT, c.EDU));
     });
   }
 });
 
 // The editor fills a sheet stored without skills from the same table, so a
-// blank investigator made either way starts the same.
-it('the blank Call of Cthulhu investigator has the rulebook\'s skill bases', () => {
-  const blank = builtInTemplates(GameSystem.CALL_OF_CTHULHU_7E).find((t) => t.name === 'Blank Call of Cthulhu 7e Character');
-  const characteristics = (blank?.data as { characteristics: Record<string, { regular: number }> }).characteristics;
-  expect(blank?.data.skills).toEqual(cocBlankSkills(characteristics.DEX.regular, characteristics.EDU.regular));
+// blank character made either way starts the same.
+it('the blank Horror d100 character has every skill at its base', () => {
+  const blank = builtInTemplates(GameSystem.HORROR_D100).find((t) => t.name === 'Blank Horror d100 Character');
+  const { characteristics } = blank?.data as { characteristics: { DEX: number; INT: number; POW: number; EDU: number } };
+  expect(blank?.data.skills).toEqual({
+    ...horrorD100NewSkills(characteristics),
+    knowledge: [{ specialty: HORROR_D100_BLASPHEMOUS_LORE, value: 0, experienceCheck: false }],
+  });
 });

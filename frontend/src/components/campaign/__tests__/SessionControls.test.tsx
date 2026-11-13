@@ -1,11 +1,11 @@
 /**
- * The DM's session buttons follow the session that is open, and the timer
+ * The GM's session buttons follow the session that is open, and the timer
  * counts from when it started.
  *
  * They followed the campaign's status alone, so a campaign an older version
  * left marked PAUSED or ACTIVE with its session already ended offered only
  * Resume or Pause, which had no session to act on. And Resume restarted the
- * DM's timer from the moment of resuming while everyone else, and the DM
+ * GM's timer from the moment of resuming while everyone else, and the GM
  * after a reload, counted from the session's start.
  */
 
@@ -21,7 +21,7 @@ let context: { status: CampaignStatus; activeSession: { id: string; sessionNumbe
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', status: context.status },
-    userRole: 'DM',
+    userRole: 'GM',
     activeSession: context.activeSession,
     setActiveSession,
     updateCampaignStatus,

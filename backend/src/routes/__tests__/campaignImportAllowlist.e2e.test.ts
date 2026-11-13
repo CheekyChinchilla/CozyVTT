@@ -18,47 +18,24 @@ import path from 'path';
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-allowlist-'));
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
-// The fixtures here are a format's first bytes and no more, apart from the
-// PNG, which is whole because a picture's size is read before it is kept.
-// The real file-type takes the Ogg one for an Ogg file that is not sound, so
-// this answers as it does for whole files.
-jest.mock('file-type', () => {
-  const sniff = (head: Buffer) => {
-    if (head.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return { ext: 'png', mime: 'image/png' };
-    if (head.subarray(0, 2).toString('latin1') === 'MZ') return { ext: 'exe', mime: 'application/x-msdownload' };
-    if (head.subarray(0, 4).equals(Buffer.from('49492a00', 'hex'))) return { ext: 'tif', mime: 'image/tiff' };
-    if (head.subarray(0, 5).toString('latin1') === '%PDF-') return { ext: 'pdf', mime: 'application/pdf' };
-    if (head.subarray(0, 4).toString('latin1') === 'OggS') return { ext: 'ogg', mime: 'audio/ogg' };
-    return undefined;
-  };
-  return {
-    fileTypeFromBuffer: async (buf: Buffer) => sniff(buf),
-    fileTypeFromFile: async (file: string) => {
-      const { readFileSync } = jest.requireActual<typeof import('fs')>('fs');
-      return sniff(readFileSync(file).subarray(0, 16));
-    },
-  };
-});
-
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { writeZip } from '../../__tests__/helpers/zipFixtures';
+import { picture, oggVorbis, mp3, pdf, windowsProgram } from '../../__tests__/helpers/wholeFiles';
 
 const app = createTestApp();
 
+// A picture's size is read before it is kept, so the PNG is a whole one too.
+let png: Buffer;
+
 const BYTES = {
-  png: Buffer.from(
-    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082',
-    'hex'
-  ),
-  exe: Buffer.concat([Buffer.from('MZ', 'latin1'), Buffer.alloc(64)]),
-  tiff: Buffer.concat([Buffer.from('49492a00', 'hex'), Buffer.alloc(64)]),
-  pdf: Buffer.from('%PDF-1.7\n%%EOF\n', 'latin1'),
-  ogg: Buffer.concat([Buffer.from('OggS', 'latin1'), Buffer.alloc(64)]),
-  // An MP3 with no ID3 tag: file-type does not always know one, and the
-  // upload route accepts it on its frame header.
-  mp3: Buffer.concat([Buffer.from([0xff, 0xfb, 0x90, 0x64]), Buffer.alloc(64)]),
+  exe: windowsProgram(),
+  pdf: pdf(),
+  ogg: oggVorbis(),
+  mp3: mp3(false),
+  // Built in beforeAll: sharp writes a picture asynchronously.
+  tiff: Buffer.alloc(0),
 };
 
 interface ArchivedAsset {
@@ -72,6 +49,8 @@ let userId: string;
 let agent: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
+  png = await picture().png().toBuffer();
+  BYTES.tiff = await picture().tiff().toBuffer();
   const user = await createTestUser({ displayName: 'Import Allowlist' });
   userId = user.id;
   agent = request.agent(app);
@@ -98,7 +77,7 @@ async function importOne(asset: ArchivedAsset) {
       name: 'manifest.json',
       data: JSON.stringify({
         formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT test', campaignName: 'Allowlist',
-        gameSystem: 'DND_5E', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
+        gameSystem: 'FIFTH_EDITION', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
         includesAudio: true, totalSizeBytes: asset.bytes.length,
       }),
     },
@@ -128,16 +107,16 @@ describe('an imported asset', () => {
   });
 
   it('is stored under the format and extension its bytes show, not the ones the archive gives', async () => {
-    const [stored] = await importOne({ type: 'MAP', mimeType: 'image/webp', originalName: 'Players Handbook.exe', bytes: BYTES.png });
+    const [stored] = await importOne({ type: 'MAP', mimeType: 'image/webp', originalName: 'Field Notes.exe', bytes: png });
     expect(stored.mimeType).toBe('image/png');
     expect(stored.filename).toMatch(/\.png$/);
     expect(stored.filePath).toMatch(/\.png$/);
-    expect(stored.originalName).toBe('Players Handbook.png');
+    expect(stored.originalName).toBe('Field Notes.png');
   });
 
   it('keeps an allowed name as it was', async () => {
-    const [stored] = await importOne({ type: 'TOKEN', mimeType: 'image/png', originalName: 'Goblin Boss.png', bytes: BYTES.png });
-    expect(stored.originalName).toBe('Goblin Boss.png');
+    const [stored] = await importOne({ type: 'TOKEN', mimeType: 'image/png', originalName: 'Goblin.png', bytes: png });
+    expect(stored.originalName).toBe('Goblin.png');
     expect(stored.type).toBe('TOKEN');
   });
 
@@ -149,7 +128,7 @@ describe('an imported asset', () => {
 
   it.each([
     ['an Ogg track', { type: 'AUDIO', mimeType: 'audio/ogg', originalName: 'rain.ogg', bytes: BYTES.ogg }, 'audio/ogg'],
-    ['an MP3 the detector does not know', { type: 'AUDIO', mimeType: 'audio/mpeg', originalName: 'tavern.mp3', bytes: BYTES.mp3 }, 'audio/mpeg'],
+    ['an MP3', { type: 'AUDIO', mimeType: 'audio/mpeg', originalName: 'tavern.mp3', bytes: BYTES.mp3 }, 'audio/mpeg'],
   ])('is accepted when it is %s, as an upload would be', async (_label, asset, mime) => {
     const [stored] = await importOne(asset);
     expect(stored?.mimeType).toBe(mime);
@@ -163,7 +142,7 @@ describe('an imported asset', () => {
 describe('an imported asset with a very long name', () => {
   it('is stored with its names cut to an upload\'s limits', async () => {
     const long = `${'A very long map name '.repeat(20)}.png`;
-    const [stored] = await importOne({ type: 'MAP', mimeType: 'image/png', originalName: long, bytes: BYTES.png });
+    const [stored] = await importOne({ type: 'MAP', mimeType: 'image/png', originalName: long, bytes: png });
     expect(stored.originalName.length).toBeLessThanOrEqual(255);
     expect(stored.originalName).toMatch(/\.png$/);
     expect(stored.name.length).toBeLessThanOrEqual(200);

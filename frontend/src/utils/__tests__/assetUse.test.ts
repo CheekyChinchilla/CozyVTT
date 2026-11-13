@@ -4,22 +4,22 @@ import { describeAssetUse } from '../assetUse';
 import { apiAssetInUse } from '../errors';
 
 const use = (over: Partial<AssetUse>): AssetUse => ({
-  kind: 'map', name: 'Goblin Cave', campaignId: 'c1', campaignName: 'Lost Mine', count: 1, ...over,
+  kind: 'map', name: 'Goblin Cave', campaignId: 'c1', campaignName: 'The Hollow Crown', count: 1, ...over,
 });
 
 describe('describeAssetUse', () => {
   it.each([
-    [use({}), 'Map "Goblin Cave" (Lost Mine)'],
-    [use({ kind: 'token', name: 'Ambush Road', count: 1 }), '1 token on the map "Ambush Road" (Lost Mine)'],
-    [use({ kind: 'token', name: 'Ambush Road', count: 3 }), '3 tokens on the map "Ambush Road" (Lost Mine)'],
-    [use({ kind: 'character', name: 'Hannah' }), 'Character "Hannah" (Lost Mine)'],
+    [use({}), 'Map "Goblin Cave" (The Hollow Crown)'],
+    [use({ kind: 'token', name: 'Ambush Road', count: 1 }), '1 token on the map "Ambush Road" (The Hollow Crown)'],
+    [use({ kind: 'token', name: 'Ambush Road', count: 3 }), '3 tokens on the map "Ambush Road" (The Hollow Crown)'],
+    [use({ kind: 'character', name: 'Hannah' }), 'Character "Hannah" (The Hollow Crown)'],
     [use({ kind: 'character', name: 'Hannah', campaignId: null, campaignName: null }), 'Character "Hannah"'],
     [use({ kind: 'characterTemplate', name: 'Starter Fighter', campaignId: null, campaignName: null }), 'Character template "Starter Fighter"'],
-    [use({ kind: 'creature', name: 'Boss Bat' }), 'Creature "Boss Bat" (Lost Mine)'],
-    [use({ kind: 'tokenTemplate', name: 'Torch' }), 'Token template "Torch" (Lost Mine)'],
-    [use({ kind: 'campaignSetting', name: 'Lost Mine' }), 'Ambient sound of the campaign "Lost Mine"'],
-    [use({ kind: 'vibePeriod', name: 'Dawn' }), 'Sound of the time of day "Dawn" (Lost Mine)'],
-    [use({ kind: 'document', name: 'The road to Thornwall' }), 'Document "The road to Thornwall" (Lost Mine)'],
+    [use({ kind: 'creature', name: 'Boss Bat' }), 'Creature "Boss Bat" (The Hollow Crown)'],
+    [use({ kind: 'tokenTemplate', name: 'Torch' }), 'Token template "Torch" (The Hollow Crown)'],
+    [use({ kind: 'campaignSetting', name: 'The Hollow Crown' }), 'Ambient sound of the campaign "The Hollow Crown"'],
+    [use({ kind: 'vibePeriod', name: 'Dawn' }), 'Sound of the time of day "Dawn" (The Hollow Crown)'],
+    [use({ kind: 'document', name: 'The road to Thornwall' }), 'Document "The road to Thornwall" (The Hollow Crown)'],
     [use({ kind: 'document', name: 'House rules', campaignId: null, campaignName: null }), 'Document "House rules"'],
   ])('describes %j', (entry, text) => {
     expect(describeAssetUse(entry)).toBe(text);

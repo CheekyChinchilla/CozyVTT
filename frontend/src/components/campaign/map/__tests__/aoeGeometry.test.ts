@@ -218,7 +218,7 @@ describe('squareExitPoint', () => {
 });
 
 // The cone was drawn with its far corners on an arc a cone's length out, so it
-// fell about a tenth short and narrow of a D&D 5e cone, and Pathfinder 2e's
+// fell about a tenth short and narrow of a 5E cone, and Fantasy d20's
 // cone, a different shape, was drawn the same.
 describe('coneOutline', () => {
   const close = (a: { x: number; y: number }, b: { x: number; y: number }) => {
@@ -226,7 +226,7 @@ describe('coneOutline', () => {
     expect(a.y).toBeCloseTo(b.y, 6);
   };
 
-  it('draws D&D 5e\'s cone as wide at its far end as it is long', () => {
+  it('draws 5E\'s cone as wide at its far end as it is long', () => {
     const outline = coneOutline({ x: 10, y: 20 }, 0, 100, 'width-equals-distance');
     if (outline.kind !== 'triangle') throw new Error('expected a triangle');
     close(outline.points[0], { x: 10, y: 20 });
@@ -244,7 +244,7 @@ describe('coneOutline', () => {
     close(mid, { x: Math.cos(angle) * 60, y: Math.sin(angle) * 60 });
   });
 
-  it('draws Pathfinder 2e\'s cone as a quarter circle', () => {
+  it('draws Fantasy d20\'s cone as a quarter circle', () => {
     const outline = coneOutline({ x: 5, y: 5 }, Math.PI / 2, 90, 'quarter-circle');
     expect(outline).toEqual({ kind: 'sector', centre: { x: 5, y: 5 }, radius: 90, from: Math.PI / 4, to: (3 * Math.PI) / 4 });
   });

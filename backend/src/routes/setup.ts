@@ -2,7 +2,7 @@ import type {} from '../types/express';
 import { Router, Request, Response } from 'express';
 import { setupState } from '../services/systemSettings';
 import { RegistrationError, answeredBusy } from '../services/auth';
-import { clientUser } from './auth';
+import { clientUser, recordSignIn } from './auth';
 import { setUpInstance, SetupAlreadyRunError } from '../services/setup';
 import { setupTokenMatches, setupTokenHint } from '../services/setupToken';
 import { regenerateSession } from '../utils/session';
@@ -92,7 +92,7 @@ router.post('/init', hashingPerAddress, async (req: Request, res: Response) => {
     await regenerateSession(req);
     req.session.userId = user.id;
     req.session.platformRole = user.platformRole;
-    req.session.signedInAt = Date.now();
+    await recordSignIn(req, user.id);
 
     return res.status(201).json({
       message: 'Setup completed successfully',

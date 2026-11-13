@@ -1,7 +1,7 @@
 /**
  * The Creature Library and Token Templates place on the map on screen.
  *
- * While the DM prepares a map, the map on screen is not the table's, and a
+ * While the GM prepares a map, the map on screen is not the table's, and a
  * creature meant for it placed on the table's map would appear in front of
  * the players. Placing names the map on screen, and the token is drawn there
  * only while that map is still the one on screen when the answer comes.
@@ -63,7 +63,7 @@ beforeEach(() => {
   act(() => { useGameStore.getState().setTokens([], 'map-prepared'); });
 });
 
-describe('placing from a library while the DM prepares a map', () => {
+describe('placing from a library while the GM prepares a map', () => {
   it('places a creature on the map on screen', async () => {
     api.addToken.mockResolvedValue(placed('bat-token'));
     render(<CreatureLibrary isOpen onClose={() => {}} />);

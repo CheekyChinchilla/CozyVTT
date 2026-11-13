@@ -128,7 +128,7 @@ export default function SessionPanels() {
         <VibeTracker />
         {/* SessionControls renders nothing for players */}
         <SessionControls />
-        {/* Everyone: the notes the DM wrote when each session ended */}
+        {/* Everyone: the notes the GM wrote when each session ended */}
         <SessionHistory />
       </div>
     </>

@@ -1,3 +1,6 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
 /**
  * statBlock.ts
  * The single definition of what a valid NPC stat block looks like.
@@ -15,21 +18,19 @@
  */
 
 import { z } from 'zod';
-import {
-  MAX_ABILITY_SCORE,
-  MAX_PROFICIENCY_BONUS,
-  MIN_ABILITY_SCORE,
-} from '../utils/rules/dnd5e';
-import { STAT_BLOCK_LIMITS } from './statBlockLimits';
+import { MAX_PROFICIENCY_BONUS } from '../utils/rules/fifthEdition';
+import { STAT_BLOCK_LIMITS, statBlockNumberBounds } from './statBlockLimits';
+import { normaliseGameSystem } from '../legacy/gameSystemAliases';
 
 /**
- * Storage bounds for any save or skill bonus, across every game system.
+ * Storage bounds for any save or skill bonus. A Horror d100 creature's
+ * skills are percentages and have their own highest (statBlockNumberBounds).
  *
- * Deliberately wider than D&D 5e needs. 5e tops out around +28 (a CR 30
+ * Deliberately wider than 5E needs. 5E tops out around +28 (a CR 30
  * creature with a +10 ability and expertise on a +9 proficiency bonus), but
- * Pathfinder 2e runs much higher: its creature-building benchmarks put an
- * extreme skill at +33 by level 15 and higher still beyond that. A 5e-shaped
- * bound would silently reject legitimate high-level PF2e creatures.
+ * Fantasy d20 runs much higher: its creature-building benchmarks put an
+ * extreme skill at +33 by level 15 and higher still beyond that. A 5E-shaped
+ * bound would silently reject legitimate high-level Fantasy d20 creatures.
  *
  * This is a backstop against absurd or hostile data, not a rules check. What
  * stops a commoner being given a +30 save is the editor deriving the value from
@@ -42,8 +43,8 @@ export const MAX_STORED_BONUS = STAT_BLOCK_LIMITS.maxBonus;
 /**
  * Cap on how many saves or skills one stat block may carry.
  *
- * Comfortably above the eighteen 5e skills plus six saves so custom and
- * non-5e entries fit, while still bounding the size of the stored JSON.
+ * Comfortably above the eighteen 5E skills plus six saves so custom and
+ * non-5E entries fit, while still bounding the size of the stored JSON.
  */
 const MAX_BONUS_ENTRIES = STAT_BLOCK_LIMITS.maxBonusEntries;
 
@@ -82,18 +83,47 @@ export interface StatBlockSchemaOptions {
  * A map of save or skill keys to bonuses.
  *
  * Keys are not enumerated here on purpose: the stat block is shared across game
- * systems, and D&D 5e's six ability saves, Pathfinder 2e's Fortitude/Reflex/Will
+ * systems, and 5E's six ability saves, Fantasy d20's Fortitude/Reflex/Will
  * and any custom skill all have to fit. Which keys are *offered* is the editor's
  * job; this layer's job is to make the stored numbers sane.
  */
-const bonusRecordSchema = z
-  .record(
-    z.string().trim().min(1).max(MAX_KEY_LENGTH),
-    z.number().int().min(MIN_STORED_BONUS).max(MAX_STORED_BONUS)
-  )
-  .refine((record) => Object.keys(record).length <= MAX_BONUS_ENTRIES, {
-    message: `At most ${MAX_BONUS_ENTRIES} entries are allowed`,
-  });
+const bonusRecordOf = (value: z.ZodNumber) =>
+  z
+    .record(z.string().trim().min(1).max(MAX_KEY_LENGTH), value)
+    .refine((record) => Object.keys(record).length <= MAX_BONUS_ENTRIES, {
+      message: `At most ${MAX_BONUS_ENTRIES} entries are allowed`,
+    });
+
+const bonusRecordSchema = bonusRecordOf(z.number().int().min(MIN_STORED_BONUS).max(MAX_STORED_BONUS));
+
+/**
+ * Skills, bounded by game system in the stat block's own check
+ * (statBlockNumberBounds): a Horror d100 skill is a percentage.
+ */
+const skillRecordSchema = bonusRecordOf(z.number());
+
+/**
+ * The six scores, bounded by game system in the stat block's own check
+ * (statBlockNumberBounds): a Horror d100 creature keeps its
+ * characteristics here, POW in Wisdom's slot and CHA in Charisma's.
+ */
+const abilitiesSchema = z.object({
+  str: z.number(),
+  dex: z.number(),
+  con: z.number(),
+  int: z.number(),
+  wis: z.number(),
+  cha: z.number(),
+});
+type AbilityKey = keyof z.infer<typeof abilitiesSchema>;
+const ABILITY_KEYS = Object.keys(abilitiesSchema.shape) as AbilityKey[];
+
+/** Report a value's issues against `schema` at `path` in the stat block. */
+function checkNumber(ctx: z.RefinementCtx, schema: z.ZodNumber, value: number, path: (string | number)[]): void {
+  const result = schema.safeParse(value);
+  if (result.success) return;
+  for (const issue of result.error.issues) ctx.addIssue({ ...issue, path: [...path, ...issue.path] });
+}
 
 /**
  * How proficient a creature is in a save or skill.
@@ -146,20 +176,14 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
     hpMax: z.number().int().min(1).max(99999).optional(),
     hitDice: z.string().max(STAT_BLOCK_LIMITS.maxHitDiceLength).optional(),
     speed: z.string().max(options.maxSpeedLength),
-    // TODO(creatures): D&D 5e's score bound, and every system's skill bound of
-    // 50, refuse a Call of Cthulhu creature's real numbers (STR 60, Dodge 55).
-    // A Call of Cthulhu creature model, with its eight characteristics and
-    // percentile skills, is the fix (docs/FUTURE_FEATURES.md, Known issues).
-    abilities: z.object({
-      str: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-      dex: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-      con: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-      int: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-      wis: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-      cha: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-    }),
+    // TODO(creatures): a Horror d100 creature has eight characteristics
+    // and this stat block six slots, so SIZ and EDU have nowhere to go; its
+    // skills are percentages kept in the bonus record. A Horror d100
+    // creature model with all eight is the fix (docs/FUTURE_FEATURES.md,
+    // Known issues).
+    abilities: abilitiesSchema,
     // Attribute modifiers, for systems that print modifiers rather than
-    // scores. Pathfinder 2e stat blocks give "Str +4" with no underlying
+    // scores. Fantasy d20 stat blocks give "Str +4" with no underlying
     // score, so deriving one would be an invention.
     attributeModifiers: z
       .object({
@@ -172,10 +196,10 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
       })
       .optional(),
     // Creature level, for systems that rate creatures by level rather than
-    // challenge rating. PF2e runs -1 to 25.
+    // challenge rating. Fantasy d20 runs -1 to 25.
     level: z.number().int().min(-1).max(30).optional(),
     savingThrows: bonusRecordSchema.optional(),
-    skills: bonusRecordSchema.optional(),
+    skills: skillRecordSchema.optional(),
     proficiencies: proficienciesSchema.optional(),
     damageVulnerabilities: z.string().max(STAT_BLOCK_LIMITS.maxDetailLength).optional(),
     damageResistances: z.string().max(STAT_BLOCK_LIMITS.maxDetailLength).optional(),
@@ -192,7 +216,13 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
     legendaryActions: listSchema,
     creatureType: z.string().max(STAT_BLOCK_LIMITS.maxCreatureTypeLength).optional(),
     alignment: z.string().max(STAT_BLOCK_LIMITS.maxAlignmentLength).optional(),
-    gameSystem: z.string().max(50).optional(),
+    // The system the stat block's numbers are on. One an older version
+    // named is stored as its new value; any other text is kept as given.
+    gameSystem: z
+      .string()
+      .max(50)
+      .optional()
+      .transform((named) => normaliseGameSystem(named) ?? named),
     notes: z.string().max(STAT_BLOCK_LIMITS.maxNotesLength).optional(),
   };
   const named = new Set(Object.keys(shape));
@@ -201,6 +231,13 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
     .object(shape)
     .passthrough()
     .superRefine((block, ctx) => {
+      // Scores and skills, by the game system the stat block names.
+      const bounds = statBlockNumberBounds(block.gameSystem);
+      const score = z.number().int().min(bounds.minScore).max(bounds.maxScore);
+      const skill = z.number().int().min(bounds.minSkill).max(bounds.maxSkill);
+      for (const key of ABILITY_KEYS) checkNumber(ctx, score, block.abilities[key], ['abilities', key]);
+      for (const [key, value] of Object.entries(block.skills ?? {})) checkNumber(ctx, skill, value, ['skills', key]);
+
       const extra = Object.keys(block).filter((key) => !named.has(key));
       if (options.maxExtraKeys !== undefined && extra.length > options.maxExtraKeys) {
         ctx.addIssue({

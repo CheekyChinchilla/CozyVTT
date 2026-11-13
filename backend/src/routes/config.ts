@@ -21,7 +21,7 @@ const router = Router();
  * Public endpoint — no authentication required, no sensitive values.
  *
  * The SMTP entry is a bare boolean on purpose: host, port, user and TLS mode
- * stay on the admin-only /api/admin/config. A campaign DM is not necessarily a
+ * stay on the admin-only /api/admin/config. A campaign GM is not necessarily a
  * platform admin, so without this they could not tell whether the "also email
  * them" option on an invitation would do anything at all.
  */

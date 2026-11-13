@@ -13,14 +13,14 @@ import { useRollFeedback } from '@/hooks/useRollFeedback';
 import { canEditCharacter, canEditCharacterIn, canRollAsCharacter } from '@/services/permissions';
 import { api } from '@/services/api';
 import type { Campaign, Character, CampaignMembership } from '@/types';
-import { gameSystemName } from '@/constants/game-systems';
+import { gameSystemName, isSupportedOrNoSystem } from '@/constants/game-systems';
 
 // Import view components
-import { DnD5eCharacterView } from '../character-sheets/dnd5e/DnD5eCharacterView';
-import Pathfinder2eCharacterView from '../character-sheets/pathfinder2e/Pathfinder2eCharacterView';
-import Shadowrun6eCharacterSheet from '../character-sheets/shadowrun6e/Shadowrun6eCharacterSheet';
-import CallOfCthulhu7eCharacterView from '../character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterView';
+import { FifthEditionCharacterView } from '../character-sheets/fifth-edition/FifthEditionCharacterView';
+import FantasyD20CharacterView from '../character-sheets/fantasy-d20/FantasyD20CharacterView';
+import HorrorD100CharacterView from '../character-sheets/horror-d100/HorrorD100CharacterView';
 import { FlexibleCharacterSheetView } from '../character-sheets/flexible/FlexibleCharacterSheetView';
+import { UnsupportedSystemSheet } from '../character-sheets/UnsupportedSystemSheet';
 import { CharacterSheetErrorBoundary } from '../character-sheets/ErrorBoundary';
 import { RollModeControl } from '../character-sheets/RollModeControl';
 import { systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
@@ -48,7 +48,7 @@ interface CharacterSheetViewerModalProps {
    */
   publicName?: string;
   /**
-   * Rolls from this sheet go to the DM alone: it was opened from a token on
+   * Rolls from this sheet go to the GM alone: it was opened from a token on
    * a map the table is not on.
    */
   secretRolls?: boolean;
@@ -138,8 +138,14 @@ export default function CharacterSheetViewerModal({
   // Reading someone else's sheet is deliberate — the server lets any campaign
   // member do it. Rolling from it is not: those are their modifiers.
   const canRoll = user ? canRollAsCharacter(user, character, membership) : false;
-  const isDMEditingOtherCharacter =
-    membership?.role === 'DM' && character.userId !== user?.id;
+  // The values a Horror d100 character held before its sheet was rebuilt are
+  // shown to its owner and to the campaign's GM. The server sends them to
+  // every reader, as it sent the old sheet's, so this decides only what is
+  // shown. The role is read as canEditCharacterIn reads it.
+  const viewerRole = membership?.role ?? campaign?.userRole ?? campaign?.memberships?.find((m) => m.userId === user?.id)?.role;
+  const showOriginalValues = character.userId === user?.id || viewerRole === 'GM';
+  const isGMEditingOtherCharacter =
+    membership?.role === 'GM' && character.userId !== user?.id;
 
   // Handle edit - open editor modal
   const handleEdit = () => {
@@ -185,26 +191,28 @@ export default function CharacterSheetViewerModal({
   const rollHandler = canRoll && socket ? handleRoll : undefined;
 
   // Offered wherever the sheet rolls and its system rolls a d20 twice for
-  // advantage: D&D 5e, and Pathfinder 2e's fortune and misfortune.
+  // advantage: 5E, and Fantasy d20's fortune and misfortune.
   const offersRollMode = !!rollHandler && systemSupportsAdvantage(character.gameSystem);
 
   // Spending follows the same rule as rolling. The server checks it again
-  // (owner or DM), so this only decides whether the control is offered.
+  // (owner or GM), so this only decides whether the control is offered.
   const spendHitDie = canRoll && socket
     ? (index: number) => socket.emitHitDiceSpend({ characterId: character.id, index })
     : undefined;
 
   // Render appropriate character sheet view based on game system
   const renderCharacterSheet = () => {
+    // A system CozyVTT no longer supports: its data, read-only.
+    if (!isSupportedOrNoSystem(character.gameSystem)) {
+      return <UnsupportedSystemSheet character={character} />;
+    }
     switch (character.gameSystem) {
-      case 'DND_5E':
-        return <DnD5eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} rollMode={rollMode} onSpendHitDie={spendHitDie} />;
-      case 'PATHFINDER_2E':
-        return <Pathfinder2eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} rollMode={rollMode} />;
-      case 'SHADOWRUN_6E':
-        return <Shadowrun6eCharacterSheet character={character} mode="view" />;
-      case 'CALL_OF_CTHULHU_7E':
-        return <CallOfCthulhu7eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} />;
+      case 'FIFTH_EDITION':
+        return <FifthEditionCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} rollMode={rollMode} onSpendHitDie={spendHitDie} />;
+      case 'FANTASY_D20':
+        return <FantasyD20CharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} rollMode={rollMode} />;
+      case 'HORROR_D100':
+        return <HorrorD100CharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} showOriginalValues={showOriginalValues} />;
       default:
         return <FlexibleCharacterSheetView character={character} onEdit={canEdit ? handleEdit : undefined} />;
     }
@@ -249,12 +257,12 @@ export default function CharacterSheetViewerModal({
               </div>
             </div>
 
-            {/* DM Edit Banner */}
-            {isDMEditingOtherCharacter && (
+            {/* GM Edit Banner */}
+            {isGMEditingOtherCharacter && (
               <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-moss-green/10 border border-moss-green/30 rounded-lg">
                 <Shield className="w-4 h-4 text-brand-ink" />
                 <p className="text-sm text-brand-ink">
-                  You are viewing <strong>{ownerName}'s</strong> character as DM
+                  You are viewing <strong>{ownerName}'s</strong> character as GM
                 </p>
               </div>
             )}

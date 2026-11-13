@@ -25,8 +25,8 @@ process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { randomUUID } from 'crypto';
 import request from 'supertest';
-import unzipper from 'unzipper';
 import { createTestApp } from '../../__tests__/helpers/test-app';
+import { readZip } from '../../__tests__/helpers/zipFixtures';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
 const app = createTestApp();
@@ -58,7 +58,7 @@ beforeAll(async () => {
   attackerId = attackerUser.id;
   victimId = victimUser.id;
   campaignId = (await createTestCampaign(attackerId, { name: 'Attacker campaign' })).id;
-  await prisma.campaignMembership.create({ data: { userId: attackerId, campaignId, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId: attackerId, campaignId, role: 'GM', characterIds: [] } });
   privateId = await makeAsset(victimId, 'victim-private', 'DOCUMENT');
   ownId = await makeAsset(attackerId, 'attacker-own', 'TOKEN');
   mapId = (await prisma.map.create({
@@ -109,7 +109,7 @@ describe('an export', () => {
       r.on('end', () => done(null, Buffer.concat(chunks)));
     });
     expect(res.status).toBe(200);
-    const entries = (await unzipper.Open.buffer(res.body as Buffer)).files.map((f) => f.path);
+    const entries = (await readZip(res.body as Buffer)).map((f) => f.path);
     expect(entries.some((e) => e.includes(ownId))).toBe(true);
     expect(entries.some((e) => e.includes(privateId))).toBe(false);
   });

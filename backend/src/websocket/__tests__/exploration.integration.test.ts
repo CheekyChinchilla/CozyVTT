@@ -3,7 +3,7 @@
  *
  * Per user, per map, in the fog grid's shape. A reveal is stored, bounds
  * checked and echoed to that user; another player's memory is their own; the
- * DM can read a player's (for Player Preview) and can forget everyone's. The
+ * GM can read a player's (for Player Preview) and can forget everyone's. The
  * server never consults this table when deciding which tokens to send, so a
  * forged reveal shows a player nothing they were not already given.
  *
@@ -25,13 +25,13 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `explore-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let p1Id: string;
 let p2Id: string;
 let specId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let p1Cookie: string;
 let p2Cookie: string;
 let specCookie: string;
@@ -39,17 +39,17 @@ let specCookie: string;
 type StateEvent = { mapId: string; cells: number[] };
 
 beforeAll(async () => {
-  const [dm, p1, p2, spec] = await Promise.all(
+  const [gm, p1, p2, spec] = await Promise.all(
     ['dm', 'p1', 'p2', 'spec'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Explore ${name}` } })
     )
   );
-  dmId = dm.id; p1Id = p1.id; p2Id = p2.id; specId = spec.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Explore ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  gmId = gm.id; p1Id = p1.id; p2Id = p2.id; specId = spec.id;
+  const campaign = await prisma.campaign.create({ data: { name: `Explore ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: p1Id, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: p2Id, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: specId, campaignId, role: 'SPECTATOR', characterIds: [] },
@@ -68,14 +68,14 @@ beforeAll(async () => {
   // The campaign is showing this map: a player is answered about the current map only.
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, p1Cookie, p2Cookie, specCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(p1Id), server.loginAs(p2Id), server.loginAs(specId)]);
+  [gmCookie, p1Cookie, p2Cookie, specCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(p1Id), server.loginAs(p2Id), server.loginAs(specId)]);
 });
 
 afterAll(async () => {
   await server?.close();
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, p1Id, p2Id, specId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, p1Id, p2Id, specId] } } });
   await prisma.$disconnect();
 });
 
@@ -109,7 +109,7 @@ describe('exploration:reveal', () => {
     p1.disconnect();
   });
 
-  // The page reports on its own, and a report can cross the DM turning
+  // The page reports on its own, and a report can cross the GM turning
   // memory off; an error would land in the player's dice panel.
   it('is dropped quietly while explored memory is off for the map', async () => {
     await prisma.map.update({ where: { id: mapId }, data: { explorationEnabled: false } });
@@ -148,58 +148,58 @@ describe('exploration:reveal', () => {
   });
 });
 
-describe('exploration:reveal, seen by the DM and on a player\'s behalf', () => {
-  it('reaches a DM socket previewing that player as the player\'s memory grows', async () => {
+describe('exploration:reveal, seen by the GM and on a player\'s behalf', () => {
+  it('reaches a GM socket previewing that player as the player\'s memory grows', async () => {
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     // The preview asks for the player's memory by name when it starts.
-    const opened = waitForEvent<StateEvent & { userId: string | null }>(dm, 'exploration:state');
-    dm.emit('exploration:request', { mapId, userId: p1Id });
+    const opened = waitForEvent<StateEvent & { userId: string | null }>(gm, 'exploration:state');
+    gm.emit('exploration:request', { mapId, userId: p1Id });
     await opened;
-    const seenByDm = waitForEvent<StateEvent & { userId: string | null }>(dm, 'exploration:state');
+    const seenByGm = waitForEvent<StateEvent & { userId: string | null }>(gm, 'exploration:state');
     const echoed = waitForEvent<StateEvent>(p1, 'exploration:state');
     p1.emit('exploration:reveal', { mapId, cells: [2, 3] });
     await echoed;
-    const got = await seenByDm;
+    const got = await seenByGm;
     expect(got.userId).toBe(p1Id);
     expect(got.cells).toEqual([2, 3]);
     p1.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
-  // Closing the preview asks as nobody, which is how a DM socket stops
+  // Closing the preview asks as nobody, which is how a GM socket stops
   // following the player it previewed.
-  it('stops following a player once the DM asks as nobody', async () => {
+  it('stops following a player once the GM asks as nobody', async () => {
     await new Promise((resolve) => setTimeout(resolve, 1100));
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const opened = waitForEvent(dm, 'exploration:state');
-    dm.emit('exploration:request', { mapId, userId: p1Id });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const opened = waitForEvent(gm, 'exploration:state');
+    gm.emit('exploration:request', { mapId, userId: p1Id });
     await opened;
-    dm.emit('exploration:request', { mapId: '' });
+    gm.emit('exploration:request', { mapId: '' });
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    const quiet = expectNoEvent(dm, 'exploration:state', 600);
+    const quiet = expectNoEvent(gm, 'exploration:state', 600);
     const echoed = waitForEvent(p1, 'exploration:state');
     p1.emit('exploration:reveal', { mapId, cells: [5] });
     await echoed;
     await quiet;
     p1.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   // Switching the preview between players quickly can run past the request
-  // limit. The dropped request still names who the DM is now previewing, or
+  // limit. The dropped request still names who the GM is now previewing, or
   // the socket went on following the previous player and never heard the
   // new one's memory grow.
-  it('follows the player a DM previews even when the request for them is over the limit', async () => {
+  it('follows the player a GM previews even when the request for them is over the limit', async () => {
     await new Promise((resolve) => setTimeout(resolve, 1100));
     const p2 = await server.connectAndAuth(p2Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const states: Array<StateEvent & { userId: string | null }> = [];
-    dm.on('exploration:state', (d: StateEvent & { userId: string | null }) => states.push(d));
-    for (let i = 0; i < 5; i++) dm.emit('exploration:request', { mapId, userId: p1Id });
-    dm.emit('exploration:request', { mapId, userId: p2Id });
+    gm.on('exploration:state', (d: StateEvent & { userId: string | null }) => states.push(d));
+    for (let i = 0; i < 5; i++) gm.emit('exploration:request', { mapId, userId: p1Id });
+    gm.emit('exploration:request', { mapId, userId: p2Id });
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     const echoed = waitForEvent<StateEvent>(p2, 'exploration:state');
@@ -209,49 +209,49 @@ describe('exploration:reveal, seen by the DM and on a player\'s behalf', () => {
 
     expect(states.some((d) => d.userId === p2Id && d.cells.includes(4))).toBe(true);
     p2.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   // Each reveal carries the player's whole memory, a few times a second while
-  // they move. A DM who is not previewing that player throws it away, so it
-  // is not sent: before, every DM received every player's memory.
-  it("reaches no DM socket that is not previewing that player", async () => {
+  // they move. A GM who is not previewing that player throws it away, so it
+  // is not sent: before, every GM received every player's memory.
+  it("reaches no GM socket that is not previewing that player", async () => {
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const quiet = expectNoEvent(dm, 'exploration:state', 800);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const quiet = expectNoEvent(gm, 'exploration:state', 800);
     const echoed = waitForEvent<StateEvent>(p1, 'exploration:state');
     p1.emit('exploration:reveal', { mapId, cells: [4] });
     await echoed;
     await quiet;
     p1.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
-  it('lets the DM record cells for a named player, who receives them', async () => {
+  it('lets the GM record cells for a named player, who receives them', async () => {
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const theirs = waitForEvent<StateEvent & { userId: string | null }>(p1, 'exploration:state');
-    dm.emit('exploration:reveal', { mapId, cells: [4], userId: p1Id });
+    gm.emit('exploration:reveal', { mapId, cells: [4], userId: p1Id });
     const got = await theirs;
     expect(got.userId).toBe(p1Id);
     expect(got.cells).toEqual([4]);
     expect(await prisma.mapExploration.count({ where: { mapId, userId: p1Id } })).toBe(1);
-    expect(await prisma.mapExploration.count({ where: { mapId, userId: dmId } })).toBe(0);
+    expect(await prisma.mapExploration.count({ where: { mapId, userId: gmId } })).toBe(0);
     p1.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
-  // The page reports as the DM only for the player Player Preview shows. A
-  // report of the DM's own, which a script could direct at every map of the
+  // The page reports as the GM only for the player Player Preview shows. A
+  // report of the GM's own, which a script could direct at every map of the
   // campaign, would write and send a whole map's memory each time.
-  it("takes no report of the DM's own memory, named or not, and sends nothing for it", async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const quiet = expectNoEvent(dm, 'exploration:state', 1500);
-    dm.emit('exploration:reveal', { mapId, cells: [1, 2] });
-    dm.emit('exploration:reveal', { mapId, cells: [3], userId: dmId });
+  it("takes no report of the GM's own memory, named or not, and sends nothing for it", async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const quiet = expectNoEvent(gm, 'exploration:state', 1500);
+    gm.emit('exploration:reveal', { mapId, cells: [1, 2] });
+    gm.emit('exploration:reveal', { mapId, cells: [3], userId: gmId });
     await quiet;
-    expect(await prisma.mapExploration.count({ where: { mapId, userId: dmId } })).toBe(0);
-    dm.disconnect();
+    expect(await prisma.mapExploration.count({ where: { mapId, userId: gmId } })).toBe(0);
+    gm.disconnect();
   });
 
   it('refuses a player naming another user, and stores nothing', async () => {
@@ -263,16 +263,16 @@ describe('exploration:reveal, seen by the DM and on a player\'s behalf', () => {
     p2.disconnect();
   });
 
-  it('refuses the DM naming someone who is not a member', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const denial = waitForEvent<{ message: string }>(dm, 'error');
-    dm.emit('exploration:reveal', { mapId, cells: [1], userId: randomUUID() });
+  it('refuses the GM naming someone who is not a member', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const denial = waitForEvent<{ message: string }>(gm, 'error');
+    gm.emit('exploration:reveal', { mapId, cells: [1], userId: randomUUID() });
     expect((await denial).message).toMatch(/member/);
     expect(await prisma.mapExploration.count({ where: { mapId } })).toBe(0);
-    dm.disconnect();
+    gm.disconnect();
   });
 
-  // A spectator is a non-DM like any other for memory: they may write only
+  // A spectator is a non-GM like any other for memory: they may write only
   // their own, and are sent nobody else's.
   it("refuses a spectator naming another user, and shows them nobody's memory", async () => {
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);
@@ -319,20 +319,20 @@ describe('exploration:request', () => {
     p2.disconnect();
   });
 
-  it('lets the DM read a named player\'s memory', async () => {
+  it('lets the GM read a named player\'s memory', async () => {
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const stored = waitForEvent<StateEvent>(p1, 'exploration:state');
     p1.emit('exploration:reveal', { mapId, cells: [7, 8] });
     await stored;
 
-    const theirs = waitForEvent<StateEvent & { userId: string }>(dm, 'exploration:state');
-    dm.emit('exploration:request', { mapId, userId: p1Id });
+    const theirs = waitForEvent<StateEvent & { userId: string }>(gm, 'exploration:state');
+    gm.emit('exploration:request', { mapId, userId: p1Id });
     const got = await theirs;
     expect(got.userId).toBe(p1Id);
     expect(got.cells).toEqual([7, 8]);
     p1.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('answers nothing while explored memory is off', async () => {
@@ -346,26 +346,26 @@ describe('exploration:request', () => {
 });
 
 describe('exploration:reset', () => {
-  it('lets the DM forget every player\'s memory, and tells the room', async () => {
+  it('lets the GM forget every player\'s memory, and tells the room', async () => {
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const stored = waitForEvent<StateEvent>(p1, 'exploration:state');
     p1.emit('exploration:reveal', { mapId, cells: [1] });
     await stored;
 
     const cleared = waitForEvent<StateEvent>(p1, 'exploration:state');
-    dm.emit('exploration:reset', { mapId });
+    gm.emit('exploration:reset', { mapId });
     expect((await cleared).cells).toEqual([]);
     expect(await prisma.mapExploration.count({ where: { mapId } })).toBe(0);
     p1.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('refuses a player', async () => {
     const p1 = await server.connectAndAuth(p1Cookie, campaignId);
     const denial = waitForEvent<{ message: string }>(p1, 'error');
     p1.emit('exploration:reset', { mapId });
-    expect((await denial).message).toMatch(/DM/);
+    expect((await denial).message).toMatch(/GM/);
     p1.disconnect();
   });
 });

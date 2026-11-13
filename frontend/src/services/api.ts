@@ -3,7 +3,7 @@ import { handleUnauthorized } from '@/services/unsavedWork';
 import { loadPage } from '@/services/pageLoad';
 import { rememberSignInNotice } from '@/services/signInNotice';
 import { signInPath } from '@/utils/returnTo';
-import type { WallSegment } from '@/types/walls';
+import type { WallSegment, WallsAdded } from '@/types/walls';
 import type {
   User,
   AdminListedUser,
@@ -67,6 +67,7 @@ import type {
   ServerConfig,
   RosterMember,
   CampaignMembership,
+  AssignableCampaignRole,
 } from '@/types';
 import { withKnownCreatureChoices, withKnownTemplateChoices } from '@/utils/knownChoices';
 import { saveBlob } from '@/utils/download';
@@ -569,7 +570,7 @@ class ApiClient {
    * Invite a user to a campaign.
    *
    * `sendEmail` is opt-in and defaults to false: the invitation always appears
-   * on the invitee's dashboard, and an email only goes out if the DM asked for
+   * on the invitee's dashboard, and an email only goes out if the GM asked for
    * one. `emailSent` reports what actually happened, since a server with no
    * SMTP configured will decline to send even when asked.
    */
@@ -583,13 +584,13 @@ class ApiClient {
     return response.data;
   }
 
-  /** The campaign's invitations that still stand (DM only). */
+  /** The campaign's invitations that still stand (GM only). */
   async listCampaignInvitations(campaignId: string): Promise<{ invitations: CampaignInvitationSummary[] }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/invitations`);
     return response.data;
   }
 
-  /** Withdraw a pending invitation (DM only); the player no longer has it. */
+  /** Withdraw a pending invitation (GM only); the player no longer has it. */
   async withdrawCampaignInvitation(campaignId: string, invitationId: string): Promise<{ message: string }> {
     const response = await this.client.delete(`/api/campaigns/${campaignId}/invitations/${invitationId}`);
     return response.data;
@@ -602,27 +603,36 @@ class ApiClient {
 
   /**
    * Leave a campaign as a player or a spectator. Refused (409) for its owner
-   * and its DM; `message` is the sentence the leaver's socket is told too.
+   * and its GM; `message` is the sentence the leaver's socket is told too.
    */
   async leaveCampaign(campaignId: string): Promise<{ message: string }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/leave`);
     return response.data;
   }
 
-  async changeCampaignMemberRole(campaignId: string, userId: string, role: string): Promise<{ message: string }> {
+  /**
+   * Make a member a player or a spectator (GM only). Refused for the GM and
+   * for someone no longer in the campaign, with a message that says which.
+   * Every open page of the campaign hears `campaign.role.changed`.
+   */
+  async changeCampaignMemberRole(
+    campaignId: string,
+    userId: string,
+    role: AssignableCampaignRole,
+  ): Promise<{ message: string; membership: CampaignMembership }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/members/${userId}/role`, { role });
     return response.data;
   }
 
   /**
-   * Hand the DM role to another member. The outgoing DM becomes a player in the
+   * Hand the GM role to another member. The outgoing GM becomes a player in the
    * same action, and campaign ownership does not move.
    */
-  async transferDM(
+  async transferGM(
     campaignId: string,
     userId: string,
   ): Promise<{ message: string; memberships: import('@/types').CampaignMembership[] }> {
-    const response = await this.client.put(`/api/campaigns/${campaignId}/dm`, { userId });
+    const response = await this.client.put(`/api/campaigns/${campaignId}/gm`, { userId });
     return response.data;
   }
 
@@ -665,12 +675,12 @@ class ApiClient {
   // ============================================
   // Documents
   //
-  // Shared, not private: a campaign's members read what its DM shares. The
+  // Shared, not private: a campaign's members read what its GM shares. The
   // server decides who may read, edit or share each one; these calls only ask.
   // ============================================
 
   /**
-   * The documents a campaign's members may read: shared in by the DM, or
+   * The documents a campaign's members may read: shared in by the GM, or
    * created for the campaign. Any member can list.
    */
   async listCampaignDocuments(
@@ -680,7 +690,7 @@ class ApiClient {
     return response.data;
   }
 
-  /** Share a document with a campaign. DM only; the DM must already be able to read it. */
+  /** Share a document with a campaign. GM only; the GM must already be able to read it. */
   async linkCampaignDocument(campaignId: string, assetId: string): Promise<{ link: { id: string } }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/documents`, { assetId });
     return response.data;
@@ -835,7 +845,7 @@ class ApiClient {
     return response.data;
   }
 
-  /** Rewrite a past session's recap. An empty string clears it. DM only. */
+  /** Rewrite a past session's recap. An empty string clears it. GM only. */
   async updateSessionNotes(
     campaignId: string,
     sessionId: string,
@@ -1060,9 +1070,13 @@ class ApiClient {
     return response.data;
   }
 
-  /** Add one wall segment to a map (DM only); the server gives it its id. */
-  async addWall(campaignId: string, mapId: string, segment: Omit<WallSegment, 'id'>): Promise<{ segment: WallSegment; total: number }> {
-    const response = await this.client.post(`/api/campaigns/${campaignId}/maps/${mapId}/walls`, segment);
+  /**
+   * Add many wall segments to a map in one request (GM only); the server
+   * gives each its id. Those the map refuses are skipped and listed, each
+   * with its place in the list and why.
+   */
+  async addWalls(campaignId: string, mapId: string, segments: Array<Omit<WallSegment, 'id'>>): Promise<WallsAdded> {
+    const response = await this.client.post<WallsAdded>(`/api/campaigns/${campaignId}/maps/${mapId}/walls/batch`, { segments });
     return response.data;
   }
 
@@ -1087,7 +1101,7 @@ class ApiClient {
    * Import a Universal VTT file as a new map.
    *
    * Answers 409 with `UVTT_IMPORT_NEEDS_CONFIRMATION` when the file needs the
-   * DM's answer first, having created nothing: its walls reach outside its
+   * GM's answer first, having created nothing: its walls reach outside its
    * picture, or it carries walls for its furniture. Send the answer back in
    * `options`. See MapManager, which is where it is asked.
    */
@@ -1105,7 +1119,7 @@ class ApiClient {
     if (options?.confirm) formData.append('confirm', 'true');
     if (options?.includeObjectWalls) formData.append('includeObjectWalls', 'true');
     // Once the upload has arrived, the server answers within 50 seconds: an
-    // import waits up to 20 for its turn behind other DMs' imports and runs
+    // import waits up to 20 for its turn behind other GMs' imports and runs
     // for up to 30, and reaching either limit answers 503 saying which. A
     // limit of the page's own would count the upload too and give up before
     // that answer, so there is none; the bundled nginx allows the answer 60
@@ -1133,7 +1147,7 @@ class ApiClient {
     return response.data;
   }
 
-  /** `token` is null when the caller is not sent the token, e.g. a player's own token the DM has hidden. */
+  /** `token` is null when the caller is not sent the token, e.g. a player's own token the GM has hidden. */
   async updateToken(campaignId: string, mapId: string, tokenId: string, data: UpdateTokenRequest): Promise<{ message: string; token: Token | null }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`, data);
     return response.data;
@@ -1424,7 +1438,7 @@ class ApiClient {
 
   /**
    * Remove the legacy "X has joined / has left" system messages from a
-   * campaign's chat. DM only. These are no longer written; this clears what
+   * campaign's chat. GM only. These are no longer written; this clears what
    * earlier versions left behind.
    */
   async clearJoinLeaveMessages(campaignId: string): Promise<{ message: string; deleted: number }> {

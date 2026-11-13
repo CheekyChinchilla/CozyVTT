@@ -56,15 +56,13 @@
   --color-info: rgb(var(--rgb-info));
   --color-info-ink: rgb(var(--rgb-info-ink));
 
-  /* ── Legacy aliases (the same channels) ── */
+  /* ── Colour names the components use (the same channels as the theme tokens above) ── */
   --color-moss-green: rgb(var(--rgb-brand));
   --color-forest-shadow: rgb(var(--rgb-brand-dark));
   --color-warm-amber: rgb(var(--rgb-accent));
   --color-sunset-orange: rgb(var(--rgb-accent-hover));
   --color-soft-cream: rgb(var(--rgb-bg-base));
   --color-parchment: rgb(var(--rgb-bg-surface));
-  --color-parchment-light: rgb(var(--rgb-bg-surface-light));
-  --color-parchment-dark: rgb(var(--rgb-bg-surface-dark));
   --color-charcoal: rgb(var(--rgb-ink));
   --color-warm-gray: rgb(var(--rgb-ink-secondary));
   --color-stone-gray: rgb(var(--rgb-ink-muted));
@@ -72,7 +70,7 @@
   --color-spirit-red: rgb(var(--rgb-danger));
   --color-spirit-purple: rgb(var(--rgb-spirit));
 
-  /* The Call of Cthulhu sheet's Deep Sepia header colour (colorPresets.ts): a
+  /* The Horror d100 sheet's Deep Sepia header colour (colorPresets.ts): a
      header is the player's choice and does not follow the theme. */
   --color-sepia-100: #f5ebd9;
   --color-sepia-200: #e8d5b7;

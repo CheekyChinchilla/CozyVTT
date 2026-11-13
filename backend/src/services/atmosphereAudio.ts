@@ -6,7 +6,7 @@
 // member fetch whatever their campaign is playing, because the sound is not
 // relayed through the server, each player's browser fetches the file itself.
 // So every setter has to ask the same question the serving route asks, of the
-// acting DM. Both the Atmosphere panel's handler and the vibe switch go
+// acting GM. Both the Atmosphere panel's handler and the vibe switch go
 // through here, so that question is asked once, the persisted state has one
 // shape, and the broadcast is the same event however the track was chosen.
 
@@ -19,14 +19,14 @@ import { setVibeSettingsLiveKey } from './vibeSettingsColumn';
 
 export interface SetAmbientAudioResult {
   ok: boolean;
-  /** On refusal: what to tell the DM. */
+  /** On refusal: what to tell the GM. */
   message?: string;
 }
 
 /**
  * Set or stop the campaign's ambient track, persist it, and tell the room.
  *
- * `assetId: null` stops the audio. A track the acting DM cannot read answers
+ * `assetId: null` stops the audio. A track the acting GM cannot read answers
  * the same as one that does not exist, so the reply cannot be used to
  * discover which ids are real. The admin exemption stays off: an admin may
  * read any file, but setting one here is not reading it, it opens the file

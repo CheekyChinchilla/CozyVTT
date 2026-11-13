@@ -40,6 +40,8 @@ const adminService = vi.hoisted(() => ({
   getConfig: vi.fn(),
 }));
 vi.mock('@/services/admin.service', () => ({ adminService }));
+// The status card's check of live connections would open a real socket.
+vi.mock('@/services/liveConnectionCheck', () => ({ checkLiveConnection: () => () => undefined }));
 vi.mock('@/services/api', () => ({ api: {}, default: {} }));
 
 beforeEach(() => {
@@ -70,12 +72,12 @@ describe('the Settings tab', () => {
   it('saves the instance name without a timezone, and repaints the page title', async () => {
     const name = await openSettings();
     await userEvent.clear(name);
-    await userEvent.type(name, 'The Hearthstone Tavern');
+    await userEvent.type(name, 'The Mossy Lantern');
 
     await userEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
 
     await waitFor(() => expect(adminService.updateSettings).toHaveBeenCalledTimes(1));
-    expect(adminService.updateSettings.mock.calls[0][0]).toMatchObject({ instanceName: 'The Hearthstone Tavern' });
+    expect(adminService.updateSettings.mock.calls[0][0]).toMatchObject({ instanceName: 'The Mossy Lantern' });
     expect(adminService.updateSettings.mock.calls[0][0]).not.toHaveProperty('timezone');
     await waitFor(() => expect(refreshAppearance).toHaveBeenCalled());
   });

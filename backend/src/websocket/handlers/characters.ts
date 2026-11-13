@@ -1,7 +1,10 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
 // ============================================
 // Character handlers: character.hp.update, character.hp.temporary,
 // character.hitdice.spend
-// Players act on their own characters; the DM may act on any of them.
+// Players act on their own characters; the GM may act on any of them.
 // ============================================
 
 import { Server } from 'socket.io';
@@ -10,7 +13,8 @@ import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
 import { toJson } from '../../utils/prisma-json';
-import type { DnD5eCharacterData } from '../../validators/game-systems/dnd5e.schema';
+import { sheetAsRead } from '../../legacy/sheetConversion';
+import type { FifthEditionCharacterData } from '../../validators/game-systems/fifthEdition.schema';
 import { withinCeiling } from '../shared';
 import { emitCharacterUpdated } from '../utils';
 import { characterInCampaign } from '../../utils/characterCampaign';
@@ -27,16 +31,16 @@ interface HpBlock {
   temporary?: unknown;
 }
 /** One hit dice pool as it sits in the blob, read loosely: only `remaining` is touched. */
-type HitDiceEntry = Partial<Record<keyof NonNullable<DnD5eCharacterData['hitDice']>[number], unknown>>;
+type HitDiceEntry = Partial<Record<keyof NonNullable<FifthEditionCharacterData['hitDice']>[number], unknown>>;
 interface CharacterHitDiceData {
   hitDice?: unknown;
   [key: string]: unknown;
 }
 interface CharacterHpData {
-  /** D&D 5e and Pathfinder 2e keep HP at the top level. */
+  /** 5E and Fantasy d20 keep HP here. */
   hp?: HpBlock;
-  /** Call of Cthulhu 7e keeps it under derived stats. */
-  derivedStats?: { hp?: HpBlock };
+  /** Horror d100 keeps it here. */
+  hitPoints?: HpBlock;
   [key: string]: unknown;
 }
 
@@ -44,9 +48,10 @@ type Refusal = { error: string };
 
 /**
  * The sheet with `delta` applied to its current hit points, clamped to 0 and
- * the maximum, or why it cannot be. In D&D 5e and Pathfinder 2e damage takes
+ * the maximum, or why it cannot be. In 5E and Fantasy d20 damage takes
  * temporary hit points first and only the rest comes off current hit points;
- * healing does not restore them (both rulebooks say so).
+ * healing does not restore them (both rulebooks say so). A Horror d100
+ * character's hit points stop at the maximum alone: damage takes them below 0.
  *
  * Only the HP-bearing corners of the sheet are described: the blob is a full
  * character in one of several systems, and nothing else is read or written.
@@ -59,8 +64,8 @@ function applyHpDelta(
 ): { data: CharacterHpData; hp: { current: number; max: number; temp: number } } | Refusal {
   const charData = stored as CharacterHpData;
   switch (gameSystem) {
-    case 'DND_5E':
-    case 'PATHFINDER_2E': {
+    case 'FIFTH_EDITION':
+    case 'FANTASY_D20': {
       if (!charData?.hp || typeof charData.hp.maximum !== 'number') {
         return { error: 'Character does not have HP tracking' };
       }
@@ -73,14 +78,17 @@ function applyHpDelta(
       const hp = temp !== heldTemp ? { ...charData.hp, current, temporary: temp } : { ...charData.hp, current };
       return { data: { ...charData, hp }, hp: { current, max, temp } };
     }
-    case 'CALL_OF_CTHULHU_7E': {
-      if (!charData?.derivedStats?.hp || typeof charData.derivedStats.hp.maximum !== 'number') {
+    case 'HORROR_D100': {
+      if (!charData?.hitPoints || typeof charData.hitPoints.maximum !== 'number') {
         return { error: 'Character does not have HP tracking' };
       }
-      const max = charData.derivedStats.hp.maximum;
-      const current = Math.max(0, Math.min(max, (typeof charData.derivedStats.hp.current === 'number' ? charData.derivedStats.hp.current : max) + delta));
+      const max = charData.hitPoints.maximum;
+      // No lowest: a character can lose more hit points than they have, and
+      // the number below 0 is kept track of (open d100 rules, p. 14, Hit
+      // Points). Healing stops at the maximum.
+      const current = Math.min(max, (typeof charData.hitPoints.current === 'number' ? charData.hitPoints.current : max) + delta);
       return {
-        data: { ...charData, derivedStats: { ...charData.derivedStats, hp: { ...charData.derivedStats.hp, current } } },
+        data: { ...charData, hitPoints: { ...charData.hitPoints, current } },
         hp: { current, max, temp: 0 },
       };
     }
@@ -110,7 +118,7 @@ function takeTemporaryHp(
   stored: unknown,
   temporary: number
 ): { data: CharacterHpData; hp: { current: number; max: number; temp: number } } | Refusal {
-  if (gameSystem === 'CALL_OF_CTHULHU_7E') return { error: 'Call of Cthulhu sheets keep no temporary hit points' };
+  if (gameSystem === 'HORROR_D100') return { error: 'Horror d100 sheets keep no temporary hit points' };
   const charData = stored as CharacterHpData;
   const heldTemp = typeof charData?.hp?.temporary === 'number' ? charData.hp.temporary : 0;
   const grant = grantTemporaryHitPoints(heldTemp, temporary, gameSystem);
@@ -126,7 +134,7 @@ function takeTemporaryHp(
 /**
  * The character `characterId` names, when this socket may change it: one of
  * its campaign's, as the REST routes judge it, and the socket's own unless
- * it is the DM's; a spectator changes none. Otherwise the refusal is sent,
+ * it is the GM's; a spectator changes none. Otherwise the refusal is sent,
  * `notYours` to a player on someone else's character, and the answer is null.
  */
 async function characterToChange(socket: AuthenticatedSocket, campaignId: string, characterId: string, notYours: string): Promise<Character | null> {
@@ -140,13 +148,13 @@ async function characterToChange(socket: AuthenticatedSocket, campaignId: string
     return null;
   }
   // A spectator is watching, not playing: not even a character they own,
-  // since a token bound to it follows the sheet on every screen. The DM
+  // since a token bound to it follows the sheet on every screen. The GM
   // can still cover for them.
   if (socket.role === 'SPECTATOR') {
     socket.emit('error', { message: 'Spectators cannot change a character' });
     return null;
   }
-  if (character.userId !== socket.userId && socket.role !== 'DM') {
+  if (character.userId !== socket.userId && socket.role !== 'GM') {
     socket.emit('error', { message: notYours });
     return null;
   }
@@ -178,7 +186,7 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         return;
       }
 
-      // The character's owner, or the DM.
+      // The character's owner, or the GM.
       const character = await characterToChange(socket, socket.campaignId, characterId, 'You do not have permission to update this character\'s HP');
       if (!character) return;
 
@@ -189,7 +197,9 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         await tx.$queryRaw`SELECT id FROM "Character" WHERE id = ${characterId} FOR UPDATE`;
         const fresh = await tx.character.findUnique({ where: { id: characterId }, select: { data: true } });
         if (!fresh) return { error: 'Character not found' } as const;
-        const applied = applyHpDelta(character.gameSystem, fresh.data, delta);
+        // A Horror d100 sheet still in the shape before 1.7.0 is converted,
+        // and stored converted with its hit points changed.
+        const applied = applyHpDelta(character.gameSystem, sheetAsRead(character.gameSystem, fresh.data), delta);
         if ('error' in applied) return applied;
         await tx.character.update({ where: { id: characterId }, data: { data: toJson(applied.data) } });
         return applied;
@@ -262,12 +272,12 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
   });
 
   /**
-   * CHARACTER.HITDICE.SPEND — spend one D&D 5e hit die.
+   * CHARACTER.HITDICE.SPEND — spend one 5E hit die.
    *
    * The roll itself goes through `dice.roll` like every other roll; this only
    * decrements the pool, so the count cannot be inflated by a client that
    * simply declines to send it. Same permission rule as HP: the character's
-   * owner, or the DM covering for an absent player.
+   * owner, or the GM covering for an absent player.
    */
   socket.on('character.hitdice.spend', async (data: { characterId: string; index: number }) => {
     try {
@@ -285,11 +295,11 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         return;
       }
 
-      // As for hit points: the character's owner, or the DM.
+      // As for hit points: the character's owner, or the GM.
       const character = await characterToChange(socket, socket.campaignId, characterId, 'You do not have permission to spend this character\'s hit dice');
       if (!character) return;
 
-      if (character.gameSystem !== 'DND_5E') {
+      if (character.gameSystem !== 'FIFTH_EDITION') {
         socket.emit('error', { message: 'Hit dice are not tracked for this game system' });
         return;
       }
@@ -314,7 +324,7 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
       // event an open character sheet already refreshes on — rather than a
       // narrow one of its own that nothing would listen to. No token art or
       // name changed, so nothing needs to repaint the map.
-      // The sheet as each member may read it: the Keeper's Notes to the DM alone.
+      // The sheet as each member may read it: the GM's Notes to the GM alone.
       await emitCharacterUpdated(socket.campaignId, updated, {
         characterId,
         userId: socket.userId,

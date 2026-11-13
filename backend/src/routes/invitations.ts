@@ -11,7 +11,7 @@ import { broadcastToCampaign } from '../websocket/utils';
 import logger from '../utils/logger';
 import { acceptInvitationSchema } from '../validators/invitations';
 import { systemsCompatible } from '../utils/gameSystemCompatibility';
-import { clearKeeperNotes } from '../utils/keeperNotes';
+import { clearGmNotes } from '../utils/gmNotes';
 import { standingInvitation } from '../utils/invitationState';
 
 const router = Router();
@@ -49,9 +49,9 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
               },
             },
             // Who runs the game, which is not the owner once it has been
-            // handed over; the invitation names this member as its DM.
+            // handed over; the invitation names this member as its GM.
             memberships: {
-              where: { role: 'DM' },
+              where: { role: 'GM' },
               take: 1,
               select: { user: { select: { displayName: true } } },
             },
@@ -63,10 +63,12 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       },
     });
 
-    return res.json(invitations.map(({ campaign: { memberships, ...campaign }, ...invitation }) => ({
-      ...invitation,
-      campaign: { ...campaign, dm: memberships[0]?.user ?? null },
-    })));
+    // The GM goes as `gm`, and as `dm` too for this release, the name
+    // versions before 1.7.0 gave it, so a script made for one still reads it.
+    return res.json(invitations.map(({ campaign: { memberships, ...campaign }, ...invitation }) => {
+      const gm = memberships[0]?.user ?? null;
+      return { ...invitation, campaign: { ...campaign, gm, dm: gm } };
+    }));
   } catch (error) {
     logger.error('Error fetching invitations', { err: error });
     return res.status(500).json({ message: 'Failed to fetch invitations' });
@@ -166,10 +168,10 @@ router.post('/:id/accept', authenticated, async (req: AuthenticatedRequest, res:
           },
         });
 
-        // Assign characters to campaign. Each leaves any Keeper's Notes
-        // behind: they belong to the Keeper of a campaign it was in before.
+        // Assign characters to campaign. Each leaves any GM's Notes
+        // behind: they belong to the GM of a campaign it was in before.
         if (characterIds.length > 0) {
-          for (const characterId of characterIds) await clearKeeperNotes(tx, characterId);
+          for (const characterId of characterIds) await clearGmNotes(tx, characterId);
           const assigned = await tx.character.updateMany({
             where: {
               id: { in: characterIds },

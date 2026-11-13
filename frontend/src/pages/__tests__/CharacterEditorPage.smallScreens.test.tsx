@@ -14,7 +14,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterEditorPage from '../CharacterEditorPage';
 import source from '../CharacterEditorPage.tsx?raw';
-import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { fantasyD20Character } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
 
 const auth = { user: { id: 'user-1', platformRole: 'USER' } };
 
@@ -30,7 +30,7 @@ vi.mock('@/contexts/ToastContext', () => ({
 }));
 vi.mock('@/components/character/NewCharacterTemplateModal', () => ({ default: () => null }));
 vi.mock('@/services/character.service', () => ({
-  default: { getCharacter: () => Promise.resolve(pf2eCharacter()), updateCharacter: vi.fn(), exportCharacterJSON: vi.fn() },
+  default: { getCharacter: () => Promise.resolve(fantasyD20Character()), updateCharacter: vi.fn(), exportCharacterJSON: vi.fn() },
 }));
 
 const classes = (element: Element | null) => (element?.getAttribute('class') ?? '').split(/\s+/).filter(Boolean);

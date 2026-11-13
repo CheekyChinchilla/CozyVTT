@@ -22,7 +22,7 @@ vi.mock('@/services/campaign.service', () => ({ default: { getCampaigns: () => P
 const uploadAsset = vi.fn();
 vi.mock('@/services/api', () => ({ api: { uploadAsset: (form: FormData, onProgress?: (percent: number) => void) => uploadAsset(form, onProgress) } }));
 
-const campaign = (id: string, userRole: 'DM' | 'PLAYER' | 'SPECTATOR') =>
+const campaign = (id: string, userRole: 'GM' | 'PLAYER' | 'SPECTATOR') =>
   ({ id, name: `Campaign ${id}`, ownerId: 'someone-else', userRole, memberships: [] }) as unknown as Campaign;
 
 function open() {
@@ -72,7 +72,7 @@ describe('switching to a kind of asset the chosen campaign does not take', () =>
   // is taken back and nothing put in its place: the one campaign left may
   // be one they never meant to share the file with.
   it('asks for a campaign again, and does not pick the other one', async () => {
-    campaigns = [campaign('home', 'DM'), campaign('friday', 'PLAYER')];
+    campaigns = [campaign('home', 'GM'), campaign('friday', 'PLAYER')];
     render(<AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
     fireEvent.click(await screen.findByText('Token'));
     fireEvent.click(await screen.findByText('Campaign'));
@@ -89,7 +89,7 @@ describe('switching to a kind of asset the chosen campaign does not take', () =>
 // A map picture is kept from players until a map using it is on screen,
 // whichever library it is in, and the Campaign line says so.
 describe('what Campaign says about a map picture', () => {
-  beforeEach(() => { campaigns = [campaign('home', 'DM')]; });
+  beforeEach(() => { campaigns = [campaign('home', 'GM')]; });
 
   it('says players see it once its map is on screen, and token art is shared at once', async () => {
     render(<AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
@@ -102,7 +102,7 @@ describe('what Campaign says about a map picture', () => {
   });
 });
 
-// Create Map's Upload New: a picture for a map the DM may be preparing in
+// Create Map's Upload New: a picture for a map the GM may be preparing in
 // secret. Personal is chosen at first; the campaign's library is a click
 // away. Nothing else is offered, not even Global to a global asset manager,
 // and the campaign is the one the map is for.
@@ -111,7 +111,7 @@ describe('choosing Personal or the campaign, as Create Map offers', () => {
   const CAMPAIGN_HINT = 'Players see it once its map is on screen, and it stays if you leave.';
 
   beforeEach(() => {
-    campaigns = [campaign('home', 'DM'), campaign('friday', 'DM')];
+    campaigns = [campaign('home', 'GM'), campaign('friday', 'GM')];
     manager = true;
     uploadAsset.mockReset();
     uploadAsset.mockResolvedValue({ asset: { id: 'new' } });
@@ -199,7 +199,7 @@ describe('the name, description and tags', () => {
     expect(screen.getByText('dungeon')).toBeInTheDocument();
   });
 
-  // Any other spelling a DM may type, drawn-map among them, is an ordinary tag.
+  // Any other spelling a GM may type, drawn-map among them, is an ordinary tag.
   it('takes drawn-map as an ordinary tag', async () => {
     open();
     const tagBox = await screen.findByPlaceholderText('Type a tag and press Enter...');

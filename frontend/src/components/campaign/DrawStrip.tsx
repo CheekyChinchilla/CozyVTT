@@ -5,7 +5,7 @@
  * there, so the strip is no dialog and holds no focus. Every control of the
  * desktop's panel (DrawControls), laid out for a phone, each 44 pixels:
  *
- * - a header: Draw, then Clear… for the DM (every drawing, or one
+ * - a header: Draw, then Clear… for the GM (every drawing, or one
  *   member's, each asked first) or Clear mine for a player, and Done, which
  *   puts the tools away; while a polygon is open its Cancel and Done stand
  *   there instead, so one Done shows at a time, the one the hint names;
@@ -14,7 +14,7 @@
  *   phone on its side, in the header's row);
  * - the colour, a button opening the eight colours and Another colour, and
  *   the width;
- * - Fill shapes, Snap to grid and, for the DM, Only I can see this.
+ * - Fill shapes, Snap to grid and, for the GM, Only I can see this.
  *
  * It is at most half the map's height (45 percent on a short screen), its
  * header fixed and the rest scrolling under it, so the map keeps room to
@@ -39,7 +39,7 @@ import {
 } from './DrawControls';
 
 export default function DrawStrip({
-  kind, onKindChange, settings, onSettingsChange, isDM, onlyErase = false, polygonCorners, onPolygonDone, onPolygonCancel, clearable, onClear, members, onClearMember, onClose,
+  kind, onKindChange, settings, onSettingsChange, isGM, onlyErase = false, polygonCorners, onPolygonDone, onPolygonCancel, clearable, onClear, members, onClearMember, onClose,
 }: DrawControlsProps) {
   const [asking, setAsking] = useState<ClearAsking>(null);
   const [clearChoicesOpen, setClearChoicesOpen] = useState(false);
@@ -49,7 +49,7 @@ export default function DrawStrip({
   const colourName = isNamedColour(settings.color) ? COLOUR_NAMES[named] : 'Another colour';
   const polygonOpen = kind === 'polygon' && polygonCorners > 0;
 
-  /** The DM's Clear…: every drawing, or one member's, as a choice when any member has drawings. */
+  /** The GM's Clear…: every drawing, or one member's, as a choice when any member has drawings. */
   const clearChoices: MenuItem[] = [
     { kind: 'command', id: 'all', label: 'Clear drawings', tone: 'danger', run: () => setAsking('all') },
     ...members.map((member): MenuItem => ({
@@ -100,15 +100,15 @@ export default function DrawStrip({
           <button
             type="button"
             onClick={() => {
-              if (!isDM) onClear();
+              if (!isGM) onClear();
               else if (members.length > 0) setClearChoicesOpen(true);
               else setAsking('all');
             }}
             disabled={clearable === 0}
-            aria-haspopup={isDM ? 'dialog' : undefined}
+            aria-haspopup={isGM ? 'dialog' : undefined}
             className={cn(HEADER_BUTTON, 'text-danger-ink hover:bg-danger/10')}
           >
-            {isDM ? 'Clear…' : 'Clear mine'}
+            {isGM ? 'Clear…' : 'Clear mine'}
           </button>
           <button
             type="button"
@@ -123,7 +123,7 @@ export default function DrawStrip({
       hint={<>
         {onlyErase && 'Drawing is off for now. '}
         {HINTS[kind]}
-        {kind === 'eraser' && !isDM && ' You can erase only your own.'}
+        {kind === 'eraser' && !isGM && ' You can erase only your own.'}
       </>}
       tools={tools}
       after={<>
@@ -212,7 +212,7 @@ export default function DrawStrip({
         </>
       )}
 
-      {(SHAPES.has(kind) || (isDM && kind !== 'eraser')) && (
+      {(SHAPES.has(kind) || (isGM && kind !== 'eraser')) && (
         <div className="flex flex-wrap items-center gap-2 pr-2">
           {FILLABLE.has(kind) && (
             <label className={CHIP}>
@@ -227,13 +227,13 @@ export default function DrawStrip({
             </label>
           )}
           {/* The laser pointer goes to everyone, so the box is not offered with it. */}
-          {isDM && kind !== 'eraser' && kind !== 'laser' && (
+          {isGM && kind !== 'eraser' && kind !== 'laser' && (
             <label className={CHIP}>
-              <input type="checkbox" checked={settings.dmOnly} onChange={(e) => onSettingsChange({ dmOnly: e.target.checked })} className="accent-brand" />
+              <input type="checkbox" checked={settings.gmOnly} onChange={(e) => onSettingsChange({ gmOnly: e.target.checked })} className="accent-brand" />
               Only I can see this
             </label>
           )}
-          {isDM && kind === 'laser' && <p className="text-sm text-ink-muted">Everyone sees the laser pointer.</p>}
+          {isGM && kind === 'laser' && <p className="text-sm text-ink-muted">Everyone sees the laser pointer.</p>}
         </div>
       )}
     </ToolStrip>

@@ -1,6 +1,6 @@
 /**
  * The map's chrome on the compact layout: the band's one row and Map
- * controls, the dock at the map's foot, the Draw strip, and the DM's tool
+ * controls, the dock at the map's foot, the Draw strip, and the GM's tool
  * stack behind Tools. jsdom evaluates no media query and lays nothing out, so a size
  * is checked as the classes that set it, and a place as the one given from
  * the boxes a browser would measure.
@@ -19,7 +19,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
   };
   const sent: Array<[string, unknown]> = [];
@@ -65,7 +65,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -207,7 +207,7 @@ beforeAll(() => {
 beforeEach(() => {
   h.sent.length = 0;
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: mapWith() });
+  h.set({ userRole: 'GM', currentMap: mapWith() });
 });
 
 describe("the band's one row", () => {
@@ -281,7 +281,7 @@ describe('Map controls', () => {
       fit: noop, toggleGrid: noop, nextGridColor: noop, toggleRuler: noop, nextRulerColor: noop, toggleAoE: noop, toggleSpiritTokens: noop, toggleTools: noop, togglePaint: noop,
     };
     const view: MapControlsView = {
-      isDM: true, hasMap: true, showGrid: true, gridColor: 'black', showRuler: false, rulerColor: 'amber', showAoE: false,
+      isGM: true, hasMap: true, showGrid: true, gridColor: 'black', showRuler: false, rulerColor: 'amber', showAoE: false,
       spiritTokensShown: true, toolsShown: false, paint: null,
     };
     const titleFor = (extra: Partial<MapControlsView>) => mapControlsTitle(mapControlItems({ ...view, ...extra }, run));
@@ -297,7 +297,7 @@ describe('Map controls', () => {
 
     h.set({ userRole: 'PLAYER', currentMap: mapWith() });
     render(<MapCanvas />);
-    expect(mapControlsButton()).toHaveAttribute('title', titleFor({ isDM: false }));
+    expect(mapControlsButton()).toHaveAttribute('title', titleFor({ isGM: false }));
   });
 
   it('opens a sheet named Map controls, and says so', () => {
@@ -313,7 +313,7 @@ describe('Map controls', () => {
     expect(screen.queryByRole('dialog', { name: 'Map controls' })).toBeNull();
   });
 
-  it('holds what the row leaves out, for the DM', () => {
+  it('holds what the row leaves out, for the GM', () => {
     render(<MapCanvas />);
     fireEvent.click(mapControlsButton());
     expect(sheetRows()).toEqual([
@@ -402,7 +402,7 @@ describe('Map controls', () => {
     expect(screen.getByRole('button', { name: 'Draw' })).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('hides and shows the spirit tokens for the DM', () => {
+  it('hides and shows the spirit tokens for the GM', () => {
     render(<MapCanvas />);
     pressRow('Hide spirit tokens');
     fireEvent.click(mapControlsButton());
@@ -465,7 +465,7 @@ describe('what sits under the band', () => {
   // desktop, which on the compact layout is over the band's left end.
   // Preview's row and the details card in the dock lay over the stack's
   // last panels, where Lights' Place and Walls' Done and Cancel land.
-  it('stops the DM’s tool stack above the dock, however tall the dock is', () => {
+  it('stops the GM’s tool stack above the dock, however tall the dock is', () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }) });
     render(<MapCanvas />);
     pressRow('Show tools');
@@ -497,7 +497,7 @@ describe('what sits under the band', () => {
     expect(screen.getByRole('button', { name: 'Put back' }).parentElement!.style.top).toBe('62px');
   });
 
-  it('starts the DM’s tool stack under the band, which spans the map', () => {
+  it('starts the GM’s tool stack under the band, which spans the map', () => {
     render(<MapCanvas />);
     layOut();
 
@@ -509,7 +509,7 @@ describe('the dock at the map’s foot', () => {
   const dock = () => document.querySelector<HTMLElement>('[data-map-dock]')!;
   const card = () => screen.getByText('Goblin').closest('.glass-panel') as HTMLElement;
   /** The preview's button, by the words it shows with the preview off or on. */
-  const previewButton = () => screen.getByRole('button', { name: /^(Preview Player View|DM View)$/ });
+  const previewButton = () => screen.getByRole('button', { name: /^(Preview Player View|GM View)$/ });
 
   it('holds the details card a tap shows, across the map’s foot on a phone', () => {
     h.set({ userRole: 'PLAYER' });
@@ -554,7 +554,7 @@ describe('the dock at the map’s foot', () => {
 
     fireEvent.click(previewButton());
     expect(screen.getByRole('combobox', { name: 'Player or token to preview as' })).toBeInTheDocument();
-    expect(previewButton()).toHaveTextContent('DM View');
+    expect(previewButton()).toHaveTextContent('GM View');
     expect(dock()).toContainElement(screen.getByRole('combobox', { name: 'Player or token to preview as' }));
   });
 
@@ -609,7 +609,7 @@ describe('the Draw strip', () => {
     mouse.up(surface(), to);
   }
 
-  it('opens across the map’s foot, last in the dock, and not in the DM’s tool stack', () => {
+  it('opens across the map’s foot, last in the dock, and not in the GM’s tool stack', () => {
     render(<MapCanvas />);
     fireEvent.click(drawButton());
 
@@ -650,7 +650,7 @@ describe('the Draw strip', () => {
 
     expect(sentOf('drawing:add')).toEqual([expect.objectContaining({
       mapId: 'map-a',
-      drawing: { kind: 'rect', color: '#3d8bd9', width: 4, audience: 'DM', points: [[100, 100], [200, 150]], fillColor: '#3d8bd9' },
+      drawing: { kind: 'rect', color: '#3d8bd9', width: 4, audience: 'GM', points: [[100, 100], [200, 150]], fillColor: '#3d8bd9' },
     })]);
   });
 
@@ -714,14 +714,14 @@ describe('the Draw strip', () => {
     expect(screen.getByText('Goblin')).toBeInTheDocument();
   });
 
-  it('stays in the DM’s tool stack on the desktop', () => {
+  it('stays in the GM’s tool stack on the desktop', () => {
     render(<MapCanvasOnly />);
     fireEvent.click(screen.getByRole('button', { name: 'Draw' }));
     expect(screen.getByTitle(/Drag to move the panels/).parentElement).toContainElement(drawingTools());
   });
 });
 
-describe('the DM’s tool stack behind Tools', () => {
+describe('the GM’s tool stack behind Tools', () => {
   const stack = () => screen.getByTitle(/Drag to move the panels/).parentElement!;
   const wallDrawMode = () => screen.getByRole('button', { name: 'Wall draw mode' });
 
@@ -811,7 +811,7 @@ describe('the DM’s tool stack behind Tools', () => {
     expect(screen.queryByTitle(/Drag to move the panels/)).toBeNull();
   });
 
-  it('is offered to the DM only', () => {
+  it('is offered to the GM only', () => {
     h.set({ userRole: 'PLAYER' });
     render(<MapCanvas />);
     fireEvent.click(mapControlsButton());

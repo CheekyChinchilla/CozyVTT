@@ -2,7 +2,7 @@
  * A save refused because the character changed after the editor opened.
  *
  * The editor over a sheet used to close and throw away everything typed, so a
- * DM taking hit points at the table, or an older copy of the character opened
+ * GM taking hit points at the table, or an older copy of the character opened
  * from the Characters page, cost the player their edits. It now stays open,
  * carries the player's own changes onto the newest version, shows them, and
  * saves only when told to. A field changed in both places is shown both ways
@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import CharacterSheetEditorModal from '../CharacterSheetEditorModal';
-import { dnd5eCharacter } from '@/components/character-sheets/dnd5e/__tests__/dnd5eFixture';
+import { fifthEditionCharacter } from '@/components/character-sheets/fifth-edition/__tests__/fifthEditionFixture';
 import type { Character } from '@/types';
 
 const showToast = vi.fn();
@@ -33,9 +33,9 @@ vi.mock('@/services/api', () => ({
 
 const stale = { response: { status: 409, data: { error: 'Conflict', code: 'CHARACTER_CHANGED', message: 'changed' } } };
 
-/** The character as stored after the DM took five hit points at the table. */
+/** The character as stored after the GM took five hit points at the table. */
 function latestWith(overrides: Record<string, unknown>): Character {
-  return { ...dnd5eCharacter(overrides), updatedAt: '2026-01-01T00:00:05.000Z' };
+  return { ...fifthEditionCharacter(overrides), updatedAt: '2026-01-01T00:00:05.000Z' };
 }
 
 interface SentBody {
@@ -55,7 +55,7 @@ describe('a stale save in the editor over a sheet', () => {
     getCharacter.mockResolvedValue({ character: latestWith({ hp: { maximum: 12, current: 7, temporary: 0 } }) });
     const onClose = vi.fn();
     const onSaved = vi.fn();
-    render(<CharacterSheetEditorModal character={dnd5eCharacter()} onClose={onClose} onSaved={onSaved} />);
+    render(<CharacterSheetEditorModal character={fifthEditionCharacter()} onClose={onClose} onSaved={onSaved} />);
 
     fireEvent.change(screen.getByPlaceholderText('Character Name'), { target: { value: 'Aldra the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -84,7 +84,7 @@ describe('a stale save in the editor over a sheet', () => {
     updateCharacter.mockRejectedValueOnce(stale);
     getCharacter.mockResolvedValue({ character: latestWith({ hp: { maximum: 12, current: 7, temporary: 0 } }) });
     const onClose = vi.fn();
-    render(<CharacterSheetEditorModal character={dnd5eCharacter()} onClose={onClose} />);
+    render(<CharacterSheetEditorModal character={fifthEditionCharacter()} onClose={onClose} />);
 
     fireEvent.change(screen.getByPlaceholderText('Character Name'), { target: { value: 'Aldra the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -100,7 +100,7 @@ describe('a stale save in the editor over a sheet', () => {
   it('shows a field changed in both places both ways, and saves the one chosen', async () => {
     updateCharacter.mockRejectedValueOnce(stale);
     getCharacter.mockResolvedValue({ character: latestWith({ characterName: 'Aldra of the North' }) });
-    render(<CharacterSheetEditorModal character={dnd5eCharacter()} onClose={vi.fn()} />);
+    render(<CharacterSheetEditorModal character={fifthEditionCharacter()} onClose={vi.fn()} />);
 
     fireEvent.change(screen.getByPlaceholderText('Character Name'), { target: { value: 'Aldra the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));

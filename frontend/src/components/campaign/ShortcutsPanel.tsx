@@ -46,8 +46,8 @@ function ShortcutTable({ caption, shortcuts }: { caption: string; shortcuts: Map
 
 export default function ShortcutsPanel({ open, onClose, role }: ShortcutsPanelProps) {
   const shown = shortcutsFor(role);
-  const map = shown.filter((s) => s.who !== 'dm');
-  const walls = shown.filter((s) => s.who === 'dm');
+  const map = shown.filter((s) => s.who !== 'gm');
+  const walls = shown.filter((s) => s.who === 'gm');
 
   return (
     <Modal open={open} onClose={onClose} title="Keyboard shortcuts" icon={Keyboard} size="md">

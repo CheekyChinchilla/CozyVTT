@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isValidEmail } from '@/utils/validation';
 import { api } from '@/services/api';
 import Button from '@/components/ui/Button';
+import { AboutButton } from '@/components/common/AboutDialog';
 import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
 import { readSignInNotice, forgetSignInNotice } from '@/services/signInNotice';
 import { AFTER_SIGN_IN, keepingReturnPath, returnPathFrom } from '@/utils/returnTo';
@@ -286,6 +287,10 @@ export default function LoginPage() {
             </p>
           </div>
         )}
+
+        <div className="flex justify-center">
+          <AboutButton />
+        </div>
       </main>
     </div>
   );

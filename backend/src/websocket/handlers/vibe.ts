@@ -14,7 +14,7 @@ import logger from '../../utils/logger';
 
 export function registerVibeHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * VIBE.UPDATE - DM changes the current vibe period and its audio follows.
+   * VIBE.UPDATE - GM changes the current vibe period and its audio follows.
    * Updates campaign.currentVibe, broadcasts period data to all members, and
    * sets the period's track as the table's ambient audio (none means silence).
    */
@@ -26,9 +26,9 @@ export function registerVibeHandlers(io: Server, socket: AuthenticatedSocket): v
       }
       if (!withinCeiling(socket, 'vibe.update')) return;
 
-      // DM only
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only the DM can change the vibe' });
+      // GM only
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only the GM can change the vibe' });
         return;
       }
 
@@ -89,7 +89,7 @@ export function registerVibeHandlers(io: Server, socket: AuthenticatedSocket): v
       // The vibe owns the soundtrack: a period with a track starts it for
       // the table, one without silences it. Older settings carried free-text
       // notes in this field; those count as no track. A dead or forbidden id
-      // silences the table and tells the DM, but never blocks the switch.
+      // silences the table and tells the GM, but never blocks the switch.
       const requestedAudio = vibePeriodAudioAssetId(vibePeriod.audio);
       const volume = await lastAmbientVolume(socket.campaignId);
       const audioResult = await setCampaignAmbientAudio(io, socket.campaignId, socket.userId, requestedAudio, { volume });

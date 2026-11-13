@@ -9,17 +9,17 @@
  * rule, applied in order, each step only to names still equal after the last:
  *
  * 1. A display name another member shares gets their role beside it, and a
- *    player's character after the role: "Dana (DM)", "Mara (Player, Vex)",
+ *    player's character after the role: "Dana (GM)", "Mara (Player, Nesk)",
  *    "Mara (Player)", "Ash (Spectator)". The role comes first, so a character
- *    named "DM" makes "Dana (Player, DM)", never the DM's "Dana (DM)".
+ *    named "GM" makes "Dana (Player, GM)", never the GM's "Dana (GM)".
  * 2. Names still equal get the day each member joined: "Mara (Player,
  *    joined 3 Oct)", in the browser's own way of writing a date.
  * 3. Names still equal, members who joined on the same day, get their order
  *    of joining among them, the earlier keeping 1: "Mara (Player, joined 3
  *    Oct, 2)". A name written to copy another's can need this more than once.
  *
- * What a member writes cannot mark them as the DM: the To list gives the DM a
- * group of their own, and the line under the box the DM's shield, both by
+ * What a member writes cannot mark them as the GM: the To list gives the GM a
+ * group of their own, and the line under the box the GM's shield, both by
  * user id.
  */
 

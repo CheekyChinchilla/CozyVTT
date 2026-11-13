@@ -13,14 +13,14 @@ import CharacterRollPicker from '../CharacterRollPicker';
 import { anyMenuShown, menuOpened, whenMenuOpens } from '@/components/ui/openMenus';
 import type { Character, CharacterData, GameSystem } from '@/types';
 
-const seelah: Character = {
+const maren: Character = {
   id: 'char-1',
   userId: 'alice',
   campaignId: 'camp-1',
-  gameSystem: 'PATHFINDER_2E' as GameSystem,
-  name: 'Seelah',
+  gameSystem: 'FANTASY_D20' as GameSystem,
+  name: 'Maren',
   data: {
-    characterName: 'Seelah',
+    characterName: 'Maren',
     class: 'Champion',
     level: 5,
     ancestry: 'Human',
@@ -43,7 +43,7 @@ function rollStrength(publicName?: string) {
   const onRoll = vi.fn();
   render(
     <CharacterRollPicker
-      character={seelah}
+      character={maren}
       publicName={publicName}
       onRoll={onRoll}
       onClose={() => undefined}
@@ -60,7 +60,7 @@ describe('the name a roll is filed under', () => {
   it("is the character's, when the picker is opened for the character", () => {
     const [expression, , name] = rollStrength();
     expect(expression).toMatch(/^1d20/);
-    expect(name).toBe('Seelah');
+    expect(name).toBe('Maren');
   });
 
   it('is the public name when one is given, so an obscured token is not named in the dice log', () => {
@@ -72,7 +72,7 @@ describe('the name a roll is filed under', () => {
 describe('the close button', () => {
   it('is named Close', () => {
     const onClose = vi.fn();
-    render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
+    render(<CharacterRollPicker character={maren} onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -80,7 +80,7 @@ describe('the close button', () => {
   // It was 20 pixels square. The size is set on a touch screen only, which
   // jsdom cannot show, so the classes are what is checked.
   it('is big enough for a finger, with its cross in the middle', () => {
-    render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
+    render(<CharacterRollPicker character={maren} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
     expect(screen.getByRole('button', { name: 'Close' }).className.split(/\s+/))
       .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
   });
@@ -89,13 +89,61 @@ describe('the close button', () => {
 describe('the roll mode', () => {
   // The picker's mode and a sheet's Roll mode apply one helper, so these pin
   // what the picker rolled before it used it.
-  it('rolls a Pathfinder 2e check twice with Fortune, keeping the higher, and the log says so', () => {
+  it('rolls a Fantasy d20 check twice with Fortune, keeping the higher, and the log says so', () => {
     const onRoll = vi.fn();
-    render(<CharacterRollPicker character={seelah} onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
+    render(<CharacterRollPicker character={maren} onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
     fireEvent.click(screen.getByRole('button', { name: 'Normal' }));
     fireEvent.click(screen.getByRole('button', { name: 'Fortune' }));
     fireEvent.click(screen.getByRole('button', { name: /^STR / }));
-    expect(onRoll).toHaveBeenCalledWith('2d20kh1+4', 'Strength Check (Fortune)', 'Seelah');
+    expect(onRoll).toHaveBeenCalledWith('2d20kh1+4', 'Strength Check (Fortune)', 'Maren');
+  });
+});
+
+describe('the initiative entry', () => {
+  const wren = (extra: Record<string, unknown>): Character => ({
+    ...maren,
+    gameSystem: 'FIFTH_EDITION' as GameSystem,
+    name: 'Wren',
+    data: {
+      characterName: 'Wren',
+      stats: { dexterity: { score: 14, modifier: 2 } },
+      ...extra,
+    } as unknown as CharacterData,
+  });
+
+  function openFor(character: Character) {
+    const onRollInitiative = vi.fn();
+    render(
+      <CharacterRollPicker
+        character={character}
+        onRoll={vi.fn()}
+        onRollInitiative={onRollInitiative}
+        onClose={() => undefined}
+        anchorX={0}
+        anchorY={0}
+      />
+    );
+    return onRollInitiative;
+  }
+
+  it('shows the two d20s a 5E character with advantage on initiative rolls', () => {
+    openFor(wren({ initiativeAdvantage: true }));
+    expect(screen.getByRole('button', { name: /Roll Initiative/ })).toHaveTextContent('Roll Initiative2d20kh1+2');
+  });
+
+  it('shows one d20 when the box is off', () => {
+    openFor(wren({ initiativeAdvantage: false }));
+    expect(screen.getByRole('button', { name: /Roll Initiative/ })).toHaveTextContent('Roll Initiative1d20+2');
+  });
+
+  // The server works out the roll from the sheet; the picker's Roll mode
+  // does not reach it.
+  it('sends no roll of its own, whatever the roll mode', () => {
+    const onRollInitiative = openFor(wren({ initiativeAdvantage: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Normal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disadvantage' }));
+    fireEvent.click(screen.getByRole('button', { name: /Roll Initiative/ }));
+    expect(onRollInitiative).toHaveBeenCalledWith();
   });
 });
 
@@ -106,11 +154,11 @@ describe('where it is drawn', () => {
   it('is on the body, outside the panel group it is opened from', () => {
     render(
       <div data-group>
-        <CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />
+        <CharacterRollPicker character={maren} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />
       </div>,
     );
 
-    const picker = screen.getByText('Roll for Seelah').closest('.fixed');
+    const picker = screen.getByText('Roll for Maren').closest('.fixed');
     expect(picker).not.toBeNull();
     expect(picker?.closest('[data-group]')).toBeNull();
     expect(picker?.parentElement).toBe(document.body);
@@ -128,16 +176,16 @@ describe('near the edge of the screen', () => {
   it('flips to the left of and above the point', () => {
     HTMLDivElement.prototype.getBoundingClientRect = () =>
       ({ left: 0, top: 0, right: 300, bottom: 400, width: 300, height: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
-    render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={vi.fn()} anchorX={900} anchorY={600} />);
+    render(<CharacterRollPicker character={maren} onRoll={vi.fn()} onClose={vi.fn()} anchorX={900} anchorY={600} />);
 
-    const picker = screen.getByText(/^Roll for Seelah/).closest<HTMLElement>('.fixed')!;
+    const picker = screen.getByText(/^Roll for Maren/).closest<HTMLElement>('.fixed')!;
     expect([picker.style.left, picker.style.top]).toEqual(['600px', '200px']);
   });
 });
 
 describe('while it is open', () => {
   it('is a menu on the screen, until it closes', () => {
-    const { unmount } = render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
+    const { unmount } = render(<CharacterRollPicker character={maren} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
     expect(anyMenuShown()).toBe(true);
     unmount();
     expect(anyMenuShown()).toBe(false);
@@ -152,7 +200,7 @@ describe('beside another menu', () => {
     const stop = whenMenuOpens(told);
     const onClose = vi.fn();
     try {
-      render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
+      render(<CharacterRollPicker character={maren} onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
       expect(told).toHaveBeenCalledTimes(1);
       expect(onClose).not.toHaveBeenCalled();
     } finally {
@@ -162,5 +210,32 @@ describe('beside another menu', () => {
     act(() => { menuOpened(); });
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// The Horror d100 sheet calls STR, CON and the rest characteristics; the menu
+// headed their rolls "Abilities", the d20 systems' word.
+describe('the heading over a character\'s first group of rolls', () => {
+  const picker = (character: Character) =>
+    render(<CharacterRollPicker character={character} onRoll={vi.fn()} onClose={() => undefined} anchorX={0} anchorY={0} />);
+
+  it('is Characteristics for a Horror d100 character, as its sheet names them', () => {
+    picker({
+      ...maren,
+      gameSystem: 'HORROR_D100' as GameSystem,
+      data: {
+        characterName: 'Edda', profession: 'Clerk', era: 'Modern',
+        characteristics: { STR: 12, CON: 12, SIZ: 13, INT: 16, POW: 11, DEX: 14, CHA: 13 },
+      } as unknown as CharacterData,
+    });
+    expect(screen.getByText('Characteristics')).toBeInTheDocument();
+    expect(screen.queryByText('Abilities')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Effort/ })).toBeInTheDocument();
+  });
+
+  it('stays Abilities for the other systems', () => {
+    picker(maren);
+    expect(screen.getByText('Abilities')).toBeInTheDocument();
+    expect(screen.queryByText('Characteristics')).toBeNull();
   });
 });

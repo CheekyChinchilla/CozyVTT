@@ -1,7 +1,7 @@
 /**
  * Sending an invitation from the campaign page leaves the page as it is.
  *
- * The page reloaded after every invitation sent, which dropped the DM's
+ * The page reloaded after every invitation sent, which dropped the GM's
  * connection, anything typed and the "Invitation sent." message, though
  * nothing on the campaign changes until the invitation is accepted.
  */
@@ -12,7 +12,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'c1', name: 'The Sunken Crown', status: 'ACTIVE', memberships: [], createdAt: '2026-10-01T00:00:00.000Z' },
-    userRole: 'DM',
+    userRole: 'GM',
   }),
 }));
 vi.mock('../LeaveCampaign', () => ({ default: () => null }));

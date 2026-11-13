@@ -1,7 +1,7 @@
 /**
  * Session History
  *
- * The notes a DM writes when ending a session, read back.
+ * The notes a GM writes when ending a session, read back.
  *
  * Those notes have always been saved — the end-session dialog said so — but
  * nothing displayed them, so they went into the database and stayed there. This
@@ -9,9 +9,9 @@
  * notes describe what happened at the table, which is exactly what a player
  * wants before the next game.
  *
- * Which is also why the DM can edit and clear them here. Sessions were being
+ * Which is also why the GM can edit and clear them here. Sessions were being
  * ended with notes for as long as the box has existed, and showing them all at
- * once makes public something a DM may have treated as a private scratchpad.
+ * once makes public something a GM may have treated as a private scratchpad.
  * Editing is the way to take that back.
  */
 
@@ -61,7 +61,7 @@ export default function SessionHistory() {
   const [savingNotes, setSavingNotes] = useState(false);
 
   const campaignId = campaign?.id;
-  const isDM = userRole === 'DM';
+  const isGM = userRole === 'GM';
 
   const load = useCallback(async () => {
     if (!campaignId) return;
@@ -143,7 +143,7 @@ export default function SessionHistory() {
 
           {!error && past.length === 0 && !loading && (
             <p className="text-xs text-warm-gray">
-              No finished sessions yet. When the DM ends a session, whatever they write
+              No finished sessions yet. When the GM ends a session, whatever they write
               about it appears here.
             </p>
           )}
@@ -164,7 +164,7 @@ export default function SessionHistory() {
                       {formatDate(session.startedAt)}
                       {duration && ` · ${duration}`}
                     </span>
-                    {isDM && editingId !== session.id && (
+                    {isGM && editingId !== session.id && (
                       <button
                         onClick={() => {
                           setEditingId(session.id);
@@ -220,7 +220,7 @@ export default function SessionHistory() {
                     </div>
                   </div>
                 ) : session.notes ? (
-                  // `whitespace-pre-wrap` so the DM's own line breaks survive —
+                  // `whitespace-pre-wrap` so the GM's own line breaks survive —
                   // these are usually written as a short list of what happened.
                   <p className="text-xs text-brand-ink whitespace-pre-wrap wrap-break-word">
                     {session.notes}

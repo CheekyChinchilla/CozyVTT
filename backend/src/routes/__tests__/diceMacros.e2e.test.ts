@@ -4,7 +4,7 @@
  * A macro is a player's own named roll for one campaign. Two things are being
  * pinned here.
  *
- * **It is private, including from the DM.** Running the game is not a reason to
+ * **It is private, including from the GM.** Running the game is not a reason to
  * read what somebody saved for themselves, and the rule has to hold on the
  * server rather than by the client not asking. A macro belonging to someone else
  * answers 404 rather than 403, so the response cannot be used to confirm that an
@@ -33,7 +33,7 @@ import { MAX_MACRO_CHARACTER_NAME_LENGTH } from '../../validators/diceLimits';
 const app = createTestApp();
 
 describe('/api/campaigns/:campaignId/macros', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let outsiderId: string;
   let campaignId: string;
@@ -49,32 +49,32 @@ describe('/api/campaigns/:campaignId/macros', () => {
 
   beforeAll(async () => {
     const stamp = Date.now();
-    for (const who of ['dm', 'player', 'outsider']) {
+    for (const who of ['gm', 'player', 'outsider']) {
       emails[who] = `macros-${who}-${stamp}@test.cozyvtt.local`;
     }
 
-    const [dm, player, outsider] = await Promise.all([
-      createTestUser({ email: emails.dm, displayName: 'Macro DM' }),
+    const [gm, player, outsider] = await Promise.all([
+      createTestUser({ email: emails.gm, displayName: 'Macro GM' }),
       createTestUser({ email: emails.player, displayName: 'Macro Player' }),
       createTestUser({ email: emails.outsider, displayName: 'Macro Outsider' }),
     ]);
-    dmId = dm.id;
+    gmId = gm.id;
     playerId = player.id;
     outsiderId = outsider.id;
 
-    const campaign = await createTestCampaign(dmId, { name: `Macros ${stamp}` });
+    const campaign = await createTestCampaign(gmId, { name: `Macros ${stamp}` });
     campaignId = campaign.id;
 
     // A second campaign the player also belongs to, to prove macros do not leak
     // between tables — the isolation the feature request specifically asked for.
-    const other = await createTestCampaign(dmId, { name: `Macros Other ${stamp}` });
+    const other = await createTestCampaign(gmId, { name: `Macros Other ${stamp}` });
     otherCampaignId = other.id;
 
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+        { userId: gmId, campaignId, role: 'GM', characterIds: [] },
         { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
-        { userId: dmId, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
+        { userId: gmId, campaignId: otherCampaignId, role: 'GM', characterIds: [] },
         { userId: playerId, campaignId: otherCampaignId, role: 'PLAYER', characterIds: [] },
       ],
     });
@@ -82,7 +82,7 @@ describe('/api/campaigns/:campaignId/macros', () => {
 
   afterAll(async () => {
     await cleanupCampaigns([campaignId, otherCampaignId]);
-    await cleanupUsers([dmId, playerId, outsiderId]);
+    await cleanupUsers([gmId, playerId, outsiderId]);
     await prisma.$disconnect();
   });
 
@@ -138,17 +138,17 @@ describe('/api/campaigns/:campaignId/macros', () => {
     it('saves a character and a purpose of its own, trimmed', async () => {
       const agent = await login(emails.player);
       const res = await create(agent, {
-        name: 'Goblin', expression: '1d20+4', characterName: '  Goblin boss ', purpose: ' Scimitar attack  ',
+        name: 'Goblin', expression: '1d20+4', characterName: '  Hobgoblin ', purpose: ' Longsword attack  ',
       });
 
       expect(res.status).toBe(201);
-      expect(res.body.macro).toMatchObject({ characterName: 'Goblin boss', purpose: 'Scimitar attack' });
+      expect(res.body.macro).toMatchObject({ characterName: 'Hobgoblin', purpose: 'Longsword attack' });
       expect(await prisma.diceMacro.findUnique({ where: { id: res.body.macro.id } })).toMatchObject({
-        characterName: 'Goblin boss', purpose: 'Scimitar attack',
+        characterName: 'Hobgoblin', purpose: 'Longsword attack',
       });
 
       const listed = await agent.get(`/api/campaigns/${campaignId}/macros`);
-      expect(listed.body.macros[0]).toMatchObject({ characterName: 'Goblin boss', purpose: 'Scimitar attack' });
+      expect(listed.body.macros[0]).toMatchObject({ characterName: 'Hobgoblin', purpose: 'Longsword attack' });
     });
 
     it('stores an empty character or purpose as none', async () => {
@@ -211,7 +211,7 @@ describe('/api/campaigns/:campaignId/macros', () => {
       });
       playerMacroId = macro.id;
       await prisma.diceMacro.create({
-        data: { userId: dmId, campaignId, name: 'DM only', expression: '1d100' },
+        data: { userId: gmId, campaignId, name: 'GM only', expression: '1d100' },
       });
     });
 
@@ -224,20 +224,20 @@ describe('/api/campaigns/:campaignId/macros', () => {
       expect(res.body.macros[0].name).toBe('Player only');
     });
 
-    it('hides a player\'s macros from the DM', async () => {
+    it('hides a player\'s macros from the GM', async () => {
       // Running the game is not a reason to read what a player saved for
       // themselves.
-      const agent = await login(emails.dm);
+      const agent = await login(emails.gm);
       const list = await agent.get(`/api/campaigns/${campaignId}/macros`);
-      expect(list.body.macros.map((m: { name: string }) => m.name)).toEqual(['DM only']);
+      expect(list.body.macros.map((m: { name: string }) => m.name)).toEqual(['GM only']);
 
       const read = await agent.get(`/api/campaigns/${campaignId}/macros/${playerMacroId}`);
       // 404 rather than 403: the answer must not confirm the id exists.
       expect(read.status).toBe(404);
     });
 
-    it('refuses to let the DM edit or delete a player\'s macro', async () => {
-      const agent = await login(emails.dm);
+    it('refuses to let the GM edit or delete a player\'s macro', async () => {
+      const agent = await login(emails.gm);
 
       expect((await agent.put(`/api/campaigns/${campaignId}/macros/${playerMacroId}`)
         .send({ name: 'Hijacked' })).status).toBe(404);
@@ -247,8 +247,8 @@ describe('/api/campaigns/:campaignId/macros', () => {
       expect(still?.name).toBe('Player only');
     });
 
-    it('refuses to let the DM give a player\'s macro a character or a purpose', async () => {
-      const agent = await login(emails.dm);
+    it('refuses to let the GM give a player\'s macro a character or a purpose', async () => {
+      const agent = await login(emails.gm);
       const res = await agent.put(`/api/campaigns/${campaignId}/macros/${playerMacroId}`)
         .send({ characterName: 'Puppet', purpose: 'Hijacked' });
 
@@ -405,7 +405,7 @@ describe('/api/campaigns/:campaignId/macros', () => {
   describe('cascade', () => {
     it('a macro goes with the campaign it belongs to', async () => {
       const stamp = Date.now();
-      const doomed = await createTestCampaign(dmId, { name: `Doomed ${stamp}` });
+      const doomed = await createTestCampaign(gmId, { name: `Doomed ${stamp}` });
       await prisma.campaignMembership.create({
         data: { userId: playerId, campaignId: doomed.id, role: 'PLAYER', characterIds: [] },
       });

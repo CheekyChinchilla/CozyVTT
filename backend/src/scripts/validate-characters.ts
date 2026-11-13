@@ -4,11 +4,12 @@
  * Checks every character against its game system's schema, the way the server
  * checks a sheet when it is saved, and lists the ones it would refuse. Older
  * fields are moved first, as the character routes do, so a sheet from before
- * 1.3.0 is judged as its next save would be. Nothing is written.
+ * 1.3.0 is judged as its next save would be, and a Horror d100 sheet from
+ * before 1.7.0 is judged converted. Nothing is written.
  *
  * Usage:
  *   npm run validate:characters                         (validate all)
- *   npm run validate:characters -- --system DND_5E      (one system; dnd5e works too)
+ *   npm run validate:characters -- --system FIFTH_EDITION  (one system; fifthedition works too)
  *   npm run validate:characters -- --verbose            (show every error)
  *   npm run validate:characters -- --export             (write validation-report.json)
  *
@@ -27,9 +28,13 @@ import path from 'path';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { createPrismaClient } from '../config/prismaClient';
 import { ZodError } from 'zod';
-import { GameSystem } from '../game-systems';
+import {
+  SUPPORTED_GAME_SYSTEMS, type GameSystem, type SupportedGameSystem,
+} from '../game-systems';
 import { validateCharacterData } from '../validators/game-systems';
+import { LEGACY_GAME_SYSTEMS } from '../legacy/gameSystemAliases';
 import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
+import { sheetAsRead } from '../legacy/sheetConversion';
 import { errorCode } from '../utils/errors';
 
 interface ValidationIssue {
@@ -78,11 +83,16 @@ function formatZodError(error: ZodError): Array<{ path: string; message: string;
 
 /**
  * A game system named on the command line: the name itself in any case, with
- * or without its underscores, so "DND_5E", "dnd_5e" and "dnd5e" all work.
+ * or without its underscores, so "FIFTH_EDITION", "fifth_edition" and
+ * "fifthedition" all work, and so does the name an older version gave it,
+ * written any of those ways.
  */
-function readGameSystem(value: string): GameSystem | null {
+function readGameSystem(value: string): SupportedGameSystem | null {
   const squash = (name: string) => name.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  return Object.values(GameSystem).find((system) => squash(system) === squash(value)) ?? null;
+  const named = SUPPORTED_GAME_SYSTEMS.find((system) => squash(system) === squash(value));
+  if (named) return named;
+  const old = Object.entries(LEGACY_GAME_SYSTEMS).find(([name]) => squash(name) === squash(value));
+  return old ? old[1] : null;
 }
 
 /** The command line, or what is wrong with it. */
@@ -96,11 +106,11 @@ export function parseValidateArgs(args: readonly string[]): ValidateOptions | { 
     else if (arg === '--system') {
       const value = args[i + 1];
       if (value === undefined || value.startsWith('--')) {
-        return { error: '--system needs a game system after it, for example --system DND_5E' };
+        return { error: '--system needs a game system after it, for example --system FIFTH_EDITION' };
       }
       const system = readGameSystem(value);
       if (!system) {
-        return { error: `Unknown game system "${value}". Use one of: ${Object.values(GameSystem).join(', ')}` };
+        return { error: `Unknown game system "${value}". Use one of: ${SUPPORTED_GAME_SYSTEMS.join(', ')}` };
       }
       options.gameSystem = system;
       i += 1;
@@ -164,9 +174,10 @@ export async function validateCharacters(
     const breakdown = (report.systemBreakdown[gameSystem] ??= { total: 0, valid: 0, invalid: 0 });
     breakdown.total++;
 
-    // As the character routes do before validating a save.
-    const sheet = migrateLegacySheetFields(gameSystem, character.data);
-    const result = validateCharacterData(gameSystem, sheet);
+    // As the character routes do before validating a save. A Horror d100
+    // sheet still in the shape before 1.7.0 is judged as the server answers
+    // it and saves it, converted.
+    const result = validateCharacterData(gameSystem, migrateLegacySheetFields(gameSystem, sheetAsRead(gameSystem, character.data)));
 
     if (result.success) {
       report.validCharacters++;
@@ -304,12 +315,13 @@ Character Validation Script
 Usage:
   npm run validate:characters                      # Validate all characters
   npm run validate:characters -- --verbose         # Show full error details
-  npm run validate:characters -- --system DND_5E   # Validate one game system
+  npm run validate:characters -- --system FIFTH_EDITION   # Validate one game system
   npm run validate:characters -- --export          # Export issues to JSON
 
 Options:
-  --system <system>   Only this game system: DND_5E, PATHFINDER_2E, SHADOWRUN_6E or
-                      CALL_OF_CTHULHU_7E, in any case, with or without the underscores
+  --system <system>   Only this game system: FIFTH_EDITION, FANTASY_D20 or HORROR_D100,
+                      in any case, with or without the underscores; the
+                      names older versions used work too
   --verbose           Show detailed error messages for each character
   --export            Export validation issues to validation-report.json
   --help              Show this help message
@@ -319,7 +331,7 @@ could not run.
 
 Examples:
   npm run validate:characters
-  npm run validate:characters -- --system dnd5e --verbose
+  npm run validate:characters -- --system fifthedition --verbose
   npm run validate:characters -- --export --verbose
 `;
 

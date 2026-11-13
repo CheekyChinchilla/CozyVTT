@@ -1,8 +1,8 @@
 /**
- * The initiative tracker while the DM prepares a map the table is not on.
+ * The initiative tracker while the GM prepares a map the table is not on.
  *
  * The order stays the table's, but the tokens the tracker can offer are the
- * ones on the DM's screen. Add Combatant listed the prepared map's tokens
+ * ones on the GM's screen. Add Combatant listed the prepared map's tokens
  * and sent the table's map with them, which the server answered "Token not
  * found". And a combatant standing on a map the table is not on could be
  * rolled for in front of everyone, under its name.
@@ -13,7 +13,7 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import InitiativeTracker from '../InitiativeTracker';
 import { useGameStore } from '@/stores/gameStore';
 import type { CombatantEntry, Token } from '@/types';
-import { TokenLayer, TokenType } from '@/types';
+import { TokenDisposition, TokenLayer, TokenType } from '@/types';
 
 const seat = vi.hoisted(() => ({ viewedMapId: 'map-prepared' }));
 const emitInitiativeAdd = vi.fn();
@@ -21,8 +21,8 @@ const rollDice = vi.fn();
 
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
-    userRole: 'DM',
-    campaign: { id: 'campaign-1', gameSystem: 'DND_5E', memberships: [], characters: [] },
+    userRole: 'GM',
+    campaign: { id: 'campaign-1', gameSystem: 'FIFTH_EDITION', memberships: [], characters: [] },
     currentMap: { id: 'map-table' },
     viewedMap: { id: seat.viewedMapId },
   }),
@@ -45,7 +45,7 @@ const entry = (tokenId: string, mapId: string): CombatantEntry => ({
   tokenId, mapId, name: 'Lich', imageUrl: '', initiative: 12, hp: null, type: 'npc', disposition: null, characterId: null,
 });
 
-/** A custom roll from the combatant's Roll..., as the DM makes it. */
+/** A custom roll from the combatant's Roll..., as the GM makes it. */
 async function rollFromRow(name: string) {
   fireEvent.click(screen.getByRole('button', { name }));
   fireEvent.click(screen.getByText('Roll...'));
@@ -70,8 +70,21 @@ describe('Add Combatant while preparing', () => {
   });
 });
 
+// The list printed the stored value with a capital, "Npc".
+describe('Add Combatant\'s list', () => {
+  it('names each token\'s kind as the token editor does, and its disposition after it', () => {
+    useGameStore.getState().setTokens([token('lich', 'Lich'), { ...token('ward', 'Ward'), type: TokenType.OBJECT }, { ...token('scout', 'Scout'), type: TokenType.PLAYER, disposition: TokenDisposition.FRIENDLY }]);
+    render(<InitiativeTracker />);
+    fireEvent.click(screen.getByText('Add Combatant'));
+    const row = (name: string) => within(screen.getByRole('dialog')).getByText(name).parentElement;
+    expect(row('Lich')).toHaveTextContent(/^LichNPC$/);
+    expect(row('Ward')).toHaveTextContent(/^WardObject$/);
+    expect(row('Scout')).toHaveTextContent(/^ScoutPlayer · friendly$/);
+  });
+});
+
 describe("a combatant's rolls", () => {
-  it('are for the DM alone when it stands on a map the table is not on', async () => {
+  it('are for the GM alone when it stands on a map the table is not on', async () => {
     useGameStore.getState().setCombatState({ active: false, round: 0, currentTokenId: null, combatants: [entry('lich', 'map-prepared')] });
     render(<InitiativeTracker />);
     await rollFromRow('Lich');

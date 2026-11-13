@@ -3,8 +3,8 @@
  *
  * **This is not the security boundary.** The server is, in two places that
  * already agree: the socket handler sends a secret roll only to the person who
- * made it and to the campaign's DMs, and `GET /campaigns/:id/dice-rolls`
- * filters history with `isDM ? {} : { OR: [{ secret: false }, { secret: true,
+ * made it and to the campaign's GMs, and `GET /campaigns/:id/dice-rolls`
+ * filters history with `isGM ? {} : { OR: [{ secret: false }, { secret: true,
  * userId }] }`. Nothing else is ever sent over the wire.
  *
  * This is the second line of defence, and the reason it exists is that a
@@ -15,7 +15,7 @@
 
 /** The parts of a roll this decision depends on. */
 export interface RollVisibility {
-  /** Null once the roller's account is deleted: then a secret roll is the DM's alone. */
+  /** Null once the roller's account is deleted: then a secret roll is the GM's alone. */
   userId: string | null;
   secret?: boolean;
 }
@@ -23,16 +23,16 @@ export interface RollVisibility {
 /**
  * Whether the panel may display a roll at all.
  *
- * A public roll: everyone. A secret roll: the person who rolled it, and the DM,
+ * A public roll: everyone. A secret roll: the person who rolled it, and the GM,
  * who receives them deliberately for audit and dispute resolution.
  */
 export function mayDisplayRoll(
   roll: RollVisibility,
   viewerId: string | undefined,
-  isDM: boolean
+  isGM: boolean
 ): boolean {
   if (!roll.secret) return true;
-  if (isDM) return true;
+  if (isGM) return true;
   return !!viewerId && roll.userId === viewerId;
 }
 
@@ -47,10 +47,10 @@ export function mayDisplayRoll(
 export function visibleRolls<T extends RollVisibility>(
   rolls: readonly T[],
   viewerId: string | undefined,
-  isDM: boolean,
+  isGM: boolean,
   showSecret: boolean
 ): T[] {
   return rolls.filter(
-    (roll) => mayDisplayRoll(roll, viewerId, isDM) && (showSecret || !roll.secret)
+    (roll) => mayDisplayRoll(roll, viewerId, isGM) && (showSecret || !roll.secret)
   );
 }

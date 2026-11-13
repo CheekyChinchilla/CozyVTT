@@ -16,7 +16,7 @@ import { useCoarsePointer } from '@/hooks/useMediaQuery';
 import { useLongPress, type LongPressPoint } from '@/hooks/useLongPress';
 import { showRowWhileDraggedByGrip } from '@/utils/rowDrag';
 import { api } from '@/services/api';
-import { GAME_SYSTEM_SHORT_LABELS, GAME_SYSTEM_TINTS, isGameSystem } from '@/constants/game-systems';
+import { GAME_SYSTEM_SHORT_LABELS, GAME_SYSTEM_TINTS, UNSUPPORTED_SYSTEM_LABEL, isGameSystem } from '@/constants/game-systems';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { canRollAsCharacter, canEditCharacter, canRemoveCharacterFromCampaign } from '@/services/permissions';
 import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin, GripVertical, ShieldPlus } from 'lucide-react';
@@ -30,9 +30,10 @@ import TemporaryHpDialog from './TemporaryHpDialog';
 import { characterTemporaryHp } from '@/utils/temporaryHp';
 import Toast, { useToast } from '@/components/Toast';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import type { CampaignRole, Character, RosterMember, User, CampaignMembership } from '@/types';
+import type { Character, RosterMember, User, CampaignMembership } from '@/types';
 import type { FlatMenuItem } from '@/components/ui/menu';
-import { TokenLayer } from '@/types';
+import { CampaignRole, TokenLayer } from '@/types';
+import { CAMPAIGN_ROLE_LABEL } from '@/utils/campaignRoles';
 
 /** A character's menu, open at a point. */
 interface CharacterMenu { x: number; y: number; characterId: string; characterUserId: string; opening: number }
@@ -199,7 +200,7 @@ export default function CampaignRoster() {
    * Put a character on the map from the roster.
    *
    * The drag works too, but only if you can see both the roster and the map at
-   * once — and it is the only way there was, so a DM with the roster open over
+   * once — and it is the only way there was, so a GM with the roster open over
    * the map had no way to place anyone. Placed at the centre of the map, the
    * same as the creature library, because a menu click has no cursor position.
    */
@@ -276,7 +277,7 @@ export default function CampaignRoster() {
     if (canEditCharacter(viewer, owner, membership)) {
       items.push({ kind: 'command', id: 'edit-sheet', icon: Edit, label: 'Edit Character Sheet', run: handleEditCharacterSheet });
     }
-    if (membership.role === 'DM' && viewedMap) {
+    if (membership.role === 'GM' && viewedMap) {
       items.push({ kind: 'command', id: 'add-to-map', icon: MapPin, label: 'Add to Map', run: handleAddTokenToMap });
     }
     // "Reassign to Player" used to sit here. It never did anything —
@@ -313,7 +314,7 @@ export default function CampaignRoster() {
   // Get role icon
   const getRoleIcon = (role: CampaignRole) => {
     switch (role) {
-      case 'DM':
+      case 'GM':
         return Crown;
       case 'PLAYER':
         return Gamepad2;
@@ -326,7 +327,7 @@ export default function CampaignRoster() {
 
   // Group members by role
   const groupedRoster = {
-    DM: roster.filter((m) => m.role === 'DM'),
+    GM: roster.filter((m) => m.role === 'GM'),
     PLAYER: roster.filter((m) => m.role === 'PLAYER'),
     SPECTATOR: roster.filter((m) => m.role === 'SPECTATOR'),
   };
@@ -361,15 +362,15 @@ export default function CampaignRoster() {
         </div>
       ) : (
         <div className="space-y-4">
-          {/* DM Section */}
-          {groupedRoster.DM.length > 0 && (
+          {/* GM Section */}
+          {groupedRoster.GM.length > 0 && (
             <div>
               <h4 className="text-xs font-semibold text-brand-ink/60 uppercase tracking-wider mb-2">
-                Dungeon Master
+                {CAMPAIGN_ROLE_LABEL[CampaignRole.GM]}
               </h4>
               <div className="space-y-2">
-                {groupedRoster.DM.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                {groupedRoster.GM.map((member) => (
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isGM={userRole === 'GM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -383,7 +384,7 @@ export default function CampaignRoster() {
               </h4>
               <div className="space-y-2">
                 {groupedRoster.PLAYER.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isGM={userRole === 'GM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -397,7 +398,7 @@ export default function CampaignRoster() {
               </h4>
               <div className="space-y-2">
                 {groupedRoster.SPECTATOR.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isGM={userRole === 'GM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -491,7 +492,7 @@ interface MemberCardProps {
   onCharacterMenu: (at: LongPressPoint, characterId: string, characterUserId: string) => void;
   /** The primary pointer is a finger: a character drags by its grip only. */
   coarsePointer: boolean;
-  isDM: boolean;
+  isGM: boolean;
   currentUserId: string;
   /** The viewer is a player, so may adjust their own characters' hit points; a spectator may not. */
   canAdjustOwn: boolean;
@@ -501,7 +502,7 @@ interface MemberCardProps {
   isOnline: boolean;
 }
 
-function MemberCard({ member, getRoleIcon, onCharacterClick, onCharacterMenu, coarsePointer, isDM, currentUserId, canAdjustOwn, characterHpCache, onHpDelta, isOnline }: MemberCardProps) {
+function MemberCard({ member, getRoleIcon, onCharacterClick, onCharacterMenu, coarsePointer, isGM, currentUserId, canAdjustOwn, characterHpCache, onHpDelta, isOnline }: MemberCardProps) {
   const RoleIcon = getRoleIcon(member.role);
 
   return (
@@ -519,13 +520,13 @@ function MemberCard({ member, getRoleIcon, onCharacterClick, onCharacterMenu, co
         <div className="relative shrink-0">
           <div
             className={`p-1.5 rounded-full ${
-              member.role === 'DM' ? 'bg-moss-green/20' : 'bg-spirit-purple/20'
+              member.role === 'GM' ? 'bg-moss-green/20' : 'bg-spirit-purple/20'
             }`}
           >
             {/* eslint-disable-next-line react-hooks/static-components -- getRoleIcon picks one of two lucide icons; no component is made here */}
             <RoleIcon
               className={`w-4 h-4 ${
-                member.role === 'DM' ? 'text-brand-ink' : 'text-spirit-ink'
+                member.role === 'GM' ? 'text-brand-ink' : 'text-spirit-ink'
               }`}
             />
           </div>
@@ -556,12 +557,12 @@ function MemberCard({ member, getRoleIcon, onCharacterClick, onCharacterMenu, co
       {member.characters.length > 0 && (
         <div className="ml-9 pointer-coarse:ml-0 space-y-1">
           {member.characters.map((character) => {
-            // The DM may place any character. This used to also require a token
+            // The GM may place any character. This used to also require a token
             // picture, which meant the handle only existed on characters that
             // had one — and the handle was the picture, so a character without
             // one could not be dragged at all. The canvas draws an imageless
             // token as a lettered circle, so there is nothing to gate on.
-            const canDrag = isDM;
+            const canDrag = isGM;
             return (
             <div
               key={character.id}
@@ -578,7 +579,7 @@ function MemberCard({ member, getRoleIcon, onCharacterClick, onCharacterMenu, co
             {/* HP bar + controls — shown when character has HP data and user can edit */}
             {(() => {
               const hp = characterHpCache[character.id] ?? character.hp;
-              const canAdjust = isDM || (canAdjustOwn && character.userId === currentUserId);
+              const canAdjust = isGM || (canAdjustOwn && character.userId === currentUserId);
               if (!hp || hp.max === 0) return null;
               const pct = Math.max(0, Math.min(1, hp.current / hp.max));
               // The tiers and colours of the map's HP bars.
@@ -655,7 +656,7 @@ function MemberCard({ member, getRoleIcon, onCharacterClick, onCharacterMenu, co
 
 interface CharacterRowProps {
   character: RosterMember['characters'][number];
-  /** The viewer is the DM, who may drag the character onto the map. */
+  /** The viewer is the GM, who may drag the character onto the map. */
   canDrag: boolean;
   coarsePointer: boolean;
   onClick: () => void;
@@ -664,7 +665,7 @@ interface CharacterRowProps {
 
 /**
  * A character's line in the roster: a click or a tap opens the sheet, and a
- * right-click or a finger's long-press the character's menu. The DM drags it
+ * right-click or a finger's long-press the character's menu. The GM drags it
  * onto the map, with a mouse from anywhere on the line and on a touch screen
  * from the grip at its start only, which never long-presses: an iPad's own
  * drag would otherwise lift the line at about the time the menu opens.
@@ -672,10 +673,10 @@ interface CharacterRowProps {
 function CharacterRow({ character, canDrag, coarsePointer, onClick, onMenu }: CharacterRowProps) {
   const longPress = useLongPress(onMenu);
   const dragTitle = `Drag ${character.name} onto the map`;
-  // A code this build does not know is shown as written, untinted.
+  // A code this build does not know is shown as Unsupported system, untinted.
   const system = isGameSystem(character.gameSystem) ? character.gameSystem : null;
   const systemTint = system ? `${GAME_SYSTEM_TINTS[system].bg} ${GAME_SYSTEM_TINTS[system].text}` : 'bg-ink/10 text-ink';
-  const systemLabel = system ? GAME_SYSTEM_SHORT_LABELS[system] : character.gameSystem;
+  const systemLabel = system ? GAME_SYSTEM_SHORT_LABELS[system] : UNSUPPORTED_SYSTEM_LABEL;
   const rowDrags = canDrag && !coarsePointer;
   return (
     <div
@@ -718,7 +719,7 @@ function CharacterRow({ character, canDrag, coarsePointer, onClick, onMenu }: Ch
         </span>
       )}
 
-      {/* Character Token — draggable by DM onto map */}
+      {/* Character Token — draggable by GM onto map */}
       {character.tokenImageUrl ? (
         <img
           src={character.tokenImageUrl}

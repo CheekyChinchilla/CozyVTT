@@ -81,7 +81,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   const canUploadGlobal = isAdmin || !!user?.globalAssetManager;
 
   // What the server will allow (canChange, from the asset list and the move's
-  // reply): the uploader, the DM of a campaign asset's campaign, or an admin,
+  // reply): the uploader, the GM of a campaign asset's campaign, or an admin,
   // by the rule the delete and move routes share.
   const canDelete = currentAsset.canChange === true;
 

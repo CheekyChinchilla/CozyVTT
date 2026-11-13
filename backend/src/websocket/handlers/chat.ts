@@ -60,10 +60,10 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
    * Validates content, saves to database, and sends it to each member who
    * may read it. The message type comes from the sender's role, never from
    * the payload. Always under the per-user flood ceiling; the campaign's chat
-   * cooldown, when the DM turns it on, is the stricter rule on top.
+   * cooldown, when the GM turns it on, is the stricter rule on top.
    * With a `recipientId` it is a WHISPER to that member (whisperRecipient in
    * services/permissions.ts), sent to the sender's and the recipient's
-   * sockets in this campaign and to no one else, the DM included.
+   * sockets in this campaign and to no one else, the GM included.
    * Answered through the acknowledgement when one is passed (see ../ack.ts).
    * SECURITY: Uses server-authenticated socket.campaignId and socket.role only.
    */
@@ -120,10 +120,10 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
       }
 
       // The type is decided by the sender's role on the session, not by the
-      // payload: a player's message is always PLAYER. The DM's is DM unless
+      // payload: a player's message is always PLAYER. The GM's is GM unless
       // they ask to speak as a player (out of character). A whisper is a
       // WHISPER whoever sends it.
-      const type: 'PLAYER' | 'DM' | 'WHISPER' = whisperTo ? 'WHISPER' : socket.role === 'DM' ? (askedType ?? 'DM') : 'PLAYER';
+      const type: 'PLAYER' | 'GM' | 'WHISPER' = whisperTo ? 'WHISPER' : socket.role === 'GM' ? (askedType ?? 'GM') : 'PLAYER';
 
       // Rate limiting: respect campaign's chatCooldown settings
       const campaignSettings = await prisma.campaign.findUnique({

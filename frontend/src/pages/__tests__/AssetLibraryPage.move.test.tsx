@@ -46,7 +46,7 @@ vi.mock('@/hooks/queries', () => ({
 
 vi.mock('@/components/assets/AssetUploadModal', () => ({ default: () => null }));
 vi.mock('@/services/campaign.service', () => ({
-  default: { getCampaigns: () => Promise.resolve([{ id: 'c1', name: 'My table', userRole: 'DM' }]) },
+  default: { getCampaigns: () => Promise.resolve([{ id: 'c1', name: 'My table', userRole: 'GM' }]) },
 }));
 
 const api = vi.hoisted(() => ({

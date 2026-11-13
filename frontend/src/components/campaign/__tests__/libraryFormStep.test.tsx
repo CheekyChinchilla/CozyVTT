@@ -270,13 +270,13 @@ describe('the Creature Library on a wide screen', () => {
     await openCreatureLibrary();
     await userEvent.click(screen.getByText('Boss Bat'));
     await userEvent.click(screen.getByTitle('Edit creature'));
-    expect(screen.getByPlaceholderText('e.g. Goblin Boss')).toHaveValue('Boss Bat');
+    expect(screen.getByPlaceholderText('e.g. Hobgoblin')).toHaveValue('Boss Bat');
 
     await userEvent.click(screen.getByRole('button', { name: 'Create Custom' }));
 
     expect(screen.getByRole('heading', { name: 'Create Custom Creature' })).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Edit Creature' })).toBeNull();
-    expect(screen.getByPlaceholderText('e.g. Goblin Boss')).toHaveValue('');
+    expect(screen.getByPlaceholderText('e.g. Hobgoblin')).toHaveValue('');
   });
 });
 

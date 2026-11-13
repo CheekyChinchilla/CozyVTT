@@ -4,7 +4,7 @@
  * (the map, a shared Document, a note) shows the newest painting.
  *
  * Only a picture Paint made may be written over (a campaign map picture
- * tagged cozyvtt-drawn-map), only by its campaign's DM, and only with what
+ * tagged cozyvtt-drawn-map), only by its campaign's GM, and only with what
  * the map upload would take: within MAX_MAP_SIZE_MB, a picture by its bytes,
  * within the picture limits, and of the format it replaces. A refused
  * picture leaves the old one as it was. The new file is renamed over the
@@ -34,8 +34,8 @@ import { storedFilePath } from '../../utils/storedPath';
 const app = createTestApp();
 
 type Agent = ReturnType<typeof request.agent>;
-type Who = 'dm' | 'player' | 'otherDm' | 'stranger' | 'admin';
-const ids: Record<Who, string> = { dm: '', player: '', otherDm: '', stranger: '', admin: '' };
+type Who = 'gm' | 'player' | 'otherGm' | 'stranger' | 'admin';
+const ids: Record<Who, string> = { gm: '', player: '', otherGm: '', stranger: '', admin: '' };
 const agents = {} as Record<Who, Agent>;
 let campaignId = '';
 let otherCampaignId = '';
@@ -51,9 +51,9 @@ async function login(email: string): Promise<Agent> {
   return agent;
 }
 
-/** A campaign map picture uploaded by the DM, as Draw a map uploads one, or untagged. */
+/** A campaign map picture uploaded by the GM, as Draw a map uploads one, or untagged. */
 async function upload(tags: string): Promise<string> {
-  const res = await agents.dm.post('/api/assets/upload')
+  const res = await agents.gm.post('/api/assets/upload')
     .field('type', 'MAP').field('scope', 'CAMPAIGN').field('campaignId', campaignId).field('name', 'Drawn map').field('tags', tags)
     .attach('file', await picture('#e8dcc4'), 'drawn-map.png');
   expect(res.status).toBe(201);
@@ -84,13 +84,13 @@ beforeAll(async () => {
     const user = await createTestUser({ email: `replace-${who.toLowerCase()}-${stamp}@test.invalid`, displayName: `Replace ${who}`, role: who === 'admin' ? 'ADMIN' : 'USER' });
     ids[who] = user.id;
   }
-  campaignId = (await createTestCampaign(ids.dm, { name: `Replace ${stamp}` })).id;
-  otherCampaignId = (await createTestCampaign(ids.otherDm, { name: `Replace other ${stamp}` })).id;
+  campaignId = (await createTestCampaign(ids.gm, { name: `Replace ${stamp}` })).id;
+  otherCampaignId = (await createTestCampaign(ids.otherGm, { name: `Replace other ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: ids.dm, campaignId, role: 'DM', characterIds: [] },
+      { userId: ids.gm, campaignId, role: 'GM', characterIds: [] },
       { userId: ids.player, campaignId, role: 'PLAYER', characterIds: [] },
-      { userId: ids.otherDm, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
+      { userId: ids.otherGm, campaignId: otherCampaignId, role: 'GM', characterIds: [] },
     ],
   });
   // One at a time: the server hashes one password per address at once.
@@ -116,14 +116,14 @@ async function mapNaming(id: string, name: string, current = false) {
   return map;
 }
 
-describe("the campaign's DM", () => {
+describe("the campaign's GM", () => {
   it('writes a new painting over the drawn picture, under the same id, and is told the address to use', async () => {
     const id = await upload(DRAWN_MAP_TAG);
     const before = await onDisk(id);
     const files = filesUnder(UPLOAD_DIR);
     const painted = await picture('#336699');
 
-    const res = await replace('dm', id, painted);
+    const res = await replace('gm', id, painted);
 
     expect(res.status).toBe(200);
     expect(res.body.asset).toMatchObject({ id, fileSize: painted.length, tags: [DRAWN_MAP_TAG] });
@@ -142,9 +142,9 @@ describe("the campaign's DM", () => {
 
   it('is told a new version on every save', async () => {
     const id = await upload(DRAWN_MAP_TAG);
-    const first = await replace('dm', id, await picture('#112233'));
+    const first = await replace('gm', id, await picture('#112233'));
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const second = await replace('dm', id, await picture('#445566'));
+    const second = await replace('gm', id, await picture('#445566'));
     expect([first.status, second.status]).toEqual([200, 200]);
     expect(second.body.imageUrl).not.toBe(first.body.imageUrl);
   });
@@ -154,7 +154,7 @@ describe("the campaign's DM", () => {
     const row = await prisma.asset.findUniqueOrThrow({ where: { id } });
     fs.rmSync(storedFilePath(row.thumbnailPath!));
     await prisma.asset.update({ where: { id }, data: { thumbnailPath: null } });
-    expect((await replace('dm', id, await picture('#336699'))).status).toBe(200);
+    expect((await replace('gm', id, await picture('#336699'))).status).toBe(200);
     const after = await onDisk(id);
     expect(after.thumbnail).not.toBeNull();
     expect(path.dirname(after.row.thumbnailPath!)).toBe(path.dirname(after.row.filePath));
@@ -169,7 +169,7 @@ describe('everyone who reads the picture', () => {
     expect(oldPicture.status).toBe(200);
     const painted = await picture('#336699');
 
-    const res = await replace('dm', id, painted);
+    const res = await replace('gm', id, painted);
     expect(res.status).toBe(200);
 
     const byMap = await agents.player.get(res.body.imageUrl);
@@ -186,18 +186,18 @@ describe('everyone who reads the picture', () => {
     const one = await mapNaming(id, 'One');
     const two = await mapNaming(id, 'Two');
     const painted = await picture('#336699');
-    expect((await replace('dm', id, painted)).status).toBe(200);
+    expect((await replace('gm', id, painted)).status).toBe(200);
     for (const map of [one, two]) {
-      expect((await agents.dm.get(map.imageUrl)).body).toEqual(painted);
+      expect((await agents.gm.get(map.imageUrl)).body).toEqual(painted);
     }
   });
 });
 
-describe('anyone but the DM', () => {
+describe('anyone but the GM', () => {
   it.each<[Who, number]>([
     ['player', 403],
     ['admin', 403],
-    ['otherDm', 404],
+    ['otherGm', 404],
     ['stranger', 404],
   ])('is refused, as %s, and the picture stays as it was', async (who, status) => {
     const id = await upload(DRAWN_MAP_TAG);
@@ -213,7 +213,7 @@ describe('anyone but the DM', () => {
   });
 
   it('is told 404 for an id that names nothing', async () => {
-    expect((await replace('dm', '00000000-0000-4000-8000-000000000000', await picture('#336699'))).status).toBe(404);
+    expect((await replace('gm', '00000000-0000-4000-8000-000000000000', await picture('#336699'))).status).toBe(404);
   });
 });
 
@@ -228,7 +228,7 @@ describe('a picture that was not drawn in CozyVTT', () => {
   ])('is refused with 400 and left as it was: %s', async (_what, make) => {
     const id = await make();
     const before = await onDisk(id);
-    const res = await replace('dm', id, await picture('#336699'));
+    const res = await replace('gm', id, await picture('#336699'));
     expect(res.status).toBe(400);
     expect(res.body.message).toBe('Only a picture drawn in CozyVTT can be saved over. Upload a new picture instead.');
     expect(await onDisk(id)).toEqual(before);
@@ -247,7 +247,7 @@ describe('a painting the map upload would refuse', () => {
     const files = filesUnder(UPLOAD_DIR);
     const [bytes, name] = await make();
 
-    const res = await replace('dm', id, bytes, name);
+    const res = await replace('gm', id, bytes, name);
 
     expect(res.status).toBe(400);
     if (message) expect(res.body.message).toBe(message);
@@ -257,7 +257,7 @@ describe('a painting the map upload would refuse', () => {
 
   it('is refused with 400 when no file is sent', async () => {
     const id = await upload(DRAWN_MAP_TAG);
-    const res = await agents.dm.put(`/api/assets/${id}/picture`).field('name', 'nothing');
+    const res = await agents.gm.put(`/api/assets/${id}/picture`).field('name', 'nothing');
     expect(res.status).toBe(400);
   });
 });

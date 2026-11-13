@@ -1,5 +1,5 @@
 // ============================================
-// Wall selection state — which walls the DM has gathered, the box being
+// Wall selection state — which walls the GM has gathered, the box being
 // dragged out to gather more, the endpoint being dragged, and the two
 // operations on the whole set.
 //
@@ -49,7 +49,7 @@ interface UseWallSelectionArgs {
 
 export function useWallSelection({ wallSegments, commitWalls }: UseWallSelectionArgs) {
   /**
-   * Which walls are selected. A set because the DM can gather several: click,
+   * Which walls are selected. A set because the GM can gather several: click,
    * Shift+click, a dragged box, or Ctrl+A. Most of what follows works on the
    * whole set; the properties panel is the exception, since a type belongs to
    * one wall at a time.

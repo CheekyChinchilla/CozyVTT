@@ -108,10 +108,10 @@ describe('isTokenVisibleTo', () => {
   // A 4x4 map. Fog rows are top-left origin, token grid Y is bottom-left, so
   // grid (0,0) is the bottom-left cell and fog index 12 in a 4-wide raster.
   const view = (over: Partial<TokenVisibility> = {}): TokenVisibility => ({
-    isDM: false,
+    isGM: false,
     revealedCells: null,
     isOwnToken: () => false,
-    dmShowSpiritTokens: true,
+    gmShowSpiritTokens: true,
     mapWidth: 4,
     mapHeight: 4,
     ...over,
@@ -139,23 +139,23 @@ describe('isTokenVisibleTo', () => {
     ).toBe(true);
   });
 
-  it('hides a DM-hidden token from a player', () => {
+  it('hides a GM-hidden token from a player', () => {
     expect(isTokenVisibleTo(makeToken('a', { visible: false }), view())).toBe(false);
   });
 
-  it('shows a DM-hidden token to the DM', () => {
-    expect(isTokenVisibleTo(makeToken('a', { visible: false }), view({ isDM: true }))).toBe(true);
+  it('shows a GM-hidden token to the GM', () => {
+    expect(isTokenVisibleTo(makeToken('a', { visible: false }), view({ isGM: true }))).toBe(true);
   });
 
-  it('ignores fog entirely for the DM', () => {
+  it('ignores fog entirely for the GM', () => {
     const token = makeToken('a', { position: { x: 0, y: 0 } });
-    expect(isTokenVisibleTo(token, view({ isDM: true, revealedCells: new Set() }))).toBe(true);
+    expect(isTokenVisibleTo(token, view({ isGM: true, revealedCells: new Set() }))).toBe(true);
   });
 
-  it('respects the DM hiding spirit tokens from their own canvas', () => {
+  it('respects the GM hiding spirit tokens from their own canvas', () => {
     const spirit = makeToken('s', { layer: TokenLayer.SPIRIT });
-    expect(isTokenVisibleTo(spirit, view({ isDM: true, dmShowSpiritTokens: false }))).toBe(false);
-    expect(isTokenVisibleTo(spirit, view({ isDM: true, dmShowSpiritTokens: true }))).toBe(true);
+    expect(isTokenVisibleTo(spirit, view({ isGM: true, gmShowSpiritTokens: false }))).toBe(false);
+    expect(isTokenVisibleTo(spirit, view({ isGM: true, gmShowSpiritTokens: true }))).toBe(true);
   });
 });
 
@@ -167,18 +167,18 @@ describe('visibleTokenHp', () => {
     expect(visibleTokenHp(token, { 'char-1': alivePlayer }, false)).toEqual(alivePlayer);
   });
 
-  // An NPC's hit points are the DM's to reveal.
+  // An NPC's hit points are the GM's to reveal.
   it('hides an NPC token from a player unless the bar is on', () => {
     const npc = makeToken('n', { hp: { current: 4, max: 7, temp: 0 }, showHpBar: false });
     expect(visibleTokenHp(npc, {}, false)).toBeNull();
   });
 
-  it('shows an NPC token to a player once the DM turns the bar on', () => {
+  it('shows an NPC token to a player once the GM turns the bar on', () => {
     const npc = makeToken('n', { hp: { current: 4, max: 7, temp: 0 }, showHpBar: true });
     expect(visibleTokenHp(npc, {}, false)).toEqual({ current: 4, max: 7, temp: 0 });
   });
 
-  it('shows an NPC token to the DM regardless', () => {
+  it('shows an NPC token to the GM regardless', () => {
     const npc = makeToken('n', { hp: { current: 4, max: 7, temp: 0 }, showHpBar: false });
     expect(visibleTokenHp(npc, {}, true)).toEqual({ current: 4, max: 7, temp: 0 });
   });
@@ -192,7 +192,7 @@ describe('visibleTokenHp', () => {
    *
    * A token bound to a character that is not in the cache — the window before
    * the roster fetch returns, or a character no member holds — must still
-   * respect the DM's choice. It briefly did not: the bound branch returned the
+   * respect the GM's choice. It briefly did not: the bound branch returned the
    * token's own hit points outright, so a hidden NPC's HP appeared for every
    * player until the roster arrived.
    */
@@ -205,12 +205,12 @@ describe('visibleTokenHp', () => {
       expect(visibleTokenHp(token, {}, false)).toBeNull();
     });
 
-    it('shows them once the DM turns the bar on', () => {
+    it('shows them once the GM turns the bar on', () => {
       const token = bound({ hp: { current: 3, max: 9, temp: 0 }, showHpBar: true });
       expect(visibleTokenHp(token, {}, false)).toEqual({ current: 3, max: 9, temp: 0 });
     });
 
-    it('shows them to the DM', () => {
+    it('shows them to the GM', () => {
       const token = bound({ hp: { current: 3, max: 9, temp: 0 }, showHpBar: false });
       expect(visibleTokenHp(token, {}, true)).toEqual({ current: 3, max: 9, temp: 0 });
     });

@@ -19,13 +19,13 @@ const rows = (items: MenuItem[]) => items.map((i) => {
   return `${i.kind}: ${i.label}`;
 });
 
-describe("the DM's door menu", () => {
+describe("the GM's door menu", () => {
   it.each([
     ['door-closed', ['heading: 🚪 Closed Door', 'command: Open Door (brand)', 'command: Lock Door (danger)']],
     ['door-open', ['heading: 🚪 Open Door', 'command: Close Door (brand)', 'command: Lock Door (danger)']],
     ['door-locked', ['heading: 🔒 Locked Door', 'command: Unlock Door (brand)']],
   ] as const)('on a door that is %s', (type, expected) => {
-    expect(rows(doorMenuItems(door(type), { role: CampaignRole.DM, actions: { setType: vi.fn() } }))).toEqual(expected);
+    expect(rows(doorMenuItems(door(type), { role: CampaignRole.GM, actions: { setType: vi.fn() } }))).toEqual(expected);
   });
 });
 
@@ -48,7 +48,7 @@ describe('what each item does', () => {
   ] as const)('on a door that is %s, %s makes it %s', (type, id, next) => {
     const setType = vi.fn();
     const shut = door(type);
-    const item = doorMenuItems(shut, { role: CampaignRole.DM, actions: { setType } }).find((i) => i.id === id);
+    const item = doorMenuItems(shut, { role: CampaignRole.GM, actions: { setType } }).find((i) => i.id === id);
     if (item?.kind !== 'command') throw new Error(`no command ${id}`);
 
     expect(setType).not.toHaveBeenCalled();
@@ -58,7 +58,7 @@ describe('what each item does', () => {
 
   it('closes the menu after every item', () => {
     for (const type of ['door-closed', 'door-open', 'door-locked'] as const) {
-      const items = doorMenuItems(door(type), { role: CampaignRole.DM, actions: { setType: vi.fn() } });
+      const items = doorMenuItems(door(type), { role: CampaignRole.GM, actions: { setType: vi.fn() } });
       expect(items.filter((i) => i.kind === 'command' && i.keepsOpen)).toEqual([]);
     }
   });

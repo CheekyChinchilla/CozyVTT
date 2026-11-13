@@ -1,7 +1,7 @@
 // ============================================
 // Leave Campaign
 // A player's or a spectator's way out of the campaign, asked first, in the
-// Campaign Info panel. The DM and the owner, whom the server refuses, are
+// Campaign Info panel. The GM and the owner, whom the server refuses, are
 // shown how to get out instead.
 // ============================================
 
@@ -35,21 +35,21 @@ export default function LeaveCampaign({ campaign, userRole, onLeft }: LeaveCampa
   const [leaving, setLeaving] = useState(false);
   const [left, setLeft] = useState(false);
 
-  // In the order the server refuses them: an owner in the DM seat is told
+  // In the order the server refuses them: an owner in the GM seat is told
   // about owning it, since handing the seat over would not let them leave.
   if (isCampaignOwner(campaign, user?.id)) {
     return (
       <p className={hint}>
         You own this campaign, so you cannot leave it. If you no longer want it, delete it from{' '}
-        <strong>{userRole === CampaignRole.DM ? 'Campaign Settings' : 'Owner Settings'}</strong>, on the{' '}
+        <strong>{userRole === CampaignRole.GM ? 'Campaign Settings' : 'Owner Settings'}</strong>, on the{' '}
         <strong>Danger Zone</strong> tab.
       </p>
     );
   }
-  if (userRole === CampaignRole.DM) {
+  if (userRole === CampaignRole.GM) {
     return (
       <p className={hint}>
-        To leave, hand the DM seat to another member first: in <strong>Campaign Settings</strong>, on the{' '}
+        To leave, hand the GM seat to another member first: in <strong>Campaign Settings</strong>, on the{' '}
         <strong>Members</strong> tab, click the crown beside them.
       </p>
     );
@@ -87,7 +87,7 @@ export default function LeaveCampaign({ campaign, userRole, onLeft }: LeaveCampa
         message={
           'You stop seeing and playing in this campaign straight away. Your characters in it go back to My Characters, '
           + 'and your personal notes and saved rolls stay on your dashboard, under Notes From Campaigns You Have Left. '
-          + 'Your tokens stay on the map for the DM. To come back, the DM has to invite you again.'
+          + 'Your tokens stay on the map for the GM. To come back, the GM has to invite you again.'
         }
         confirmLabel="Leave Campaign"
         cancelLabel="Cancel"

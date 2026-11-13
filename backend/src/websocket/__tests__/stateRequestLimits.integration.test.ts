@@ -10,7 +10,7 @@
  * seconds. The other on-load requests (walls, lights, fog, explored memory,
  * presence) had no limit either, and `initiative.roll` bypassed the dice
  * limit. Separately, the fan-out after a change was awaited inside the
- * change's own try/catch, so a database blip in the fan-out told the DM the
+ * change's own try/catch, so a database blip in the fan-out told the GM the
  * change had failed when it had already been made.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -28,11 +28,11 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `limits-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 const HERO = 'hero';
@@ -50,18 +50,18 @@ async function flood(client: { emit: (e: string, d?: unknown) => void; on: (e: s
 }
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Limits ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Limits ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  const campaign = await prisma.campaign.create({ data: { name: `Limits ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -79,7 +79,7 @@ beforeAll(async () => {
   mapId = map.id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 afterAll(async () => {
@@ -87,7 +87,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
@@ -142,10 +142,10 @@ describe.each([
 
 describe('initiative.roll', () => {
   it("counts a player's rolls against their dice budget", async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const added = waitForEvent(player, 'initiative.state');
-    dm.emit('initiative.add', { tokenId: HERO, mapId });
+    gm.emit('initiative.add', { tokenId: HERO, mapId });
     await added;
 
     const refusals: string[] = [];
@@ -157,39 +157,39 @@ describe('initiative.roll', () => {
     player.emit('initiative.roll', { tokenId: HERO, mapId });
     expect((await refused).message).toMatch(/rate limit/i);
     expect(refusals.every((m) => /rate limit/i.test(m))).toBe(true);
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
 
 describe('a fan-out that fails', () => {
   it('does not report the initiative change as failed, and the change stands', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     jest.spyOn(prisma.map, 'findMany').mockRejectedValueOnce(new Error('database blip'));
 
-    const silence = expectNoEvent(dm, 'error', 500);
-    dm.emit('initiative.add', { tokenId: GOBLIN, mapId });
+    const silence = expectNoEvent(gm, 'error', 500);
+    gm.emit('initiative.add', { tokenId: GOBLIN, mapId });
     await silence;
 
-    const asked = waitForEvent<{ combatants: Array<{ tokenId: string }> }>(dm, 'initiative.state');
-    dm.emit('initiative.request_state');
+    const asked = waitForEvent<{ combatants: Array<{ tokenId: string }> }>(gm, 'initiative.state');
+    gm.emit('initiative.request_state');
     expect((await asked).combatants.map((c) => c.tokenId)).toEqual([GOBLIN]);
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('does not report the spirit layer toggle as failed, and the table is still told', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const added = waitForEvent(dm, 'initiative.state');
-    dm.emit('initiative.add', { tokenId: GOBLIN, mapId });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const added = waitForEvent(gm, 'initiative.state');
+    gm.emit('initiative.add', { tokenId: GOBLIN, mapId });
     await added;
     jest.spyOn(prisma.map, 'findMany').mockRejectedValueOnce(new Error('database blip'));
 
-    const silence = expectNoEvent(dm, 'error', 500);
-    const told = waitForEvent<{ content: string }>(dm, 'chat.system');
-    dm.emit('spirit_layer.toggle', { visible: true });
+    const silence = expectNoEvent(gm, 'error', 500);
+    const told = waitForEvent<{ content: string }>(gm, 'chat.system');
+    gm.emit('spirit_layer.toggle', { visible: true });
     await silence;
     expect((await told).content).toMatch(/spirit layer/i);
     await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false } });
-    dm.disconnect();
+    gm.disconnect();
   });
 });

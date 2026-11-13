@@ -43,9 +43,9 @@ const uvtt = (mapSize: { x: number; y?: number }) =>
     })
   );
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 /** A map made straight in the database, as one stored before the limits would be. */
 async function storedMap(data: { width: number; height: number; gridSize?: number; fogEnabled?: boolean }) {
@@ -60,11 +60,11 @@ async function storedMap(data: { width: number; height: number; gridSize?: numbe
 }
 
 const create = (body: Record<string, unknown>) =>
-  dm.post(`/api/campaigns/${campaignId}/maps`).send({ name: 'Sized', imageUrl: randomUUID(), width: 20, height: 20, ...body });
+  gm.post(`/api/campaigns/${campaignId}/maps`).send({ name: 'Sized', imageUrl: randomUUID(), width: 20, height: 20, ...body });
 const update = (mapId: string, body: Record<string, unknown>) =>
-  dm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send(body);
+  gm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send(body);
 const importUvtt = (file: Buffer, gridSize?: string) => {
-  const req = dm.post(`/api/campaigns/${campaignId}/maps/import-uvtt`).attach('file', file, 'limits.uvtt');
+  const req = gm.post(`/api/campaigns/${campaignId}/maps/import-uvtt`).attach('file', file, 'limits.uvtt');
   if (gridSize !== undefined) req.field('gridSize', gridSize);
   return req;
 };
@@ -72,17 +72,17 @@ const importUvtt = (file: Buffer, gridSize?: string) => {
 beforeAll(async () => {
   const stamp = Date.now();
   const user = await createTestUser({ email: `maplimits-${stamp}@test.cozyvtt.local` });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Map limits ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Map limits ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
@@ -182,7 +182,7 @@ describe('fog on a map stored larger than the limits', () => {
   it('answers GET /fog with 409 and a reason, not a grid', async () => {
     const map = await storedMap({ width: 1000, height: 1000, fogEnabled: true });
 
-    const res = await dm.get(`/api/campaigns/${campaignId}/maps/${map.id}/fog`);
+    const res = await gm.get(`/api/campaigns/${campaignId}/maps/${map.id}/fog`);
 
     expect(res.status).toBe(409);
     expect(res.body.message).toMatch(/too big for fog of war/);
@@ -191,7 +191,7 @@ describe('fog on a map stored larger than the limits', () => {
   it('answers a fog operation with 409 and stores nothing', async () => {
     const map = await storedMap({ width: 1000, height: 1000, fogEnabled: true });
 
-    const res = await dm.post(`/api/campaigns/${campaignId}/maps/${map.id}/fog/operation`).send({ op: 'reveal_all' });
+    const res = await gm.post(`/api/campaigns/${campaignId}/maps/${map.id}/fog/operation`).send({ op: 'reveal_all' });
 
     expect(res.status).toBe(409);
     expect((await prisma.map.findUniqueOrThrow({ where: { id: map.id } })).fogData).toBeNull();
@@ -200,7 +200,7 @@ describe('fog on a map stored larger than the limits', () => {
   it('still loads the map itself', async () => {
     const map = await storedMap({ width: 1000, height: 1000, fogEnabled: true });
 
-    const res = await dm.get(`/api/campaigns/${campaignId}/maps/${map.id}`);
+    const res = await gm.get(`/api/campaigns/${campaignId}/maps/${map.id}`);
 
     expect(res.status).toBe(200);
     expect(res.body.map.width).toBe(1000);

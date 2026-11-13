@@ -1,5 +1,5 @@
 // ============================================
-// Session Toolbar — grouped DM tools in the campaign header
+// Session Toolbar — grouped GM tools in the campaign header
 // Replaces the row of seven identical labelled pill buttons with
 // icon buttons in labelled groups (Content | Ambience | Settings),
 // each with a tooltip. The open/close state still lives in
@@ -66,7 +66,7 @@ export default function SessionToolbar({
   spiritLayerEnabled = false,
 }: SessionToolbarProps) {
   return (
-    <div className="flex items-center gap-1" role="toolbar" aria-label="DM tools">
+    <div className="flex items-center gap-1" role="toolbar" aria-label="GM tools">
       {TOOL_GROUPS.map((group, groupIndex) => (
         <div key={groupIndex} className="flex items-center gap-1">
           {groupIndex > 0 && <div className="h-6 w-px bg-moss-green/20 mx-1" aria-hidden="true" />}

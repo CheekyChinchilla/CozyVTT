@@ -75,8 +75,8 @@ function at<T>(draw: () => T): T {
   }
 }
 
-function renderDense(r: DiceRolledEvent, isCurrentUser = true, rollerIsDM = false) {
-  const view = at(() => render(<DiceResult roll={r} isCurrentUser={isCurrentUser} rollerIsDM={rollerIsDM} dense />));
+function renderDense(r: DiceRolledEvent, isCurrentUser = true, rollerIsGM = false) {
+  const view = at(() => render(<DiceResult roll={r} isCurrentUser={isCurrentUser} rollerIsGM={rollerIsGM} dense />));
   return view.container.firstElementChild as HTMLElement;
 }
 
@@ -123,14 +123,14 @@ it('colours a critical and a fumble, and names them', () => {
   expect(parts(fumble).second).toHaveTextContent('Critical fail!');
 });
 
-it('marks a secret roll as secret, yours or one the DM is shown', () => {
+it('marks a secret roll as secret, yours or one the GM is shown', () => {
   const mine = renderDense(roll({ secret: true, characterName: null, purpose: 'Stealth' }));
   const badge = within(parts(mine).first).getByText(/Secret/);
   expect(badge).toHaveTextContent('🔒 Secret');
-  expect(badge).toHaveAttribute('title', 'Hidden from the other players — your DM can still see it');
+  expect(badge).toHaveAttribute('title', 'Hidden from the other players — your GM can still see it');
 
   const theirs = renderDense(roll({ secret: true }), false, false);
-  expect(within(parts(theirs).first).getByText(/Secret/)).toHaveTextContent('🔒 Secret (DM view)');
+  expect(within(parts(theirs).first).getByText(/Secret/)).toHaveTextContent('🔒 Secret (GM view)');
 });
 
 // On a narrow line the name and the Secret mark were cut through while the
@@ -180,7 +180,7 @@ it('keeps the purpose that says a roll is damage, and the working of every group
 
 it('says as much to a screen reader as the full card does', () => {
   const r = advantage([20, 9], 20);
-  const full = at(() => render(<DiceResult roll={r} isCurrentUser={false} rollerIsDM />)).container;
+  const full = at(() => render(<DiceResult roll={r} isCurrentUser={false} rollerIsGM />)).container;
   const dense = renderDense(r, false, true);
   // Word by word, each text node apart: elements side by side join their text.
   const words = (el: Element) => {

@@ -2,7 +2,7 @@
  * What a player is sent of a map's walls and lights.
  *
  * Players' browsers need the walls to work out their own sight, so every
- * wall is sent. But a door's lock is the DM's to reveal, and a light the DM
+ * wall is sent. But a door's lock is the GM's to reveal, and a light the GM
  * has turned off lights nothing a player could see: every member was sent
  * each door's real state, locked included, and every light, off ones
  * included. A player (or spectator) is now sent a locked door as a closed
@@ -27,13 +27,13 @@ jest.setTimeout(20000);
 const app = createTestApp();
 const runId = randomUUID().slice(0, 8);
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 let playerAgent: ReturnType<typeof request.agent>;
-let dmAgent: ReturnType<typeof request.agent>;
+let gmAgent: ReturnType<typeof request.agent>;
 
 type Wall = { id: string; x1: number; y1: number; x2: number; y2: number; type: string };
 type Light = { id: string; x: number; y: number; brightRadius: number; dimRadius: number; color: string; enabled: boolean };
@@ -80,24 +80,24 @@ function heard(client: Socket): string[] {
 const settled = () => new Promise((resolve) => setTimeout(resolve, 700));
 
 beforeAll(async () => {
-  const dm = await createTestUser({ displayName: 'Secrets DM' });
+  const gm = await createTestUser({ displayName: 'Secrets GM' });
   const player = await createTestUser({ displayName: 'Secrets Player' });
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Secrets ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Secrets ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   server = await createWsTestServer();
-  dmCookie = await server.loginAs(dmId);
+  gmCookie = await server.loginAs(gmId);
   playerCookie = await server.loginAs(playerId);
   playerAgent = request.agent(app);
   expect((await playerAgent.post('/api/auth/login').send({ email: player.email, password: TEST_PASSWORD })).status).toBe(200);
-  dmAgent = request.agent(app);
-  expect((await dmAgent.post('/api/auth/login').send({ email: dm.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmAgent = request.agent(app);
+  expect((await gmAgent.post('/api/auth/login').send({ email: gm.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
@@ -105,7 +105,7 @@ afterAll(async () => {
   await prisma.campaign.updateMany({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
@@ -113,7 +113,7 @@ describe('opening a map', () => {
   it('answers walls:request and lights:request with locked doors closed and no light that is off', async () => {
     const mapId = await newMap();
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
     const walls = waitForEvent<{ segments: Wall[] }>(player, 'walls:replaced');
     player.emit('walls:request', { mapId });
@@ -123,13 +123,13 @@ describe('opening a map', () => {
     player.emit('lights:request', { mapId });
     expect((await lights).lights).toEqual([LIT]);
 
-    // The DM is sent the map as it is.
-    const dmWalls = waitForEvent<{ segments: Wall[] }>(dm, 'walls:replaced');
-    dm.emit('walls:request', { mapId });
-    expect((await dmWalls).segments).toEqual([LOCKED, PLAIN]);
+    // The GM is sent the map as it is.
+    const gmWalls = waitForEvent<{ segments: Wall[] }>(gm, 'walls:replaced');
+    gm.emit('walls:request', { mapId });
+    expect((await gmWalls).segments).toEqual([LOCKED, PLAIN]);
 
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('sends the map, and the REST reads, the same way', async () => {
@@ -145,25 +145,25 @@ describe('opening a map', () => {
 });
 
 describe('a live edit', () => {
-  it('tells a player of a door the DM locks as a closed door', async () => {
+  it('tells a player of a door the GM locks as a closed door', async () => {
     const mapId = await newMap();
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const door = { ...PLAIN, id: randomUUID(), type: 'door-closed' };
     const added = waitForEvent<{ segment: Wall }>(player, 'wall:added');
-    dm.emit('wall:add', { mapId, segment: { ...door, type: 'door-locked' } });
+    gm.emit('wall:add', { mapId, segment: { ...door, type: 'door-locked' } });
     expect((await added).segment).toEqual(door);
 
     const updated = waitForEvent<{ segment: Wall }>(player, 'wall:updated');
-    dm.emit('wall:update', { mapId, segment: { ...door, type: 'door-locked', x2: 280 } });
+    gm.emit('wall:update', { mapId, segment: { ...door, type: 'door-locked', x2: 280 } });
     expect((await updated).segment).toEqual({ ...door, x2: 280 });
 
     const replaced = waitForEvent<{ segments: Wall[] }>(player, 'walls:replaced');
-    dm.emit('walls:replace', { mapId, segments: [LOCKED] });
+    gm.emit('walls:replace', { mapId, segments: [LOCKED] });
     expect((await replaced).segments).toEqual([asClosed]);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
@@ -186,30 +186,30 @@ describe('a live edit', () => {
 
   it('sends a player no light that is off, and a light turned on or off as appearing or going', async () => {
     const mapId = await newMap();
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const dark = { ...LIT, id: randomUUID(), enabled: false };
     const quiet = expectNoEvent(player, 'light:added', 500);
-    const dmAdded = waitForEvent(dm, 'light:added');
-    dm.emit('light:add', { mapId, light: dark });
-    await dmAdded;
+    const gmAdded = waitForEvent(gm, 'light:added');
+    gm.emit('light:add', { mapId, light: dark });
+    await gmAdded;
     await quiet;
 
     const appeared = waitForEvent<{ light: Light }>(player, 'light:added');
-    dm.emit('light:update', { mapId, light: { ...dark, enabled: true } });
+    gm.emit('light:update', { mapId, light: { ...dark, enabled: true } });
     expect((await appeared).light).toEqual({ ...dark, enabled: true });
 
     const gone = waitForEvent<{ lightId: string }>(player, 'light:removed');
-    dm.emit('light:update', { mapId, light: { ...dark, enabled: false } });
+    gm.emit('light:update', { mapId, light: { ...dark, enabled: false } });
     expect((await gone).lightId).toBe(dark.id);
 
     const moved = { ...LIT, x: 350 };
     const replaced = waitForEvent<{ lights: Light[] }>(player, 'lights:replaced');
-    dm.emit('lights:replace', { mapId, lights: [moved, OUT] });
+    gm.emit('lights:replace', { mapId, lights: [moved, OUT] });
     expect((await replaced).lights).toEqual([moved]);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
@@ -222,69 +222,69 @@ describe('a live edit', () => {
  * a light they never had was there.
  */
 describe('a change a player cannot see', () => {
-  it('sends a player nothing when the DM locks or unlocks a closed door', async () => {
+  it('sends a player nothing when the GM locks or unlocks a closed door', async () => {
     const mapId = await newMap();
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const door = { ...PLAIN, id: randomUUID(), type: 'door-closed' };
     const added = waitForEvent(player, 'wall:added');
-    dm.emit('wall:add', { mapId, segment: door });
+    gm.emit('wall:add', { mapId, segment: door });
     await added;
 
     const quiet = expectNoEvent(player, 'wall:updated', 800);
-    const locked = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
-    dm.emit('wall:update', { mapId, segment: { ...door, type: 'door-locked' } });
+    const locked = waitForEvent<{ segment: Wall }>(gm, 'wall:updated');
+    gm.emit('wall:update', { mapId, segment: { ...door, type: 'door-locked' } });
     expect((await locked).segment.type).toBe('door-locked');
-    const unlocked = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
-    dm.emit('wall:update', { mapId, segment: door });
+    const unlocked = waitForEvent<{ segment: Wall }>(gm, 'wall:updated');
+    gm.emit('wall:update', { mapId, segment: door });
     expect((await unlocked).segment.type).toBe('door-closed');
     await quiet;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
-  it('sends a player nothing when the DM deletes a light that is off, and the light going when it is on', async () => {
+  it('sends a player nothing when the GM deletes a light that is off, and the light going when it is on', async () => {
     const mapId = await newMap();
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const quiet = expectNoEvent(player, 'light:removed', 500);
-    const dmGone = waitForEvent<{ lightId: string }>(dm, 'light:removed');
-    dm.emit('light:remove', { mapId, lightId: OUT.id });
-    expect((await dmGone).lightId).toBe(OUT.id);
+    const gmGone = waitForEvent<{ lightId: string }>(gm, 'light:removed');
+    gm.emit('light:remove', { mapId, lightId: OUT.id });
+    expect((await gmGone).lightId).toBe(OUT.id);
     await quiet;
 
     const gone = waitForEvent<{ lightId: string }>(player, 'light:removed');
-    dm.emit('light:remove', { mapId, lightId: LIT.id });
+    gm.emit('light:remove', { mapId, lightId: LIT.id });
     expect((await gone).lightId).toBe(LIT.id);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('sends a player nothing for the same changes made through the REST routes', async () => {
     const mapId = await newMap();
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const base = `/api/campaigns/${campaignId}/maps/${mapId}`;
 
     const quietWall = expectNoEvent(player, 'wall:updated', 800);
     const quietLight = expectNoEvent(player, 'light:removed', 800);
-    const dmWall = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
-    expect((await dmAgent.patch(`${base}/walls/${LOCKED.id}`).send({ type: 'door-closed' })).status).toBe(200);
-    expect((await dmWall).segment).toEqual(asClosed);
-    const dmLight = waitForEvent<{ lightId: string }>(dm, 'light:removed');
-    expect((await dmAgent.delete(`${base}/lights/${OUT.id}`)).status).toBe(200);
-    expect((await dmLight).lightId).toBe(OUT.id);
+    const gmWall = waitForEvent<{ segment: Wall }>(gm, 'wall:updated');
+    expect((await gmAgent.patch(`${base}/walls/${LOCKED.id}`).send({ type: 'door-closed' })).status).toBe(200);
+    expect((await gmWall).segment).toEqual(asClosed);
+    const gmLight = waitForEvent<{ lightId: string }>(gm, 'light:removed');
+    expect((await gmAgent.delete(`${base}/lights/${OUT.id}`)).status).toBe(200);
+    expect((await gmLight).lightId).toBe(OUT.id);
     await Promise.all([quietWall, quietLight]);
 
     const gone = waitForEvent<{ lightId: string }>(player, 'light:removed');
-    expect((await dmAgent.delete(`${base}/lights/${LIT.id}`)).status).toBe(200);
+    expect((await gmAgent.delete(`${base}/lights/${LIT.id}`)).status).toBe(200);
     expect((await gone).lightId).toBe(LIT.id);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
@@ -296,89 +296,89 @@ describe('a change a player cannot see', () => {
  * changed where they could not see.
  */
 describe('a change a player cannot see, on a lit map', () => {
-  it('sends a player no map when the DM unlocks or locks a closed door, and the map when the DM opens it', async () => {
+  it('sends a player no map when the GM unlocks or locks a closed door, and the map when the GM opens it', async () => {
     const mapId = await newMap(true);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const told = heard(player);
-    const unlocked = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
-    dm.emit('wall:update', { mapId, segment: asClosed });
+    const unlocked = waitForEvent<{ segment: Wall }>(gm, 'wall:updated');
+    gm.emit('wall:update', { mapId, segment: asClosed });
     expect((await unlocked).segment).toEqual(asClosed);
-    const locked = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
-    dm.emit('wall:update', { mapId, segment: LOCKED });
+    const locked = waitForEvent<{ segment: Wall }>(gm, 'wall:updated');
+    gm.emit('wall:update', { mapId, segment: LOCKED });
     expect((await locked).segment).toEqual(LOCKED);
     await settled();
     expect(told).toEqual([]);
 
     const resent = waitForEvent(player, 'map.changed');
-    dm.emit('wall:update', { mapId, segment: { ...LOCKED, type: 'door-open' } });
+    gm.emit('wall:update', { mapId, segment: { ...LOCKED, type: 'door-open' } });
     await resent;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
-  it('sends a player no map when the DM adds, changes or deletes a light that is off, and the map when one is on', async () => {
+  it('sends a player no map when the GM adds, changes or deletes a light that is off, and the map when one is on', async () => {
     const mapId = await newMap(true);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const dark = { ...OUT, id: randomUUID(), x: 700 };
     const told = heard(player);
-    const added = waitForEvent(dm, 'light:added');
-    dm.emit('light:add', { mapId, light: dark });
+    const added = waitForEvent(gm, 'light:added');
+    gm.emit('light:add', { mapId, light: dark });
     await added;
-    const moved = waitForEvent(dm, 'light:updated');
-    dm.emit('light:update', { mapId, light: { ...OUT, x: 650 } });
+    const moved = waitForEvent(gm, 'light:updated');
+    gm.emit('light:update', { mapId, light: { ...OUT, x: 650 } });
     await moved;
-    const removed = waitForEvent(dm, 'light:removed');
-    dm.emit('light:remove', { mapId, lightId: dark.id });
+    const removed = waitForEvent(gm, 'light:removed');
+    gm.emit('light:remove', { mapId, lightId: dark.id });
     await removed;
     await settled();
     expect(told).toEqual([]);
 
     const resent = waitForEvent(player, 'map.changed');
-    dm.emit('light:remove', { mapId, lightId: LIT.id });
+    gm.emit('light:remove', { mapId, lightId: LIT.id });
     await resent;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   // Each reached the player as an event and a map sent again, though nothing
   // they hold had changed.
-  it('sends a player nothing when the DM sets a light that is on to the values it has', async () => {
+  it('sends a player nothing when the GM sets a light that is on to the values it has', async () => {
     const mapId = await newMap(true);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const told = heard(player);
-    const updated = waitForEvent(dm, 'light:updated');
-    dm.emit('light:update', { mapId, light: { ...LIT } });
+    const updated = waitForEvent(gm, 'light:updated');
+    gm.emit('light:update', { mapId, light: { ...LIT } });
     await updated;
     await settled();
     expect(told).toEqual([]);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('refuses the removal of a wall the map does not have, writing and sending nothing', async () => {
     const mapId = await newMap(true);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const before = (await prisma.map.findUniqueOrThrow({ where: { id: mapId } })).updatedAt;
 
     const told = heard(player);
-    const refused = waitForEvent<{ message: string }>(dm, 'error');
-    dm.emit('wall:remove', { mapId, segmentId: randomUUID() });
+    const refused = waitForEvent<{ message: string }>(gm, 'error');
+    gm.emit('wall:remove', { mapId, segmentId: randomUUID() });
     expect((await refused).message).toBe('Wall segment not found');
     await settled();
     expect(told).toEqual([]);
     expect((await prisma.map.findUniqueOrThrow({ where: { id: mapId } })).updatedAt).toEqual(before);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
@@ -388,17 +388,17 @@ describe('a change a player cannot see, on a lit map', () => {
     const base = `/api/campaigns/${campaignId}/maps/${mapId}`;
 
     const told = heard(player);
-    expect((await dmAgent.patch(`${base}/walls/${LOCKED.id}`).send({ type: 'door-closed' })).status).toBe(200);
-    expect((await dmAgent.patch(`${base}/walls/${LOCKED.id}`).send({ type: 'door-locked' })).status).toBe(200);
+    expect((await gmAgent.patch(`${base}/walls/${LOCKED.id}`).send({ type: 'door-closed' })).status).toBe(200);
+    expect((await gmAgent.patch(`${base}/walls/${LOCKED.id}`).send({ type: 'door-locked' })).status).toBe(200);
     const dark = { ...OUT, id: randomUUID(), x: 700 };
-    expect((await dmAgent.post(`${base}/lights`).send(dark)).status).toBe(201);
-    expect((await dmAgent.patch(`${base}/lights/${OUT.id}`).send({ x: 650 })).status).toBe(200);
-    expect((await dmAgent.delete(`${base}/lights/${dark.id}`)).status).toBe(200);
+    expect((await gmAgent.post(`${base}/lights`).send(dark)).status).toBe(201);
+    expect((await gmAgent.patch(`${base}/lights/${OUT.id}`).send({ x: 650 })).status).toBe(200);
+    expect((await gmAgent.delete(`${base}/lights/${dark.id}`)).status).toBe(200);
     await settled();
     expect(told).toEqual([]);
 
     const resent = waitForEvent(player, 'map.changed');
-    expect((await dmAgent.patch(`${base}/lights/${OUT.id}`).send({ enabled: true })).status).toBe(200);
+    expect((await gmAgent.patch(`${base}/lights/${OUT.id}`).send({ enabled: true })).status).toBe(200);
     await resent;
 
     player.disconnect();
@@ -418,16 +418,16 @@ describe.each([
 ])('a whole list replaced on %s', (_label, lit) => {
   it('sends a player nothing when walls:replace leaves their walls as they were, and the walls when it does not', async () => {
     const mapId = await newMap(lit);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     // The locked door unlocked and locked again: a player has it closed throughout.
     const told = heard(player);
-    const unlocked = waitForEvent<{ segments: Wall[] }>(dm, 'walls:replaced');
-    dm.emit('walls:replace', { mapId, segments: [asClosed, PLAIN] });
+    const unlocked = waitForEvent<{ segments: Wall[] }>(gm, 'walls:replaced');
+    gm.emit('walls:replace', { mapId, segments: [asClosed, PLAIN] });
     expect((await unlocked).segments).toEqual([asClosed, PLAIN]);
-    const locked = waitForEvent<{ segments: Wall[] }>(dm, 'walls:replaced');
-    dm.emit('walls:replace', { mapId, segments: [LOCKED, PLAIN] });
+    const locked = waitForEvent<{ segments: Wall[] }>(gm, 'walls:replaced');
+    gm.emit('walls:replace', { mapId, segments: [LOCKED, PLAIN] });
     expect((await locked).segments).toEqual([LOCKED, PLAIN]);
     await settled();
     expect(told).toEqual([]);
@@ -435,24 +435,24 @@ describe.each([
     const opened = { ...LOCKED, type: 'door-open' };
     const replaced = waitForEvent<{ segments: Wall[] }>(player, 'walls:replaced');
     const resent = lit ? waitForEvent(player, 'map.changed') : Promise.resolve();
-    dm.emit('walls:replace', { mapId, segments: [opened, PLAIN] });
+    gm.emit('walls:replace', { mapId, segments: [opened, PLAIN] });
     expect((await replaced).segments).toEqual([opened, PLAIN]);
     await resent;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('sends a player nothing when lights:replace leaves their lights as they were, Clear All on lights that are off included', async () => {
     const mapId = await newMap(lit);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     // The light that is off moved and another added: a player has only LIT throughout.
     const dark = { ...OUT, id: randomUUID(), x: 700 };
     const told = heard(player);
-    const changed = waitForEvent(dm, 'lights:replaced');
-    dm.emit('lights:replace', { mapId, lights: [LIT, { ...OUT, x: 650 }, dark] });
+    const changed = waitForEvent(gm, 'lights:replaced');
+    gm.emit('lights:replace', { mapId, lights: [LIT, { ...OUT, x: 650 }, dark] });
     await changed;
     await settled();
     expect(told).toEqual([]);
@@ -460,18 +460,18 @@ describe.each([
     // The last light that is on goes, which a player is sent; then Clear All.
     const lastOn = waitForEvent<{ lights: Light[] }>(player, 'lights:replaced');
     const resent = lit ? waitForEvent(player, 'map.changed') : Promise.resolve();
-    dm.emit('lights:replace', { mapId, lights: [OUT, dark] });
+    gm.emit('lights:replace', { mapId, lights: [OUT, dark] });
     expect((await lastOn).lights).toEqual([]);
     await resent;
     await settled();
     const toldAfter = heard(player);
-    const cleared = waitForEvent<{ lights: Light[] }>(dm, 'lights:replaced');
-    dm.emit('lights:replace', { mapId, lights: [] });
+    const cleared = waitForEvent<{ lights: Light[] }>(gm, 'lights:replaced');
+    gm.emit('lights:replace', { mapId, lights: [] });
     expect((await cleared).lights).toEqual([]);
     await settled();
     expect(toldAfter).toEqual([]);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
@@ -481,14 +481,14 @@ describe.each([
     const base = `/api/campaigns/${campaignId}/maps/${mapId}`;
 
     const told = heard(player);
-    expect((await dmAgent.put(`${base}/walls`).send({ segments: [asClosed, PLAIN] })).status).toBe(200);
-    expect((await dmAgent.put(`${base}/lights`).send({ lights: [LIT, { ...OUT, x: 650 }] })).status).toBe(200);
+    expect((await gmAgent.put(`${base}/walls`).send({ segments: [asClosed, PLAIN] })).status).toBe(200);
+    expect((await gmAgent.put(`${base}/lights`).send({ lights: [LIT, { ...OUT, x: 650 }] })).status).toBe(200);
     await settled();
     expect(told).toEqual([]);
 
     const replaced = waitForEvent<{ lights: Light[] }>(player, 'lights:replaced');
     const resent = lit ? waitForEvent(player, 'map.changed') : Promise.resolve();
-    expect((await dmAgent.put(`${base}/lights`).send({ lights: [] })).status).toBe(200);
+    expect((await gmAgent.put(`${base}/lights`).send({ lights: [] })).status).toBe(200);
     expect((await replaced).lights).toEqual([]);
     await resent;
 

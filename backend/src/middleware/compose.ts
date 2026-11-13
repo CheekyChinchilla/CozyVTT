@@ -1,6 +1,6 @@
 import { RequestHandler } from 'express';
 import { requireAuth, requireAdmin } from './auth';
-import { loadCampaignMembership, requireDM, requireCampaignMember } from './rbac';
+import { loadCampaignMembership, requireGM, requireCampaignMember } from './rbac';
 
 /**
  * Middleware Composition Helpers
@@ -33,10 +33,10 @@ export const adminOnly: RouteGuard[] = [requireAuth, requireAdmin];
 export const campaignMember: RouteGuard[] = [requireAuth, loadCampaignMembership, requireCampaignMember];
 
 /**
- * Campaign DM route
- * Requires user to be logged in AND be the DM of the campaign
+ * Campaign GM route
+ * Requires user to be logged in AND be the GM of the campaign
  */
-export const campaignDM: RouteGuard[] = [requireAuth, loadCampaignMembership, requireDM];
+export const campaignGM: RouteGuard[] = [requireAuth, loadCampaignMembership, requireGM];
 
 /**
  * Helper to compose multiple middleware arrays

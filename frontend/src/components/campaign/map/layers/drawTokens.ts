@@ -48,9 +48,9 @@ export interface TokenDrawState {
   hoverTokenId: string | null;
   /** Player fog cells — tokens centered in unrevealed cells are hidden. */
   revealedCells: Set<number> | null;
-  isDM: boolean;
-  dmShowSpiritTokens: boolean;
-  dmViewBothPlanes: boolean;
+  isGM: boolean;
+  gmShowSpiritTokens: boolean;
+  gmViewBothPlanes: boolean;
   spiritAccentColor: string;
   characterHpCache: Record<string, CharacterHpInfo>;
   /** True when the viewing user owns/controls this token (fog exemption). */
@@ -180,9 +180,9 @@ function drawSelectionRing(ctx: CanvasRenderingContext2D, displayMode: string, z
 /**
  * The cached art for a token, if the token has an address for it.
  *
- * The cache is keyed by token id, and the DM's holds the real art of every
+ * The cache is keyed by token id, and the GM's holds the real art of every
  * token. A masked token arrives with no address under the same id, so the
- * address decides, not the cache; otherwise the DM's preview, the hover card
+ * address decides, not the cache; otherwise the GM's preview, the hover card
  * and the drag ghost would show the table a picture the player is not sent.
  */
 export function cachedTokenImage(
@@ -203,7 +203,7 @@ function turnAboutCentre(ctx: CanvasRenderingContext2D, rotation: number | undef
 
 export function placeholderColor(token: Token): string {
   // An obscured token reaches a player with no kind and no disposition, so it
-  // lands on the neutral stone below by itself; the DM, who holds the real
+  // lands on the neutral stone below by itself; the GM, who holds the real
   // fields, keeps seeing its own colour.
   const effectiveTypeForColor = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
   return hueColour(TOKEN_HUES[tokenKind(effectiveTypeForColor, token.disposition)]);
@@ -215,15 +215,15 @@ export function drawTokens(
   viewport: Viewport
 ): void {
   const { zoom, gridSize, mapWidth, mapHeight } = viewport;
-  const { isDM } = state;
+  const { isGM } = state;
 
   // Who can see what — shared with hit testing, so the lower-left panel can no
   // longer name a token this viewer cannot see.
   const view = {
-    isDM,
+    isGM,
     revealedCells: state.revealedCells,
     isOwnToken: state.isOwnToken,
-    dmShowSpiritTokens: state.dmShowSpiritTokens,
+    gmShowSpiritTokens: state.gmShowSpiritTokens,
     mapWidth,
     mapHeight,
   };
@@ -234,7 +234,7 @@ export function drawTokens(
     if (!isTokenVisibleTo(token, view)) continue;
 
     // The cache is keyed by id, so it can hold art for a token this view
-    // receives without an address: the DM's preview of an obscured token. The
+    // receives without an address: the GM's preview of an obscured token. The
     // address decides whether art is drawn, not the cache.
     const tokenImg = cachedTokenImage(token, state.tokenImages);
 
@@ -271,16 +271,16 @@ export function drawTokens(
     const centerY = tokenY + tokenHeight / 2;
     const radius = Math.min(tokenWidth, tokenHeight) / 2;
 
-    // Hidden tokens shown to DM at 50% opacity
+    // Hidden tokens shown to GM at 50% opacity
     const isHiddenFromPlayers = !token.visible;
 
     ctx.save();
-    if (isHiddenFromPlayers && isDM) {
+    if (isHiddenFromPlayers && isGM) {
       ctx.globalAlpha = 0.5;
     }
-    // Spirit tokens seen by DM get reduced alpha so they don't overwhelm material tokens
-    if (isDM && token.layer === TokenLayer.SPIRIT) {
-      ctx.globalAlpha = state.dmViewBothPlanes ? 0.80 : 1.0;
+    // Spirit tokens seen by GM get reduced alpha so they don't overwhelm material tokens
+    if (isGM && token.layer === TokenLayer.SPIRIT) {
+      ctx.globalAlpha = state.gmViewBothPlanes ? 0.80 : 1.0;
     }
     // A token at zero hit points is drawn faded. It still marks where the body
     // fell, but reads as scenery rather than a combatant — which matches what
@@ -387,8 +387,8 @@ export function drawTokens(
       drawSelectionRing(ctx, displayMode, zoom, geom);
     }
 
-    // Spirit-layer ring for DM (dashed accent-colored outline)
-    if (isDM && token.layer === TokenLayer.SPIRIT) {
+    // Spirit-layer ring for GM (dashed accent-colored outline)
+    if (isGM && token.layer === TokenLayer.SPIRIT) {
       ctx.strokeStyle = state.spiritAccentColor;
       ctx.lineWidth = 3 / zoom;
       ctx.setLineDash([5 / zoom, 3 / zoom]);
@@ -439,10 +439,10 @@ export function drawTokens(
       }
     }
 
-    // HP bar — NPC tokens use token.hp (DM-controlled visibility); player
+    // HP bar — NPC tokens use token.hp (GM-controlled visibility); player
     // tokens follow the character sheet. Shared with the hover panel so the
     // two cannot disagree about what a viewer may see.
-    const hpSource = visibleTokenHp(token, state.characterHpCache, isDM);
+    const hpSource = visibleTokenHp(token, state.characterHpCache, isGM);
     if (hpSource) {
       const pct = Math.max(0, Math.min(1, hpSource.current / hpSource.max));
       const barW = displayMode === 'full-art' ? tokenWidth : radius * 2;
@@ -487,8 +487,8 @@ export function drawTokens(
       }
     }
 
-    // Hidden token indicator (DM-only small red dot)
-    if (isHiddenFromPlayers && isDM) {
+    // Hidden token indicator (GM-only small red dot)
+    if (isHiddenFromPlayers && isGM) {
       const dotRadius = Math.max(4, 4 / zoom);
       ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
       ctx.beginPath();
@@ -500,9 +500,9 @@ export function drawTokens(
       ctx.fill();
     }
 
-    // Obscured indicator (DM-only small "?" badge). The DM sees the token as
+    // Obscured indicator (GM-only small "?" badge). The GM sees the token as
     // it is, so this badge is the only sign that the table sees a shape.
-    if (token.obscured && isDM) {
+    if (token.obscured && isGM) {
       const badgeRadius = Math.max(5, 5 / zoom);
       const bx = displayMode === 'full-art' ? tokenX + badgeRadius * 2 : centerX - radius * 0.6;
       const by = displayMode === 'full-art' ? tokenY + badgeRadius * 2 : centerY - radius * 0.6;

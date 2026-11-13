@@ -1,10 +1,10 @@
 /**
- * A change to the map on screen reaches the table without the DM's page
+ * A change to the map on screen reaches the table without the GM's page
  * having to send it.
  *
  * Editing the current map's picture, size, grid, scale or name reached
  * players only as far as its lighting and fog flags, and setting a map
- * current through the REST route moved nobody: the DM's page sent
+ * current through the REST route moved nobody: the GM's page sent
  * `map.change` itself after each, so a script or a second tab left the table
  * on what it had. The routes now send each member the map as they may see
  * it, for the map the campaign is showing and no other.
@@ -25,25 +25,25 @@ jest.setTimeout(30000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let shownId: string;
 let preparedId: string;
 let rest: ReturnType<typeof request.agent>;
-let dm: ClientSocket;
+let gm: ClientSocket;
 let player: ClientSocket;
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `merp-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gmUser = await createTestUser({ email: `merp-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const playerUser = await createTestUser({ email: `merp-player-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Map edits reach players ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Map edits reach players ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -55,17 +55,17 @@ beforeAll(async () => {
   preparedId = (await prisma.map.create({ data: { ...base, name: 'Prepared' } })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: shownId } });
   rest = request.agent(app);
-  expect((await rest.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  expect((await rest.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
 beforeEach(async () => {
-  dm = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  gm = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
   player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
 });
 
 afterEach(() => {
-  dm.disconnect();
+  gm.disconnect();
   player.disconnect();
 });
 
@@ -73,7 +73,7 @@ afterAll(async () => {
   await server.close();
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
@@ -109,10 +109,10 @@ describe('the fields whose change sends the map on screen again', () => {
 describe('an edit to a map being prepared', () => {
   it('sends nobody the map, so no page is moved onto it', async () => {
     const playerQuiet = expectNoEvent(player, 'map.changed', 600);
-    const dmQuiet = expectNoEvent(dm, 'map.changed', 600);
+    const gmQuiet = expectNoEvent(gm, 'map.changed', 600);
     expect((await put(preparedId, { name: 'Prepared Again', gridSize: 40 })).status).toBe(200);
     await playerQuiet;
-    await dmQuiet;
+    await gmQuiet;
   });
 });
 
@@ -120,10 +120,10 @@ describe('setting a map current over REST', () => {
   it('moves every page onto it', async () => {
     try {
       const playerMoved = waitForEvent<{ mapId: string }>(player, 'map.changed');
-      const dmMoved = waitForEvent<{ mapId: string }>(dm, 'map.changed');
+      const gmMoved = waitForEvent<{ mapId: string }>(gm, 'map.changed');
       expect((await rest.put(`/api/campaigns/${campaignId}/maps/${preparedId}/set-current`)).status).toBe(200);
       expect((await playerMoved).mapId).toBe(preparedId);
-      expect((await dmMoved).mapId).toBe(preparedId);
+      expect((await gmMoved).mapId).toBe(preparedId);
     } finally {
       await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: shownId } });
     }

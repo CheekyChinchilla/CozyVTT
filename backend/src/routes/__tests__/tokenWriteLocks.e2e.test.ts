@@ -31,13 +31,13 @@ jest.setTimeout(30000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
 let characterId: string;
 let assetId: string;
-let dm: ClientSocket;
+let gm: ClientSocket;
 let player: ReturnType<typeof request.agent>;
 
 const GHOST = randomUUID();
@@ -49,19 +49,19 @@ const token = (id: string, extra: Record<string, unknown>) => ({
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `locks-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gmUser = await createTestUser({ email: `locks-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const playerUser = await createTestUser({ email: `locks-player-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Locks ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Locks ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   characterId = (await prisma.character.create({
-    data: { userId: playerId, campaignId, name: 'Hero', gameSystem: 'DND_5E', data: {} },
+    data: { userId: playerId, campaignId, name: 'Hero', gameSystem: 'FIFTH_EDITION', data: {} },
   })).id;
   assetId = (await prisma.asset.create({
     data: {
@@ -93,10 +93,10 @@ beforeEach(async () => {
   });
   await prisma.character.update({ where: { id: characterId }, data: { tokenImageUrl: null } });
   clearState(campaignId);
-  dm = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  gm = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
 });
 
-afterEach(() => dm.disconnect());
+afterEach(() => gm.disconnect());
 
 afterAll(async () => {
   await server.close();
@@ -106,7 +106,7 @@ afterAll(async () => {
   await prisma.character.deleteMany({ where: { id: characterId } });
   await prisma.asset.deleteMany({ where: { id: assetId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
@@ -139,7 +139,7 @@ const find = (tokens: ReturnType<typeof readTokens>, id: string) => tokens.find(
 describe('a write to the tokens that lands while the map is locked', () => {
   it('revealing a spirit token keeps the other write and its own', async () => {
     const { tokens, added } = await raceAgainstLockedAdd(() => {
-      dm.emit('spirit_layer.token.toggle', { mapId, tokenId: GHOST, visible: true });
+      gm.emit('spirit_layer.token.toggle', { mapId, tokenId: GHOST, visible: true });
     });
     expect(find(tokens, added)).toBeDefined();
     expect(find(tokens, GHOST)?.visible).toBe(true);
@@ -147,7 +147,7 @@ describe('a write to the tokens that lands while the map is locked', () => {
 
   it('setting initiative keeps the other write and its own', async () => {
     const { tokens, added } = await raceAgainstLockedAdd(() => {
-      dm.emit('initiative.set', { tokenId: HERO, mapId, value: 17 });
+      gm.emit('initiative.set', { tokenId: HERO, mapId, value: 17 });
     });
     expect(find(tokens, added)).toBeDefined();
     expect(find(tokens, HERO)?.initiative).toBe(17);
@@ -155,7 +155,7 @@ describe('a write to the tokens that lands while the map is locked', () => {
 
   it('rolling initiative keeps the other write and its own', async () => {
     const { tokens, added } = await raceAgainstLockedAdd(() => {
-      dm.emit('initiative.roll', { tokenId: HERO, mapId });
+      gm.emit('initiative.roll', { tokenId: HERO, mapId });
     });
     expect(find(tokens, added)).toBeDefined();
     // The roll itself comes from the character's sheet; what matters is

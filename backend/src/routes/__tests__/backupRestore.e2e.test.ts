@@ -16,8 +16,17 @@ jest.mock('child_process', () => ({
   ...jest.requireActual('child_process'),
   execFile: jest.fn(),
 }));
+// The conversion of the stored Horror d100 sheets runs on the shared test
+// database here, where other files keep old sheets on purpose; it is checked
+// against a restored database of its own in
+// legacy/__tests__/restoreConvertsHorrorD100.e2e.test.ts.
+jest.mock('../../legacy/storedHorrorD100Sheets', () => ({
+  ...jest.requireActual('../../legacy/storedHorrorD100Sheets'),
+  convertStoredHorrorD100Sheets: jest.fn(),
+}));
 
 import { execFile } from 'child_process';
+import { convertStoredHorrorD100Sheets } from '../../legacy/storedHorrorD100Sheets';
 import crypto from 'crypto';
 import fsSync from 'fs';
 import fs, { type FileHandle } from 'fs/promises';
@@ -35,7 +44,6 @@ process.env.BACKUP_DIR = BACKUP_DIR;
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { PassThrough } from 'stream';
-import unzipper from 'unzipper';
 import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
@@ -45,7 +53,7 @@ import { io as ioc } from 'socket.io-client';
 import * as archive from '../../utils/archive';
 import { removeLeftoverRestoreUploads } from '../../services/restoreState';
 import { expectFileMode, expectModeBits } from '../../__tests__/helpers/fileModes';
-import { zipBuffer } from '../../__tests__/helpers/zipFixtures';
+import { zipBuffer, renameEntry, readZip } from '../../__tests__/helpers/zipFixtures';
 import {
   clearState as clearCombatState,
   getState as getCombatState,
@@ -54,6 +62,7 @@ import {
 import logger from '../../utils/logger';
 import * as setupGate from '../../middleware/setup';
 import { LEFT_OUT_OF_BACKUP, NAME_LEFT_OUT_OF_BACKUP } from '../admin';
+import { getFilePath } from '../../utils/fileUtils';
 
 /**
  * The migration run: the project's own Prisma, from the folder the backend
@@ -64,6 +73,7 @@ const MIGRATE = 'node_modules/.bin/prisma';
 
 const app = createTestApp();
 const execFileMock = execFile as unknown as jest.Mock;
+const convertSheets = jest.mocked(convertStoredHorrorD100Sheets);
 const errorSpy = jest.spyOn(logger, 'error');
 
 interface ToolCall {
@@ -257,6 +267,8 @@ afterAll(async () => {
 beforeEach(() => {
   execFileMock.mockReset();
   errorSpy.mockClear();
+  convertSheets.mockReset();
+  convertSheets.mockResolvedValue({ converted: 0, kept: [], failed: [] });
 });
 
 const restore = (agent: ReturnType<typeof request.agent>, zip: Buffer) =>
@@ -302,7 +314,7 @@ describe('POST /api/admin/backups/restore', () => {
     const list = await admin.get('/api/admin/backups');
     expect(list.body.backups.map((b: { filename: string }) => b.filename)).toContain(named);
     const file = path.join(BACKUP_DIR, named!);
-    const entries = (await unzipper.Open.file(file)).files.map((f) => f.path);
+    const entries = (await readZip(file)).map((f) => f.path);
     expect(entries).toEqual(['database.sql']);
 
     // Readable by the backend's user alone: it holds every credential on the instance.
@@ -366,7 +378,10 @@ describe('POST /api/admin/backups/restore', () => {
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump']);
   });
 
-  it('answers the restore, instead of exiting the process, when the safety copy fails while being written', async () => {
+  // Linux only: the backup's own file is told apart by the name its handle
+  // has in /proc/self/fd, since the restore unpacks the upload through the
+  // same call.
+  (process.platform === 'linux' ? it : it.skip)('answers the restore, instead of exiting the process, when the safety copy fails while being written', async () => {
     stubTools();
     const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
     // The zip's output stream fails once writing starts, as a full disk does.
@@ -375,7 +390,9 @@ describe('POST /api/admin/backups/restore', () => {
     const probe = await fs.open(path.join(SCRATCH, 'stream-probe'), 'w');
     const proto = Object.getPrototypeOf(probe) as { createWriteStream(this: FileHandle): NodeJS.WritableStream };
     await probe.close();
+    const realCreateWriteStream = proto.createWriteStream;
     const failing = jest.spyOn(proto, 'createWriteStream').mockImplementation(function (this: FileHandle) {
+      if (!fsSync.readlinkSync(`/proc/self/fd/${this.fd}`).startsWith(fsSync.realpathSync(BACKUP_DIR) + path.sep)) return realCreateWriteStream.call(this);
       const stream = new PassThrough();
       // A real stream closes the file when it is destroyed; this stand-in
       // does the same, or the backup's handle is left open.
@@ -570,6 +587,76 @@ describe('POST /api/admin/backups/restore', () => {
     });
     expect(logged).toHaveLength(1);
     expect(logged[0]).toMatchObject({ level: 'WARNING', context: expect.objectContaining({ migrationsFailed: true }) });
+  });
+
+  it('converts the stored Horror d100 sheets once the migrations have run, before it answers', async () => {
+    const order: string[] = [];
+    const calls = stubTools();
+    const stub = execFileMock.getMockImplementation();
+    execFileMock.mockImplementation((cmd: string, ...rest: unknown[]) => {
+      order.push(cmd);
+      return stub?.(cmd, ...rest);
+    });
+    convertSheets.mockImplementation(async () => {
+      order.push('convert');
+      return { converted: 2, kept: [], failed: [] };
+    });
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+
+    const res = await restore(admin, zip);
+
+    expect(res.status).toBe(200);
+    expect(order).toEqual(['pg_dump', 'psql', MIGRATE, 'convert']);
+    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
+  });
+
+  it('answers Restore Incomplete, as a failed migration run does, when the conversion of the sheets fails, and logs the restore', async () => {
+    stubTools();
+    convertSheets.mockRejectedValue(new Error('could not lock'));
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    const startedAt = new Date();
+
+    const res = await restore(admin, zip);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Restore Incomplete');
+    expect(res.body.message).toMatch(/Horror d100/);
+    expect(res.body.message).toMatch(/restart the backend/i);
+    expect(res.body.message).toMatch(/saved as backup-/);
+    const logged = await prisma.systemLog.findMany({
+      where: { userId: adminId, message: 'Restored instance from backup', createdAt: { gte: startedAt } },
+    });
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({ level: 'WARNING', context: expect.objectContaining({ sheetConversionFailed: true }) });
+  });
+
+  it('answers Restore Incomplete with the count when some sheets could not be converted, logs it, and lets requests in again', async () => {
+    stubTools();
+    convertSheets.mockResolvedValue({ converted: 3, kept: [], failed: [{ id: 'a', error: 'x' }, { id: 'b', error: 'y' }] });
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    const startedAt = new Date();
+
+    const res = await restore(admin, zip);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Restore Incomplete');
+    expect(res.body.message).toMatch(/^The backup was restored and brought up to this version, but 2 of its Horror d100 character sheets could not be converted/);
+    expect(res.body.message).toMatch(/server log/);
+    expect(res.body.message).toMatch(/saved as backup-/);
+    const logged = await prisma.systemLog.findMany({
+      where: { userId: adminId, message: 'Restored instance from backup', createdAt: { gte: startedAt } },
+    });
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({ level: 'WARNING', context: expect.objectContaining({ sheetsNotConverted: 2 }) });
+    // The restore has ended: requests are answered again, not 503.
+    expect((await admin.get('/api/admin/backups')).status).toBe(200);
+  });
+
+  it('converts no sheet when the migration run fails', async () => {
+    stubTools({ cmd: MIGRATE, stderr: 'Error: P1001' });
+    const res = await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT }));
+    expect(res.status).toBe(500);
+    expect(convertSheets).not.toHaveBeenCalled();
   });
 
   it('ends every live connection when the database is replaced', async () => {
@@ -786,6 +873,65 @@ describe('a refused restore', () => {
     }
   });
 
+  it('says a backup with an entry that leaves its folder is not taken, with 400', async () => {
+    const calls = stubTools();
+    const file = path.join(SCRATCH, 'slip.zip');
+    await fs.writeFile(file, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT, 'uploads/xx/evil.png': 'escaped' }));
+    renameEntry(file, 'uploads/xx/evil.png', 'uploads/../evil.png');
+    try {
+      const res = await restore(admin, await fs.readFile(file));
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Invalid Backup');
+      expect(res.body.message).toBe('The archive has an unsafe file path, which a backup never has: uploads/../evil.png Nothing was changed.');
+      expect(calls).toEqual([]);
+      expect(fsSync.existsSync(path.join(UPLOAD_DIR, '..', 'evil.png'))).toBe(false);
+    } finally {
+      await fs.rm(file, { force: true });
+    }
+  });
+
+  // An entry the restore could not write ended the backend.
+  it.each([
+    ['a file where an earlier entry made a folder', { 'uploads/x/y': 'a', 'uploads/x': 'b' }, 'uploads/x'],
+    ['a folder where an earlier entry made a file', { 'uploads/x': 'a', 'uploads/x/y': 'b' }, 'uploads/x/y'],
+    ['a name longer than a folder can hold', { [`uploads/${'b'.repeat(300)}`]: 'a' }, `uploads/${'b'.repeat(300)}`],
+    ['a folder deeper inside an earlier file', { 'uploads/x': 'a', 'uploads/x/y/z': 'b' }, 'uploads/x/y/z'],
+    ['a folder name longer than a folder can hold', { [`uploads/${'b'.repeat(300)}/f`]: 'a' }, `uploads/${'b'.repeat(300)}/f`],
+  ])('says a backup with %s is not taken, with 400, and changes nothing', async (_label, files, refusedName) => {
+    const calls = stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    await writeFiles(UPLOAD_DIR, { 'maps/global/cellar.png': 'a map' });
+    try {
+      const res = await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT, ...files }));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
+        error: 'Invalid Backup',
+        message: `The archive is damaged, or holds a file name that cannot be written: ${refusedName} Nothing was changed.`,
+      });
+      expect(calls).toEqual([]);
+      expect(await filesIn(UPLOAD_DIR)).toEqual({ 'maps/global/cellar.png': Buffer.from('a map') });
+    } finally {
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
+  // The file system takes no name with a NUL in it, and the restore answered 500.
+  it('says a backup with a NUL character in a name is not taken, with 400', async () => {
+    const calls = stubTools();
+    const res = await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT, 'uploads/a\0b.png': 'a' }));
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: 'Invalid Backup',
+      message: 'The archive has an unsafe file path, which a backup never has: uploads/a\0b.png Nothing was changed.',
+    });
+    expect(calls).toEqual([]);
+  });
+
   it('can be followed by another restore', async () => {
     stubTools();
     expect((await restore(admin, Buffer.from('not a zip'))).status).toBe(400);
@@ -982,10 +1128,10 @@ describe('POST /api/admin/backups', () => {
       expect(res.status).toBe(201);
       made = path.join(BACKUP_DIR, res.body.filename);
 
-      const zip = await unzipper.Open.file(made);
+      const zip = await readZip(made);
       const held: Record<string, string> = {};
-      for (const entry of zip.files) {
-        if (entry.type === 'File') held[entry.path] = (await entry.buffer()).toString('utf8');
+      for (const entry of zip) {
+        if (entry.type === 'File') held[entry.path] = entry.data.toString('utf8');
       }
       expect(held).toEqual({
         'database.sql': SAFETY_DUMP,
@@ -996,7 +1142,7 @@ describe('POST /api/admin/backups', () => {
       });
       // The database compressed; the uploads stored as they are, since
       // pictures and sound are compressed already.
-      expect(zip.files.map((f) => [f.path, f.compressionMethod])).toEqual([
+      expect(zip.map((f) => [f.path, f.compressionMethod])).toEqual([
         ['database.sql', 8],
         ['uploads/documents/global/.notes.md', 0],
         ['uploads/maps/global/cellar.png', 0],
@@ -1004,7 +1150,7 @@ describe('POST /api/admin/backups', () => {
         ['uploads/tokens/campaigns/c1/goblin.png', 0],
       ]);
       // Not even the folder itself, which would restore as an empty one.
-      const backupsEntries = zip.files.map((f) => f.path).filter((p) => /^uploads\/backups(\/|$)/.test(p));
+      const backupsEntries = zip.map((f) => f.path).filter((p) => /^uploads\/backups(\/|$)/.test(p));
       expect(backupsEntries).toEqual([]);
     } finally {
       if (made) await fs.rm(made, { force: true });
@@ -1049,6 +1195,35 @@ describe('POST /api/admin/backups', () => {
     }
   });
 
+  // A backup written by 1.6.0, kept as it was made: pictures stored, the
+  // dump compressed, a name outside ASCII, an empty file.
+  it('restores a backup made by 1.6.0', async () => {
+    const calls = stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    const made: string[] = [];
+    try {
+      const restored = await restore(admin, await fs.readFile(path.resolve(__dirname, '../../__tests__/fixtures/instance-backup-1.6.0.zip')));
+
+      expect(restored.status).toBe(200);
+      made.push(restored.body.safetyBackup);
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
+      expect(calls[1].sqlLoaded).toContain('CREATE TABLE public."Note"');
+      expect(calls[1].sqlLoaded).toContain('a1\tSET transaction_timeout = 0;\n');
+      expect(await filesIn(UPLOAD_DIR)).toEqual({
+        'maps/global/cellar.png': Buffer.from('a map, stored as the backup stores pictures '.repeat(20)),
+        'maps/global/thumb_cellar.png': Buffer.from('its thumbnail'),
+        'tokens/campaigns/c1/Göblin König.png': Buffer.from('a name with a space and letters outside ASCII'),
+        'documents/global/.notes.md': Buffer.from('a name starting with a dot'),
+        'audio/global/silence.ogg': Buffer.alloc(0),
+      });
+    } finally {
+      for (const name of made) await fs.rm(path.join(BACKUP_DIR, name), { force: true });
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
   // A link in the uploads folder can point anywhere on the server. A backup
   // holds what is in the folder, never what a link reaches.
   it('never follows a symbolic link out of the uploads folder', async () => {
@@ -1067,8 +1242,7 @@ describe('POST /api/admin/backups', () => {
       expect(res.status).toBe(201);
       made = path.join(BACKUP_DIR, res.body.filename);
 
-      const zip = await unzipper.Open.file(made);
-      const held = await Promise.all(zip.files.map(async (f) => ({ path: f.path, body: (await f.buffer()).toString('utf8') })));
+      const held = (await readZip(made)).map((f) => ({ path: f.path, body: f.data.toString('utf8') }));
       expect(held.filter((f) => secrets.includes(f.body))).toEqual([]);
       expect(held.filter((f) => f.path.startsWith('uploads/linked/'))).toEqual([]);
       expect(held).toContainEqual({ path: 'uploads/maps/global/cellar.png', body: 'a map' });
@@ -1118,6 +1292,37 @@ describe('POST /api/admin/backups', () => {
     }
   });
 
+  // A restore refuses a name longer than an archive may hold.
+  it('leaves out a folder nested so deep that its name is longer than a restore takes', async () => {
+    stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    const deep = Array.from({ length: 5 }, (_, i) => `${i}${'d'.repeat(249)}`);
+    await writeFiles(UPLOAD_DIR, { 'maps/global/cellar.png': 'a map', [`${deep.join('/')}/far.png`]: 'copied in by hand' });
+    const warned = jest.spyOn(logger, 'warn');
+    try {
+      const res = await admin.post('/api/admin/backups');
+      expect(res.status).toBe(201);
+      const names = (await readZip(path.join(BACKUP_DIR, res.body.filename))).map((e) => e.path);
+
+      expect(names).toEqual(['database.sql', 'uploads/maps/global/cellar.png']);
+      expect(warned).toHaveBeenCalledWith(NAME_LEFT_OUT_OF_BACKUP, { path: deep.join('/') });
+      await fs.rm(path.join(BACKUP_DIR, res.body.filename), { force: true });
+    } finally {
+      warned.mockRestore();
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
+  // Each part of a stored file's name is one the file system holds to 255
+  // bytes, in folders of CozyVTT's own, so the longest has room to spare.
+  it('gives every file CozyVTT stores a name a restore takes', () => {
+    const folder = path.relative(UPLOAD_DIR, getFilePath('DOCUMENT', 'CAMPAIGN', crypto.randomUUID()));
+    const longest = `uploads/${folder.split(path.sep).join('/')}/${'f'.repeat(255)}`;
+    expect(Buffer.byteLength(longest)).toBeLessThanOrEqual(archive.MAX_ARCHIVE_NAME_BYTES / 3);
+    expect(archive.isSafeArchivePath(longest)).toBe(true);
+  });
+
   // Root reads a file whatever its mode, so the refusal below cannot be set
   // up for it.
   const asAnAccount = process.getuid?.() === 0 ? it.skip : it;
@@ -1142,3 +1347,4 @@ describe('POST /api/admin/backups', () => {
     }
   });
 });
+

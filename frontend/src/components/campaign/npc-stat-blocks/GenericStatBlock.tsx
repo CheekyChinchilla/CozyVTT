@@ -1,23 +1,22 @@
 /**
  * GenericStatBlock
- * System-agnostic stat block renderer used for Flexible/Shadowrun/unknown game systems.
+ * System-agnostic stat block renderer used for a campaign with no game system,
+ * or one CozyVTT no longer supports.
  * Shows all available data in a clean, neutral layout.
  */
 
 import type { NpcStatBlock } from '@/types';
-import { abilityModifier, formatModifier } from '@/utils/rules/dnd5e';
+import { abilityModifier, formatModifier } from '@/utils/rules/fifthEdition';
 import { formatSaveList, formatSkillList } from './statBlockProficiency';
 
 interface Props {
   statBlock: NpcStatBlock;
   tokenName: string;
-  /** False in a system with no rating (Shadowrun 6e), where one kept from before stays stored, unshown. */
-  showRating?: boolean;
 }
 
 const abilityMod = (score: number) => formatModifier(abilityModifier(score));
 
-export default function GenericStatBlock({ statBlock, tokenName, showRating = true }: Props) {
+export default function GenericStatBlock({ statBlock, tokenName }: Props) {
   return (
     <div className="space-y-2 text-xs text-ink">
       {/* Header */}
@@ -39,7 +38,7 @@ export default function GenericStatBlock({ statBlock, tokenName, showRating = tr
           </div>
         )}
         <div><span className="font-semibold text-brand-ink">Speed</span> {statBlock.speed}</div>
-        {showRating && statBlock.challengeRating && (
+        {statBlock.challengeRating && (
           <div>
             <span className="font-semibold text-brand-ink">CR</span> {statBlock.challengeRating}
             {statBlock.xp != null && ` (${statBlock.xp.toLocaleString()} XP)`}

@@ -53,8 +53,10 @@ If you become a collaborator, here's what the codebase expects:
 - **Tests** — new features should include tests; bug fixes should include a regression test that fails before the fix. A new HTTP route fails `backend/src/routes/__tests__/routeInventory.test.ts` until it is listed there, with the file of a test that sends a request to it
 - **No new linter warnings** — `npm run lint` must pass cleanly in **both** `backend/` and `frontend/`; both run with `--max-warnings 0`
 - **Run every gate, not a subset** — typecheck, lint, both test suites, the frontend build, and the two documentation checks with their own tests. The full list is in [DEVELOPMENT.md](DEVELOPMENT.md#everything-before-you-call-something-done). CI runs the same commands on every push and pull request into `dev` or `main`, and also checks the advisories in what an instance runs and builds the production images, starting them for the browser smoke tests. A pull request into `main` cannot merge until all five CI jobs pass; a push to `dev` is reported on, not blocked
-- **Documentation is part of the change** — if you alter a route, an event, a sheet field or anything a user sees, update the affected document in the same commit
-- **A dependency comes with its licence entry** — adding, removing or moving a package to a new major version updates `THIRD_PARTY_NOTICES.txt` (every package in a project's `dependencies`, and the build tools whose own code the frontend build copies into the app, Tailwind CSS, Vite and Rolldown, by its major version line, with the licence its lockfile records) and, for a main library, `THIRD_PARTY_LICENSES.md`, in the same commit. `backend/src/__tests__/thirdPartyLicences.test.ts` fails until they match the lockfiles. A package that runs a script when it installs also needs its `allowScripts` entry ([DEVELOPMENT.md](DEVELOPMENT.md#1-install-dependencies)): npm refuses to install it without one, and `dependencySources.test.ts` checks the list against the lockfile
+- **A game system goes by its CozyVTT name** — 5E (SRD 5.1), Fantasy d20 (ORC) and Horror d100 in code, comments, tests, docs, the changelog and commit messages. No game, publisher or setting is named outside the licence attribution lines. An upgrade note or an API note may say once, in plain words, where a thing on a sheet before 1.7.0 went ("APP is now CHA"), so a player or a script finds it. `scripts/tests/test_system_names.py` fails on a line or a path that names one
+- **A new game system starts with its game content**: rules published under an open licence, a CozyVTT name, our own wording, its notice shown and its names added to the names check. The nine conditions are in the [game systems guide](GAME_SYSTEMS.md#game-content-sources); settle them before writing code
+- **Documentation is part of the change** — if you alter a route, an event, a sheet field or anything a user sees, update the affected document in the same commit. Renaming a heading means updating every link to it; `scripts/tests/test_doc_anchors.py` fails on a link whose heading is gone
+- **A dependency comes with its licence entry** — adding, removing or moving a package to a new major version updates `THIRD_PARTY_NOTICES.txt` (every package in a project's `dependencies`, and the build tools whose own code the frontend build copies into the app, Tailwind CSS, Vite and Rolldown, by its major version line, with the licence its lockfile records) and, for a main library, `THIRD_PARTY_CREDITS.md`, in the same commit. `backend/src/__tests__/thirdPartyLicences.test.ts` fails until they match the lockfiles. A package that runs a script when it installs also needs its `allowScripts` entry ([DEVELOPMENT.md](DEVELOPMENT.md#1-install-dependencies)): npm refuses to install it without one, and `dependencySources.test.ts` checks the list against the lockfile
 
 ### Security
 
@@ -82,7 +84,7 @@ breaking one fails the build:
   dark. The tokens already follow the theme.
 
 Two areas are deliberately exempt from the first rule and listed in that test: the dark tool panels
-that float over the map, the DM's, the drawing tools and the Mapmaker's, and each character sheet's
+that float over the map, the GM's, the drawing tools and the Mapmaker's, and each character sheet's
 header colour presets (`colorPresets.ts`), which are the player's choice and not the theme's. If you
 add UI there, check its contrast by hand — exempt from theming is not exempt from being readable.
 
@@ -103,3 +105,5 @@ Adding a new tabletop game system is one of the most valuable contributions. Fol
 ## A Note on the AGPLv3 License
 
 By contributing to this project, you agree that your contributions will be licensed under the **GNU Affero General Public License v3.0**. This ensures that CozyVTT — and any improvements made to it — remains open and accessible to the community forever.
+
+A contribution to game content, such as a sheet or its rules, is also offered under the licence of the content it adds to: CC BY 4.0 for the SRD 5.1's, and the ORC License for rules released under it. [GAME_CONTENT_NOTICES.md](../GAME_CONTENT_NOTICES.md) says which content is under which licence.

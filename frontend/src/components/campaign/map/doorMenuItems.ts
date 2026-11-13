@@ -1,6 +1,6 @@
 // ============================================
 // The door menu as data: what a right-click or a long-press on a door offers
-// a viewer, for a door the map offers them (map/doorAccess.ts). The DM opens,
+// a viewer, for a door the map offers them (map/doorAccess.ts). The GM opens,
 // closes, locks and unlocks; anyone else opens and closes, and reads that a
 // locked door is locked.
 //
@@ -21,7 +21,7 @@ export interface DoorMenuContext {
 }
 
 export function doorMenuItems(door: WallSegment, ctx: DoorMenuContext): MenuItem[] {
-  const isDM = ctx.role === CampaignRole.DM;
+  const isGM = ctx.role === CampaignRole.GM;
   const set = (type: WallType) => () => ctx.actions.setType(door, type);
   const items: MenuItem[] = [{
     kind: 'heading',
@@ -31,8 +31,8 @@ export function doorMenuItems(door: WallSegment, ctx: DoorMenuContext): MenuItem
 
   if (door.type === 'door-closed') items.push({ kind: 'command', id: 'open', label: 'Open Door', tone: 'brand', run: set('door-open') });
   if (door.type === 'door-open') items.push({ kind: 'command', id: 'close', label: 'Close Door', tone: 'brand', run: set('door-closed') });
-  if (isDM && door.type !== 'door-locked') items.push({ kind: 'command', id: 'lock', label: 'Lock Door', tone: 'danger', run: set('door-locked') });
-  if (isDM && door.type === 'door-locked') items.push({ kind: 'command', id: 'unlock', label: 'Unlock Door', tone: 'brand', run: set('door-closed') });
-  if (!isDM && door.type === 'door-locked') items.push({ kind: 'text', id: 'locked', label: 'This door is locked.' });
+  if (isGM && door.type !== 'door-locked') items.push({ kind: 'command', id: 'lock', label: 'Lock Door', tone: 'danger', run: set('door-locked') });
+  if (isGM && door.type === 'door-locked') items.push({ kind: 'command', id: 'unlock', label: 'Unlock Door', tone: 'brand', run: set('door-closed') });
+  if (!isGM && door.type === 'door-locked') items.push({ kind: 'text', id: 'locked', label: 'This door is locked.' });
   return items;
 }

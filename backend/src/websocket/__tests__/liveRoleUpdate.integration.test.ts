@@ -2,13 +2,13 @@
  * A role change reaching a connection that is already open.
  *
  * `socket.role` is read once, when the socket authenticates to a campaign, and
- * every DM-gated handler trusts it from then on. That is the correct place to
+ * every GM-gated handler trusts it from then on. That is the correct place to
  * read it — a handler must never take a role off the wire — but it makes the
- * value a snapshot, and a snapshot goes stale the moment the DM seat moves.
+ * value a snapshot, and a snapshot goes stale the moment the GM seat moves.
  *
- * Stale in the dangerous direction: without intervention the outgoing DM keeps
- * DM powers over their open connection until they happen to reload, and the
- * incoming DM cannot use theirs. REST has no such gap, because its middleware
+ * Stale in the dangerous direction: without intervention the outgoing GM keeps
+ * GM powers over their open connection until they happen to reload, and the
+ * incoming GM cannot use theirs. REST has no such gap, because its middleware
  * reads the membership per request.
  *
  * These tests drive the real socket server and assert on the same connection
@@ -21,10 +21,11 @@
 import { randomUUID } from 'crypto';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
-import { applyRoleToLiveSockets, broadcastToCampaign } from '../utils';
+import { applyRoleToLiveSockets, broadcastToCampaign, type AccessRevoked } from '../utils';
 import * as utils from '../utils';
 import * as auth from '../auth';
 import type { AuthenticatedSocket } from '../auth';
+import { takeMemberOut, tellTableMemberLeft } from '../../services/campaignMembers';
 import {
   createWsTestServer,
   expectNoEvent,
@@ -38,10 +39,10 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `liverole-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 /** Ask a socket to clear roll history; resolve with what came back. */
@@ -63,7 +64,7 @@ function attemptClear(client: ClientSocket): Promise<'allowed' | 'refused'> {
 }
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({
         data: {
@@ -74,24 +75,24 @@ beforeAll(async () => {
       })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
 
   const campaign = await prisma.campaign.create({
-    data: { name: `Live Role Campaign ${runId}`, ownerId: dmId, vibeSettings: {} },
+    data: { name: `Live Role Campaign ${runId}`, ownerId: gmId, vibeSettings: {} },
   });
   campaignId = campaign.id;
 
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
 
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([
-    server.loginAs(dmId),
+  [gmCookie, playerCookie] = await Promise.all([
+    server.loginAs(gmId),
     server.loginAs(playerId),
   ]);
 });
@@ -99,7 +100,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await server?.close();
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
@@ -111,24 +112,24 @@ beforeEach(async () => {
 });
 
 describe('applyRoleToLiveSockets', () => {
-  it('takes DM powers off an open connection without waiting for a reconnect', async () => {
-    const dmClient = await server.connectAndAuth(dmCookie, campaignId);
+  it('takes GM powers off an open connection without waiting for a reconnect', async () => {
+    const gmClient = await server.connectAndAuth(gmCookie, campaignId);
 
-    // Baseline: this connection really does hold DM powers.
-    expect(await attemptClear(dmClient)).toBe('allowed');
+    // Baseline: this connection really does hold GM powers.
+    expect(await attemptClear(gmClient)).toBe('allowed');
 
-    await applyRoleToLiveSockets(dmId, campaignId, 'PLAYER');
+    await applyRoleToLiveSockets(gmId, campaignId, 'PLAYER');
 
     // Same socket, never reconnected. This is the privilege leak.
-    expect(await attemptClear(dmClient)).toBe('refused');
+    expect(await attemptClear(gmClient)).toBe('refused');
   });
 
-  it('grants DM powers to an open connection that had none', async () => {
+  it('grants GM powers to an open connection that had none', async () => {
     const playerClient = await server.connectAndAuth(playerCookie, campaignId);
 
     expect(await attemptClear(playerClient)).toBe('refused');
 
-    await applyRoleToLiveSockets(playerId, campaignId, 'DM');
+    await applyRoleToLiveSockets(playerId, campaignId, 'GM');
 
     expect(await attemptClear(playerClient)).toBe('allowed');
 
@@ -141,22 +142,22 @@ describe('applyRoleToLiveSockets', () => {
     // for a handover — most transfers happen between sessions — and it must be
     // a quiet no-op rather than an error.
     const neverConnected = randomUUID();
-    expect(await applyRoleToLiveSockets(neverConnected, campaignId, 'DM')).toBe(0);
+    expect(await applyRoleToLiveSockets(neverConnected, campaignId, 'GM')).toBe(0);
   });
 
   it('leaves the same user alone on a campaign they are not being changed in', async () => {
     const otherCampaign = await prisma.campaign.create({
-      data: { name: `Other ${runId}`, ownerId: dmId, vibeSettings: {} },
+      data: { name: `Other ${runId}`, ownerId: gmId, vibeSettings: {} },
     });
     await prisma.campaignMembership.create({
-      data: { userId: dmId, campaignId: otherCampaign.id, role: 'DM', characterIds: [] },
+      data: { userId: gmId, campaignId: otherCampaign.id, role: 'GM', characterIds: [] },
     });
 
-    const elsewhere = await server.connectAndAuth(dmCookie, otherCampaign.id);
+    const elsewhere = await server.connectAndAuth(gmCookie, otherCampaign.id);
     expect(await attemptClear(elsewhere)).toBe('allowed');
 
     // A handover in the first campaign must not disturb a tab open on another.
-    await applyRoleToLiveSockets(dmId, campaignId, 'PLAYER');
+    await applyRoleToLiveSockets(gmId, campaignId, 'PLAYER');
     expect(await attemptClear(elsewhere)).toBe('allowed');
 
     elsewhere.disconnect();
@@ -164,31 +165,31 @@ describe('applyRoleToLiveSockets', () => {
   });
 });
 
-describe('campaign.dm.transferred', () => {
+describe('campaign.gm.transferred', () => {
   it('reaches everyone in the campaign so open clients can re-derive their role', async () => {
-    const dmClient = await server.connectAndAuth(dmCookie, campaignId);
+    const gmClient = await server.connectAndAuth(gmCookie, campaignId);
     const playerClient = await server.connectAndAuth(playerCookie, campaignId);
 
     const heard = Promise.all([
-      waitForEvent<{ newDmId: string; previousDmId: string | null }>(
-        dmClient,
-        'campaign.dm.transferred'
+      waitForEvent<{ newGmId: string; previousGmId: string | null }>(
+        gmClient,
+        'campaign.gm.transferred'
       ),
-      waitForEvent<{ newDmId: string }>(playerClient, 'campaign.dm.transferred'),
+      waitForEvent<{ newGmId: string }>(playerClient, 'campaign.gm.transferred'),
     ]);
 
-    broadcastToCampaign(campaignId, 'campaign.dm.transferred', {
+    broadcastToCampaign(campaignId, 'campaign.gm.transferred', {
       campaignId,
-      previousDmId: dmId,
-      newDmId: playerId,
+      previousGmId: gmId,
+      newGmId: playerId,
     });
 
-    const [onDm, onPlayer] = await heard;
-    expect(onDm.newDmId).toBe(playerId);
-    expect(onDm.previousDmId).toBe(dmId);
-    expect(onPlayer.newDmId).toBe(playerId);
+    const [onGm, onPlayer] = await heard;
+    expect(onGm.newGmId).toBe(playerId);
+    expect(onGm.previousGmId).toBe(gmId);
+    expect(onPlayer.newGmId).toBe(playerId);
 
-    dmClient.disconnect();
+    gmClient.disconnect();
     playerClient.disconnect();
   });
 });
@@ -206,14 +207,14 @@ describe('a change while a connection switches campaigns', () => {
 
   beforeEach(async () => {
     const [a, b] = await Promise.all(
-      ['A', 'B'].map((label) => prisma.campaign.create({ data: { name: `Switch ${label} ${runId}`, ownerId: dmId, vibeSettings: {} } }))
+      ['A', 'B'].map((label) => prisma.campaign.create({ data: { name: `Switch ${label} ${runId}`, ownerId: gmId, vibeSettings: {} } }))
     );
     campaignA = a.id;
     campaignB = b.id;
     await prisma.campaignMembership.createMany({
       data: [
         { userId: playerId, campaignId: campaignA, role: 'PLAYER', characterIds: [] },
-        { userId: playerId, campaignId: campaignB, role: 'DM', characterIds: [] },
+        { userId: playerId, campaignId: campaignB, role: 'GM', characterIds: [] },
       ],
     });
   });
@@ -306,7 +307,7 @@ describe('a change while a connection switches campaigns', () => {
     const client = await server.connectClient(playerCookie);
     const joined = new Promise<{ role: string }>((resolve) => {
       client.once('authenticated', (data: { role: string }) => {
-        // A prepared map's walls go to the DM alone.
+        // A prepared map's walls go to the GM alone.
         client.emit('walls:request', { mapId: prepared.id });
         resolve(data);
       });
@@ -321,23 +322,65 @@ describe('a change while a connection switches campaigns', () => {
   });
 
   it('reads the membership again, for a removal whose live clear-out ran before the connection joined', async () => {
+    // A player in B, so the GM's Remove may take them out.
+    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: playerId, campaignId: campaignB } }, data: { role: 'PLAYER' } });
     const client = await server.connectAndAuth(playerCookie, campaignA);
     const original = auth.authenticateCampaign;
     jest.spyOn(auth, 'authenticateCampaign').mockImplementation(async (s, id) => {
       const result = await original(s, id);
       // Removed after the read: the route's clear-out finds nothing to clear yet.
       if (id === campaignB) {
-        await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId: campaignB } } });
-        await utils.clearCampaignFromLiveSockets(playerId, campaignB);
+        expect(await takeMemberOut(campaignB, playerId, 'removed')).toBeNull();
+        await tellTableMemberLeft(playerId, campaignB, 'removed');
       }
       return result;
     });
 
-    const revoked = waitForEvent<{ campaignId: string; reason: string }>(client, 'campaign.access.revoked');
+    const revoked = waitForEvent<AccessRevoked>(client, 'campaign.access.revoked');
     const socket = await switchToB(client);
     expect(socket.rooms.has(campaignB)).toBe(false);
     expect(socket.campaignId).toBeUndefined();
     await expect(revoked).resolves.toMatchObject({ campaignId: campaignB, reason: 'removed' });
+    client.disconnect();
+  });
+
+  it('tells a leaver whose connection joins at the moment of the leave that they left', async () => {
+    // A player in B, so they may leave it.
+    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: playerId, campaignId: campaignB } }, data: { role: 'PLAYER' } });
+    const client = await server.connectAndAuth(playerCookie, campaignA);
+    const original = auth.authenticateCampaign;
+    jest.spyOn(auth, 'authenticateCampaign').mockImplementation(async (s, id) => {
+      const result = await original(s, id);
+      // Left after the read, as the leave route does it.
+      if (id === campaignB) {
+        expect(await takeMemberOut(campaignB, playerId, 'left')).toBeNull();
+        await tellTableMemberLeft(playerId, campaignB, 'left');
+      }
+      return result;
+    });
+
+    const revoked = waitForEvent<AccessRevoked>(client, 'campaign.access.revoked');
+    const socket = await switchToB(client);
+    expect(socket.rooms.has(campaignB)).toBe(false);
+    await expect(revoked).resolves.toEqual({ campaignId: campaignB, reason: 'left', message: 'You left this campaign.' });
+    client.disconnect();
+  });
+
+  it('says not-member for a membership gone with no record of why', async () => {
+    const client = await server.connectAndAuth(playerCookie, campaignA);
+    const original = auth.authenticateCampaign;
+    jest.spyOn(auth, 'authenticateCampaign').mockImplementation(async (s, id) => {
+      const result = await original(s, id);
+      if (id === campaignB) {
+        await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId: campaignB } } });
+      }
+      return result;
+    });
+
+    const revoked = waitForEvent<AccessRevoked>(client, 'campaign.access.revoked');
+    const socket = await switchToB(client);
+    expect(socket.rooms.has(campaignB)).toBe(false);
+    await expect(revoked).resolves.toEqual({ campaignId: campaignB, reason: 'not-member', message: 'You are not a member of this campaign.' });
     client.disconnect();
   });
 });

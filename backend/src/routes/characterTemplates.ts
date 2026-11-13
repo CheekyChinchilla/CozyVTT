@@ -12,18 +12,23 @@
 
 import { Router, Response } from 'express';
 import { randomUUID } from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { GameSystem } from '../game-systems';
+import {
+  GAME_SYSTEM_NOT_SUPPORTED, SUPPORTED_GAME_SYSTEMS, type GameSystem,
+} from '../game-systems';
 import { readEnumQuery } from '../utils/queryEnum';
+import { normaliseGameSystem } from '../legacy/gameSystemAliases';
+import { sheetAsRead, sheetAsSent, sheetKeepingConversionRecord, sheetWithoutConversionRecord, sheetWithoutKeptPlayerName } from '../legacy/sheetConversion';
 import {
   validateCharacterData,
   validateFlexibleSheet,
   sheetIssues,
   sheetWithoutPlayerName,
 } from '../validators/game-systems';
-import { sheetWithoutKeeperNotes } from '../utils/keeperNotes';
+import { sheetWithoutGmNotes } from '../utils/gmNotes';
 import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
 import {
   CreateCharacterTemplateSchema,
@@ -148,12 +153,16 @@ async function resolveTemplateImage(
 }
 
 /**
- * A template as it is sent: without the player's name and the Keeper's Notes,
- * which one published before they were left out may still hold.
+ * A template as it is sent: without the player's name and the GM's Notes,
+ * which one published before they were left out may still hold (the name
+ * also among what its conversion record kept), and a
+ * Horror d100 sheet still in the shape before 1.7.0 converted, nothing
+ * written, with the record that conversion gives.
  */
-function servedTemplate<T extends { gameSystem: GameSystem | null; data: unknown }>(template: T): T {
+function servedTemplate<T extends { gameSystem: GameSystem | null; data: Prisma.JsonValue }>(template: T): T {
   const { gameSystem } = template;
-  return { ...template, data: sheetWithoutPlayerName(gameSystem, sheetWithoutKeeperNotes(gameSystem, template.data)) };
+  const data = sheetAsRead(gameSystem, template.data);
+  return { ...template, data: sheetWithoutKeptPlayerName(gameSystem, sheetWithoutPlayerName(gameSystem, sheetWithoutGmNotes(gameSystem, data))) };
 }
 
 /**
@@ -163,13 +172,20 @@ function servedTemplate<T extends { gameSystem: GameSystem | null; data: unknown
  * (gameSystem null) is checked against the Flexible layout, as a Flexible
  * character is; no sheet at all is an empty one.
  *
+ * A Horror d100 sheet in the shape before 1.7.0 is converted to the rebuilt
+ * sheet first. A template takes no conversion record from a request, whether
+ * the request sent one or the conversion of what it sent wrote one: it is
+ * every user's starting point, and holds no character's original values. An
+ * update puts back the record of the stored template, which one an older
+ * version stored keeps from its own conversion.
+ *
  * Templates were published before 1.3.0, and `migrate:sheet-fields` moves only
  * characters, so a sheet still carrying that version's fields has them moved
  * where the sheet reads them first, as a character's are. Validation would
  * otherwise drop their content.
  *
- * Every user can read a template, so it never keeps the Keeper's Notes, which
- * are the Keeper's alone, or the player's name, which is the character
+ * Every user can read a template, so it never keeps the GM's Notes, which
+ * are the GM's alone, or the player's name, which is the character
  * owner's: whoever saves one, a template editor included, both are left out.
  */
 function validateSheet(
@@ -186,9 +202,11 @@ function validateSheet(
     };
   }
 
-  const result = validateCharacterData(gameSystem, migrateLegacySheetFields(gameSystem, data || {}));
+  const sent = sheetAsSent(gameSystem, data || {});
+  const result = validateCharacterData(gameSystem, migrateLegacySheetFields(gameSystem, sent));
   if (result.success) {
-    return { ok: true, data: sheetWithoutPlayerName(gameSystem, sheetWithoutKeeperNotes(gameSystem, result.data)) };
+    const sheet = sheetWithoutConversionRecord(gameSystem, result.data);
+    return { ok: true, data: sheetWithoutPlayerName(gameSystem, sheetWithoutGmNotes(gameSystem, sheet)) };
   }
 
   return {
@@ -211,10 +229,12 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
   try {
     const userId = req.session.userId!;
     const { search, mine, limit = '50', offset = '0' } = req.query;
-    // 'flexible' selects the system-agnostic templates, which store null.
-    const system = readEnumQuery(req.query.gameSystem, 'gameSystem', [...Object.values(GameSystem), 'flexible']);
+    // 'flexible' selects the system-agnostic templates, which store null. A
+    // system's value from an older version is read as its new one.
+    const asked = normaliseGameSystem(req.query.gameSystem) ?? req.query.gameSystem;
+    const system = readEnumQuery(asked, 'gameSystem', [...SUPPORTED_GAME_SYSTEMS, 'flexible']);
     if (!system.ok) {
-      return res.status(400).json({ error: 'Validation Error', message: system.message });
+      return res.status(400).json({ error: 'Validation Error', message: GAME_SYSTEM_NOT_SUPPORTED });
     }
     const gameSystem = system.value;
 
@@ -379,7 +399,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           validationErrors: sheet.issues,
         });
       }
-      sheetData = sheet.data;
+      sheetData = sheetKeepingConversionRecord(existing.gameSystem, sheet.data, existing.data);
     }
 
     let imageUrl: string | null | undefined;

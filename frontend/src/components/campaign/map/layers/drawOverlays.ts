@@ -1,5 +1,5 @@
 // ============================================
-// Interaction overlays — DM wall-tool previews (draw/split/erase/
+// Interaction overlays — GM wall-tool previews (draw/split/erase/
 // brush/polygon), the ruler, AoE templates, and the fog selection box.
 // Pure: no React, no component closures. Snap helpers arrive as
 // callbacks because snapping depends on live tool flags.
@@ -25,7 +25,7 @@ export interface WallDrawOverlayState {
   findWallAtPoint: (x: number, y: number, threshold: number) => { seg: WallSegment; point: { x: number; y: number; t: number } } | null;
 }
 
-/** In-progress polyline for wall-draw mode (DM only). */
+/** In-progress polyline for wall-draw mode (GM only). */
 export function drawWallDrawOverlay(
   ctx: CanvasRenderingContext2D,
   state: WallDrawOverlayState,
@@ -622,7 +622,7 @@ const FOG_HIDE_TINT = '249, 115, 22';    // orange
  * cell under the cursor when idle.
  *
  * Drawn in WORLD space, unlike the circular brush cursor this replaces: a
- * grid-snapped rectangle has to stay locked to the grid while the DM pans and
+ * grid-snapped rectangle has to stay locked to the grid while the GM pans and
  * zooms, so the caller must invoke this BEFORE restoring the world transform.
  */
 export function drawFogSelection(
@@ -636,7 +636,7 @@ export function drawFogSelection(
 
   const tint = state.mode === 'fog-reveal' ? FOG_REVEAL_TINT : FOG_HIDE_TINT;
 
-  // Idle: outline just the cell a click would toggle, so the DM can see
+  // Idle: outline just the cell a click would toggle, so the GM can see
   // exactly which square is in play before committing to a drag.
   if (!anchor) {
     const cell = mapPxToFogCell(cursor.x, cursor.y, fog);

@@ -108,18 +108,19 @@ describe('DiceMacroManager', () => {
   });
 
   it('saves a new macro and tells the panel', async () => {
-    const created = macro('m9', 'Wild magic', '1d100');
+    const created = macro('m9', 'Random weather', '1d100');
     createDiceMacro.mockResolvedValue({ macro: created });
 
     const { onMacrosChanged } = renderManager();
     await waitFor(() => expect(listDiceMacros).toHaveBeenCalled());
 
-    fireEvent.change(screen.getByLabelText('Macro name'), { target: { value: 'Wild magic' } });
+    expect(screen.getByLabelText('Macro name')).toHaveAttribute('placeholder', 'Name, e.g. Random weather');
+    fireEvent.change(screen.getByLabelText('Macro name'), { target: { value: 'Random weather' } });
     fireEvent.change(screen.getByLabelText('Macro expression'), { target: { value: '1d100' } });
     fireEvent.click(screen.getByRole('button', { name: /add/i }));
 
     await waitFor(() =>
-      expect(createDiceMacro).toHaveBeenCalledWith('camp-1', { name: 'Wild magic', expression: '1d100' })
+      expect(createDiceMacro).toHaveBeenCalledWith('camp-1', { name: 'Random weather', expression: '1d100' })
     );
     // The panel behind must learn about it, or the button will not appear until
     // the page is reloaded.
@@ -142,7 +143,7 @@ describe('DiceMacroManager', () => {
 
   describe('a character and a purpose of its own', () => {
     it('are saved with a new roll, trimmed', async () => {
-      const created = macro('m9', 'Goblin', '1d20+4', { characterName: 'Goblin boss', purpose: 'Scimitar attack' });
+      const created = macro('m9', 'Goblin', '1d20+4', { characterName: 'Hobgoblin', purpose: 'Longsword attack' });
       createDiceMacro.mockResolvedValue({ macro: created });
 
       renderManager();
@@ -150,13 +151,13 @@ describe('DiceMacroManager', () => {
 
       fireEvent.change(screen.getByLabelText('Macro name'), { target: { value: 'Goblin' } });
       fireEvent.change(screen.getByLabelText('Macro expression'), { target: { value: '1d20+4' } });
-      fireEvent.change(screen.getByLabelText('Macro character'), { target: { value: ' Goblin boss ' } });
-      fireEvent.change(screen.getByLabelText('Macro purpose'), { target: { value: 'Scimitar attack ' } });
+      fireEvent.change(screen.getByLabelText('Macro character'), { target: { value: ' Hobgoblin ' } });
+      fireEvent.change(screen.getByLabelText('Macro purpose'), { target: { value: 'Longsword attack ' } });
       fireEvent.click(screen.getByRole('button', { name: /add/i }));
 
       await waitFor(() =>
         expect(createDiceMacro).toHaveBeenCalledWith('camp-1', {
-          name: 'Goblin', expression: '1d20+4', characterName: 'Goblin boss', purpose: 'Scimitar attack',
+          name: 'Goblin', expression: '1d20+4', characterName: 'Hobgoblin', purpose: 'Longsword attack',
         })
       );
       // The boxes empty for the next one.
@@ -179,21 +180,21 @@ describe('DiceMacroManager', () => {
     it('are listed beside the roll, as text', async () => {
       listDiceMacros.mockResolvedValue({
         macros: [
-          macro('m1', 'Goblin', '1d20+4', { characterName: '<b>Goblin boss</b>', purpose: 'Scimitar attack' }),
+          macro('m1', 'Goblin', '1d20+4', { characterName: '<b>Hobgoblin</b>', purpose: 'Longsword attack' }),
           macro('m2', 'Plain', '1d20', { characterName: null, purpose: null }),
         ],
       });
 
       const { container } = renderManager();
 
-      expect(await screen.findByText('as <b>Goblin boss</b>, for Scimitar attack')).toBeInTheDocument();
+      expect(await screen.findByText('as <b>Hobgoblin</b>, for Longsword attack')).toBeInTheDocument();
       expect(container.ownerDocument.querySelector('b')).toBeNull();
       expect(screen.getAllByRole('listitem')[1]).not.toHaveTextContent(/\bas\b|\bfor\b/);
     });
 
     it('can be changed and cleared on an edit', async () => {
       listDiceMacros.mockResolvedValue({
-        macros: [macro('m1', 'Goblin', '1d20+4', { characterName: 'Goblin boss', purpose: 'Scimitar attack' })],
+        macros: [macro('m1', 'Goblin', '1d20+4', { characterName: 'Hobgoblin', purpose: 'Longsword attack' })],
       });
       updateDiceMacro.mockResolvedValue({
         macro: macro('m1', 'Goblin', '1d20+4', { characterName: 'Grik', purpose: null }),
@@ -203,8 +204,8 @@ describe('DiceMacroManager', () => {
       expect(await screen.findByText('Goblin')).toBeInTheDocument();
 
       fireEvent.click(screen.getByLabelText('Edit Goblin'));
-      expect(screen.getByLabelText('Character for Goblin')).toHaveValue('Goblin boss');
-      expect(screen.getByLabelText('Purpose for Goblin')).toHaveValue('Scimitar attack');
+      expect(screen.getByLabelText('Character for Goblin')).toHaveValue('Hobgoblin');
+      expect(screen.getByLabelText('Purpose for Goblin')).toHaveValue('Longsword attack');
       fireEvent.change(screen.getByLabelText('Character for Goblin'), { target: { value: 'Grik' } });
       fireEvent.change(screen.getByLabelText('Purpose for Goblin'), { target: { value: '  ' } });
       fireEvent.click(screen.getByLabelText('Save changes to Goblin'));

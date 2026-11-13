@@ -4,7 +4,7 @@
  *
  * The spirit-layer toggles and an initiative roll save their change, then
  * read the database again to tell everyone: the map to re-send, the roller's
- * name for the dice log. An error in that second part answered the DM with
+ * name for the dice log. An error in that second part answered the GM with
  * "Failed to ...", for a change that stood, and skipped what came after it:
  * the chat notice, the order everyone should now see.
  *
@@ -24,10 +24,10 @@ const runId = randomUUID().slice(0, 8);
 const GHOST = randomUUID();
 const ORC = randomUUID();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let mapId: string;
-let dm: ClientSocket;
+let gm: ClientSocket;
 
 const token = (id: string, extra: Record<string, unknown>) => ({
   id, name: id, imageUrl: '', position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, layer: 'token',
@@ -50,9 +50,9 @@ async function eventually<T>(read: () => Promise<T>, ok: (value: T) => boolean):
 }
 
 beforeAll(async () => {
-  dmId = (await prisma.user.create({ data: { email: `fanout-dm-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Fanout DM' } })).id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Fanout ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  gmId = (await prisma.user.create({ data: { email: `fanout-dm-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Fanout GM' } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Fanout ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
   mapId = (await prisma.map.create({
     data: {
       campaignId, name: 'Fanout', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x',
@@ -68,10 +68,10 @@ beforeEach(async () => {
   clearState(campaignId);
   await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false } });
   await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson([token(GHOST, { layer: 'spirit', visible: false }), token(ORC, {})]) } });
-  dm = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  gm = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
 });
 
-afterEach(() => { jest.restoreAllMocks(); dm.disconnect(); });
+afterEach(() => { jest.restoreAllMocks(); gm.disconnect(); });
 
 afterAll(async () => {
   await server.close();
@@ -79,15 +79,15 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: dmId } });
+  await prisma.user.deleteMany({ where: { id: gmId } });
   await prisma.$disconnect();
 });
 
 it('revealing the spirit layer stands, and is announced, when re-sending the map fails', async () => {
   jest.spyOn(prisma.map, 'findUnique').mockImplementationOnce(boom as never);
-  const noError = expectNoEvent(dm, 'error', 800);
-  const notice = waitForEvent<{ content: string }>(dm, 'chat.system');
-  dm.emit('spirit_layer.toggle', { visible: true });
+  const noError = expectNoEvent(gm, 'error', 800);
+  const notice = waitForEvent<{ content: string }>(gm, 'chat.system');
+  gm.emit('spirit_layer.toggle', { visible: true });
   expect((await notice).content).toMatch(/spirit layer/i);
   await expect(noError).resolves.toBeUndefined();
   const stored = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId }, select: { spiritLayerEnabled: true } });
@@ -96,8 +96,8 @@ it('revealing the spirit layer stands, and is announced, when re-sending the map
 
 it("revealing one spirit token stands when re-sending the map fails", async () => {
   jest.spyOn(prisma.campaign, 'findUnique').mockImplementationOnce(boom as never);
-  const noError = expectNoEvent(dm, 'error', 800);
-  dm.emit('spirit_layer.token.toggle', { mapId, tokenId: GHOST, visible: true });
+  const noError = expectNoEvent(gm, 'error', 800);
+  gm.emit('spirit_layer.token.toggle', { mapId, tokenId: GHOST, visible: true });
   await expect(noError).resolves.toBeUndefined();
   const tokens = await eventually(
     async () => readTokens((await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } })).tokens),
@@ -112,9 +112,9 @@ it('a roll stands, and the new order goes out, when the dice log entry cannot be
     combatants: [{ tokenId: ORC, mapId, name: 'Orc', imageUrl: '', initiative: null, hp: null, type: 'npc', disposition: null, characterId: null }],
   });
   jest.spyOn(prisma.user, 'findUnique').mockImplementationOnce(boom as never);
-  const noError = expectNoEvent(dm, 'error', 800);
-  const order = waitForEvent<{ combatants: Array<{ tokenId: string; initiative: number | null }> }>(dm, 'initiative.state');
-  dm.emit('initiative.roll', { tokenId: ORC, mapId });
+  const noError = expectNoEvent(gm, 'error', 800);
+  const order = waitForEvent<{ combatants: Array<{ tokenId: string; initiative: number | null }> }>(gm, 'initiative.state');
+  gm.emit('initiative.roll', { tokenId: ORC, mapId });
   const sent = await order;
   expect(typeof sent.combatants.find((c) => c.tokenId === ORC)?.initiative).toBe('number');
   await expect(noError).resolves.toBeUndefined();
@@ -124,9 +124,9 @@ it('a roll stands, and the new order goes out, when the dice log entry cannot be
 // current map after the edit is saved.
 it('a wall added stands, and is not reported as failed, when telling the table fails', async () => {
   jest.spyOn(prisma.campaign, 'findUnique').mockImplementationOnce(boom as never);
-  const noError = expectNoEvent(dm, 'error', 800);
+  const noError = expectNoEvent(gm, 'error', 800);
   const segment = { id: randomUUID(), x1: 0, y1: 0, x2: 50, y2: 0, type: 'wall' };
-  dm.emit('wall:add', { mapId, segment });
+  gm.emit('wall:add', { mapId, segment });
   await expect(noError).resolves.toBeUndefined();
   const hasWall = (row: { wallSegments: unknown }) => (row.wallSegments as Array<{ id: string }>).some((w) => w.id === segment.id);
   const stored = await eventually(() => prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { wallSegments: true } }), hasWall);
@@ -137,8 +137,8 @@ it('a wall added stands, and is not reported as failed, when telling the table f
 it('a fog change stands, and is not reported as failed, when telling the table fails', async () => {
   await prisma.map.update({ where: { id: mapId }, data: { fogEnabled: true } });
   jest.spyOn(prisma.campaign, 'findUnique').mockImplementationOnce(boom as never);
-  const noError = expectNoEvent(dm, 'error', 800);
-  dm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0, 1] } });
+  const noError = expectNoEvent(gm, 'error', 800);
+  gm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0, 1] } });
   await expect(noError).resolves.toBeUndefined();
   const revealed = (row: { fogData: unknown }) => (row.fogData as { revealed: boolean[] } | null)?.revealed.slice(0, 2);
   const stored = await eventually(

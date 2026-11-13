@@ -3,13 +3,15 @@
  *
  * It always said Healthy, with the API, database and live connections all
  * green, beside an error saying the numbers could not be loaded. It now asks
- * the server (GET /api/admin/health) and shows each part as it is, or that it
- * could not tell.
+ * the server (GET /api/admin/health) and shows the API and the database as
+ * they are, or that it could not tell. Live connections are the browser's own
+ * check (AdminPage.liveConnection.test.tsx).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import AdminPage from '../AdminPage';
+import type { LiveConnectionState } from '@/services/liveConnectionCheck';
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'admin-1', displayName: 'Root', platformRole: 'ADMIN' } }),
@@ -27,10 +29,21 @@ const adminService = vi.hoisted(() => ({
 }));
 vi.mock('@/services/admin.service', () => ({ adminService }));
 vi.mock('@/services/api', () => ({ api: {}, default: {} }));
+// The browser's own check of live connections, which has its tests in
+// AdminPage.liveConnection.test.tsx, finds them working here.
+vi.mock('@/services/liveConnectionCheck', () => ({
+  checkLiveConnection: (report: (state: LiveConnectionState) => void) => {
+    report('working');
+    return () => undefined;
+  },
+}));
 
 /** An axios-shaped failure: with a status when the server answered, without one when it did not. */
 const failure = (status?: number) =>
   Object.assign(new Error('Request failed'), status ? { response: { status, data: { error: 'Internal Server Error', message: 'Failed to fetch stats' } } } : {});
+
+/** What a row of the status card says, after its label. */
+const part = (label: string) => screen.getByText(label).parentElement?.textContent?.slice(label.length).trim();
 
 const renderPage = () =>
   render(
@@ -51,8 +64,9 @@ describe('the status card', () => {
     renderPage();
 
     expect(await screen.findByText('Healthy')).toBeInTheDocument();
-    expect(screen.getByLabelText('DB: working')).toBeInTheDocument();
-    expect(screen.getByLabelText('WS: working')).toBeInTheDocument();
+    expect(part('API')).toBe('Working');
+    expect(part('DB')).toBe('Working');
+    expect(part('WS')).toBe('Working');
   });
 
   it('shows the database as down when the server says so', async () => {
@@ -62,7 +76,7 @@ describe('the status card', () => {
     renderPage();
 
     expect(await screen.findByText('Degraded')).toBeInTheDocument();
-    expect(screen.getByLabelText('DB: down')).toBeInTheDocument();
+    expect(part('DB')).toBe('Down');
     expect(screen.queryByText('Healthy')).toBeNull();
   });
 
@@ -73,8 +87,8 @@ describe('the status card', () => {
     renderPage();
 
     expect(await screen.findByText('Unknown')).toBeInTheDocument();
-    expect(screen.getByLabelText('API: down')).toBeInTheDocument();
-    expect(screen.getByLabelText('DB: not known')).toBeInTheDocument();
+    expect(part('API')).toBe('Down');
+    expect(part('DB')).toBe('Not known');
     expect(screen.queryByText('Healthy')).toBeNull();
   });
 });

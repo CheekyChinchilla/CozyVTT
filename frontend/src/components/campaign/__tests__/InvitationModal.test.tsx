@@ -44,38 +44,44 @@ beforeEach(() => {
   vi.clearAllMocks();
   listCharacters.mockResolvedValue({
     characters: [
-      character('Dwarf', GameSystem.DND_5E),
+      character('Dwarf', GameSystem.FIFTH_EDITION),
       character('Wanderer', null),
-      character('Oracle', GameSystem.PATHFINDER_2E),
-      character('Taken', GameSystem.DND_5E, 'elsewhere'),
+      character('Oracle', GameSystem.FANTASY_D20),
+      character('Taken', GameSystem.FIFTH_EDITION, 'elsewhere'),
     ],
   });
 });
 
 describe('InvitationModal', () => {
-  it('offers a D&D 5e campaign only unassigned D&D 5e characters', async () => {
-    expect(await offered(GameSystem.DND_5E)).toEqual(['Dwarf']);
+  it('offers a 5E campaign only unassigned 5E characters', async () => {
+    expect(await offered(GameSystem.FIFTH_EDITION)).toEqual(['Dwarf']);
   });
 
   it('offers a Flexible campaign only unassigned Flexible characters', async () => {
     expect(await offered(null)).toEqual(['Wanderer']);
   });
 
+  // A campaign stored with a system this build does not have, such as the
+  // value of one CozyVTT no longer supports, takes characters as one with none.
+  it('offers a campaign of a system this build does not have what it offers a Flexible one', async () => {
+    expect(await offered('SOMETHING_ELSE' as GameSystem)).toEqual(['Wanderer']);
+  });
+
   // A failed load showed "No compatible characters available", as if the
   // player had none, and wrote the reason to the console alone.
   it('says the characters could not be loaded, and why', async () => {
     listCharacters.mockRejectedValue({ response: { status: 429, data: { message: 'Too many requests, please slow down' } } });
-    render(<InvitationModal invitation={invitationTo(GameSystem.DND_5E)} onClose={vi.fn()} onAccept={vi.fn()} onDecline={vi.fn()} />);
+    render(<InvitationModal invitation={invitationTo(GameSystem.FIFTH_EDITION)} onClose={vi.fn()} onAccept={vi.fn()} onDecline={vi.fn()} />);
     expect(await screen.findByText('Your characters could not be loaded: Too many requests, please slow down')).toBeTruthy();
     expect(screen.queryByText('No compatible characters available')).toBeNull();
   });
 
   // It named the campaign's owner, who no longer runs a game handed over.
-  it('names the member who runs the campaign as its DM', async () => {
-    const handedOver = invitationTo(GameSystem.DND_5E);
-    handedOver.campaign = { ...handedOver.campaign!, owner: { displayName: 'Olwen the Owner' }, dm: { displayName: 'Dara the DM' } };
+  it('names the member who runs the campaign as its GM', async () => {
+    const handedOver = invitationTo(GameSystem.FIFTH_EDITION);
+    handedOver.campaign = { ...handedOver.campaign!, owner: { displayName: 'Olwen the Owner' }, gm: { displayName: 'Dara the GM' } };
     render(<InvitationModal invitation={handedOver} onClose={vi.fn()} onAccept={vi.fn()} onDecline={vi.fn()} />);
-    expect(await screen.findByText('Dara the DM')).toBeTruthy();
+    expect(await screen.findByText('Dara the GM')).toBeTruthy();
     expect(screen.queryByText('Olwen the Owner')).toBeNull();
   });
 });

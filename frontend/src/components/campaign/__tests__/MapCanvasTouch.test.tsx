@@ -17,13 +17,13 @@ import { TokenLayer, TokenType, type CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
 import { contact, mouse } from '@/test/pointer';
 import { menuShown } from '@/components/ui/openMenus';
-import { recordDrawing, nextFrame, pictures } from '@/test/recordingCanvas';
+import { recordDrawing, recordPaint, nextFrame, pictures } from '@/test/recordingCanvas';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
     status: 'ACTIVE' as string,
     memberships: [] as Array<{ userId: string; role: string; user: { displayName: string } }>,
@@ -83,7 +83,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -237,7 +237,7 @@ beforeEach(() => {
   h.sent.length = 0;
   h.handlers.clear();
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: mapWith(), status: 'ACTIVE', memberships: [], characters: [] });
+  h.set({ userRole: 'GM', currentMap: mapWith(), status: 'ACTIVE', memberships: [], characters: [] });
 });
 
 describe('what the map asks of the browser', () => {
@@ -310,10 +310,10 @@ describe('a token picked up by a tap', () => {
 });
 
 describe('a held token that leaves the map', () => {
-  // Since a finger or a pen can hold a token for as long as it likes, the DM
+  // Since a finger or a pen can hold a token for as long as it likes, the GM
   // can remove, hide or move it meanwhile. The page must not go on holding a
   // token it no longer has, and send its put-down.
-  it('is let go when the DM removes it, and the next tap sends nothing for it', () => {
+  it('is let go when the GM removes it, and the next tap sends nothing for it', () => {
     render(<MapCanvas />);
     show(token('tok-goblin', 'Goblin', 0, 19), token('tok-wolf', 'Wolf', 9, 9));
     tap(1, square(0, 19));
@@ -814,7 +814,7 @@ describe('a long-press', () => {
   });
 
   it.each([
-    ['the DM, on a creature', 'DM', () => token('tok-goblin', 'Goblin', 0, 19)],
+    ['the GM, on a creature', 'GM', () => token('tok-goblin', 'Goblin', 0, 19)],
     ['a player, on their own character', 'PLAYER', () => token('tok-mine', 'Aldra', 0, 19, { type: TokenType.PLAYER, controlledBy: 'me', characterId: 'char-me' })],
     ['a spectator, on a character', 'SPECTATOR', () => token('tok-mara', 'Mara', 0, 19, { type: TokenType.PLAYER, controlledBy: 'other', characterId: 'char-other' })],
   ] as const)('offers %s what a right-click there offers, in the same order', (_who, userRole, which) => {
@@ -919,8 +919,8 @@ describe('a long-press', () => {
     other.up(surface(), px(45, 25));
   });
 
-  // A press under a DM tool is the tool's for as long as it is held.
-  it('does not exist under a DM tool: a press held 600 ms then dragged draws a fog box', () => {
+  // A press under a GM tool is the tool's for as long as it is held.
+  it('does not exist under a GM tool: a press held 600 ms then dragged draws a fog box', () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }) });
     render(<MapCanvas />);
     show(goblin());
@@ -1043,7 +1043,7 @@ describe('a long-press', () => {
       expect(sentOf('map.ping')).toHaveLength(1);
     });
 
-    it('opens nothing under a DM tool, and the press can still drag', () => {
+    it('opens nothing under a GM tool, and the press can still drag', () => {
       h.set({ currentMap: mapWith({ fogEnabled: true }) });
       render(<MapCanvas />);
       fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(false) } });
@@ -1392,7 +1392,7 @@ describe('a double tap', () => {
     ['the pen', () => draw('Pen')],
     ['the eraser', () => draw('Eraser')],
     ['the laser pointer', () => draw('Laser pointer')],
-    ["the DM's ruler", () => fireEvent.click(screen.getByTitle('Ruler — measure distance'))],
+    ["the GM's ruler", () => fireEvent.click(screen.getByTitle('Ruler — measure distance'))],
     ['the AoE template', () => fireEvent.click(screen.getByTitle('AoE Shape — area of effect overlay'))],
   ])('pings nothing with %s up', (_tool, choose, map = {}) => {
     h.set({ currentMap: mapWith(map) });
@@ -1477,7 +1477,7 @@ describe('a double tap', () => {
 
   it.each([
     ['a player, on their own token', 'PLAYER', () => token('tok-mine', 'Aldra', 0, 19, { type: TokenType.PLAYER, controlledBy: 'me' })],
-    ['the DM, on a creature', 'DM', () => token('tok-goblin', 'Goblin', 0, 19)],
+    ['the GM, on a creature', 'GM', () => token('tok-goblin', 'Goblin', 0, 19)],
   ] as const)('picks the token up and puts it back for %s, and pings nothing', (_who, userRole, which) => {
     h.set({ userRole });
     render(<MapCanvas />);
@@ -1942,7 +1942,7 @@ describe('the details of the selected token', () => {
       expect(card()).toBeNull();
     });
 
-    it('show nothing once spirit tokens are hidden from the DM', () => {
+    it('show nothing once spirit tokens are hidden from the GM', () => {
       render(<MapCanvas />);
       show(token('tok-wolf', 'Dire Wolf', 4, 19, { layer: TokenLayer.SPIRIT }));
       tap(1, square(4, 19));
@@ -1962,7 +1962,7 @@ describe('the details of the selected token', () => {
       render(<MapCanvas />);
       show(token('tok-a', 'Alya', 2, 10, { type: TokenType.PLAYER, controlledBy: 'alice' }), token('tok-wolf', 'Dire Wolf', 4, 19, { visible: false }));
       fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(true) } });
-      // The DM taps the hidden creature, picking it up, and taps it down again.
+      // The GM taps the hidden creature, picking it up, and taps it down again.
       tap(1, square(4, 19));
       tap(2, square(4, 19));
       expect(card()).not.toBeNull();
@@ -2240,6 +2240,103 @@ describe('one finger', () => {
     expect(sentOf('wall:add')).toHaveLength(3);
   });
 
+  // A quick third tap, meant to start a new line from the corner a double
+  // tap ended on, counted as one more second tap and ended a line already
+  // ended.
+  it('starts a new line at a quick third tap where a square is smaller than a fingertip', () => {
+    h.set({ currentMap: mapWith({ gridSize: 10 }) });
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    tap(1, px(100, 300));
+    tap(2, px(200, 300));
+    tap(3, px(206, 304));
+    tap(4, px(203, 302));
+    tap(5, px(300, 300));
+
+    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
+      expect.objectContaining({ x1: 100, y1: 300, x2: 200, y2: 300 }),
+      expect.objectContaining({ x1: 200, y1: 300, x2: 300, y2: 300 }),
+    ]);
+  });
+
+  it('with Snap to grid off, starts a new line at a quick third tap', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    fireEvent.click(screen.getByLabelText('Snap wall points to grid'));
+
+    tap(1, px(100, 300));
+    tap(2, px(200, 300));
+    tap(3, px(205, 303));
+    tap(4, px(202, 301));
+    tap(5, px(300, 300));
+
+    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
+      expect.objectContaining({ x1: 100, y1: 300, x2: 200, y2: 300 }),
+      expect.objectContaining({ x1: 202, y1: 301, x2: 300, y2: 300 }),
+    ]);
+  });
+
+  it('counts the taps after a double tap from one again, so a fourth ends the line the third began', () => {
+    h.set({ currentMap: mapWith({ gridSize: 10 }) });
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    tap(1, px(100, 300));
+    tap(2, px(200, 300));
+    tap(3, px(204, 300));
+    tap(4, px(202, 302));
+    tap(5, px(204, 304));
+    tap(6, px(400, 400));
+
+    expect(sentOf('wall:add')).toHaveLength(1);
+  });
+
+  // Two quick taps on neighbouring corners at a low zoom, or a fingertip
+  // apart with Snap to grid off, are a double tap, which closed a polygon of
+  // one or two corners and so threw them away.
+  it.each([
+    ['where a square is smaller than a fingertip', { gridSize: 10 }, false],
+    ['with Snap to grid off', {}, true],
+  ])('keeps a polygon of under three corners through a double tap %s', (_where, map, snapOff) => {
+    h.set({ currentMap: mapWith(map) });
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+    if (snapOff) fireEvent.click(screen.getByLabelText('Snap wall points to grid'));
+
+    tap(1, px(100, 100));
+    tap(2, px(108, 104));
+    tap(3, px(300, 100));
+    tap(4, px(300, 300));
+    tap(5, px(306, 304));
+
+    const replaces = sentOf('walls:replace') as Array<{ segments: WallSegment[] }>;
+    expect(replaces.map((r) => r.segments.map(({ x1, y1, x2, y2 }) => [x1, y1, x2, y2]))).toEqual([
+      [[100, 100, 300, 100], [300, 100, 300, 300], [300, 300, 100, 100]],
+    ]);
+  });
+
+  it('starts a new polygon at a quick third tap after a double tap closed one', () => {
+    h.set({ currentMap: mapWith({ gridSize: 10 }) });
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    tap(1, px(100, 100));
+    tap(2, px(300, 100));
+    tap(3, px(300, 300));
+    tap(4, px(304, 302));
+    tap(5, px(302, 301));
+    tap(6, px(500, 300));
+    tap(7, px(500, 500));
+    tap(8, px(504, 502));
+
+    const replaces = sentOf('walls:replace') as Array<{ segments: WallSegment[] }>;
+    expect(replaces).toHaveLength(2);
+    expect(replaces[1].segments.slice(3).map(({ x1, y1, x2, y2 }) => [x1, y1, x2, y2])).toEqual([
+      [300, 300, 500, 300], [500, 300, 500, 500], [500, 500, 300, 300],
+    ]);
+  });
+
   it('leaves a mouse its 4 pixels: two clicks 12 pixels apart do not end the line', () => {
     render(<MapCanvas />);
     wallTool('Wall draw mode');
@@ -2408,7 +2505,7 @@ describe('a pen', () => {
   });
 });
 
-describe('choosing another DM tool', () => {
+describe('choosing another GM tool', () => {
   // Leaving Select keeps a wall being moved, so the finger's lift under the
   // new tool dropped the wall where it was.
   it("drops a finger's drag under way, putting a moved wall back", () => {
@@ -2464,6 +2561,49 @@ describe('the window losing focus', () => {
     finger.up(surface(), px(300, 300));
 
     expect(sentOf('walls:replace')).toEqual([]);
+  });
+});
+
+describe('the wall tool with no hover', () => {
+  const drawing = recordDrawing();
+  const overlay = () => document.querySelectorAll('canvas')[2];
+  /** Where the overlay's next frame draws a polygon's corner dots, 4 pixels across at 100%. */
+  async function cornersDrawn(): Promise<number[][]> {
+    drawing.take(overlay());
+    await nextFrame();
+    return drawing.take(overlay())
+      .filter((c) => c.method === 'arc' && c.args[2] === 4)
+      .map((c) => [c.args[0] as number, c.args[1] as number]);
+  }
+
+  // A finger has no hover, and the corners waited for a mouse's to be drawn.
+  it('draws each corner in the frame after its tap', async () => {
+    render(<MapCanvas />);
+    pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+    await nextFrame();
+    wallTool('Polygon wall mode');
+    await nextFrame();
+
+    tap(1, px(100, 100));
+    expect(await cornersDrawn()).toEqual([[100, 100]]);
+    tap(2, px(300, 100));
+    expect(await cornersDrawn()).toEqual([[100, 100], [300, 100]]);
+  });
+
+  // The colour picked under Walls waited for a hover too.
+  it('draws the walls in a colour picked under Walls in the next frame', async () => {
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A] }) });
+    render(<MapCanvas />);
+    pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+    await nextFrame();
+    wallTool('Wall draw mode');
+    await nextFrame();
+    const { strokes } = recordPaint(overlay().getContext('2d')!);
+
+    fireEvent.click(screen.getByLabelText('Wall color: Red'));
+    await nextFrame();
+
+    expect(strokes).toContain('rgba(239,68,68,0.9)');
   });
 });
 
@@ -2571,7 +2711,7 @@ describe('the ruler by touch', () => {
     };
   }
 
-  it("gives the DM a start at the first tap, an end at the second that stays after the lift, and a new start at the third", async () => {
+  it("gives the GM a start at the first tap, an end at the second that stays after the lift, and a new start at the third", async () => {
     await shown();
 
     tap(1, square(0, 19));
@@ -2630,7 +2770,7 @@ describe('the ruler by touch', () => {
 
   // A token held by a tap stays held while the ruler goes up, and the ruler
   // took every tap, so the token could not be put down.
-  it.each([['the DM', 'DM'], ['a player', 'PLAYER']])("lets %s put a token held by a tap down with a tap while the ruler is up", async (_who, role) => {
+  it.each([['the GM', 'GM'], ['a player', 'PLAYER']])("lets %s put a token held by a tap down with a tap while the ruler is up", async (_who, role) => {
     h.set({ userRole: role });
     render(<MapCanvas />);
     pictures.find((p) => p.src === '/api/assets/maps/x')!.load();

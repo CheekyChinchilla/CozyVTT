@@ -14,7 +14,7 @@
 
 import { z } from 'zod';
 import { TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
-import { GameSystem } from '@prisma/client';
+import { GameSystemSchema } from './gameSystem';
 import { NpcStatBlockSchema } from './statBlock';
 import { STAT_BLOCK_LIMITS } from './statBlockLimits';
 
@@ -31,7 +31,7 @@ const DisplayModeSchema = z.enum(TOKEN_DISPLAY_MODES);
  * field optional without repeating the constraints.
  */
 const creatureFields = {
-  gameSystem: z.nativeEnum(GameSystem).nullable().optional(),
+  gameSystem: GameSystemSchema.nullable().optional(),
   challengeRating: z.string().max(STAT_BLOCK_LIMITS.maxChallengeRatingLength).nullable().optional(),
   creatureType: z.string().max(STAT_BLOCK_LIMITS.maxCreatureTypeLength).nullable().optional(),
   alignment: z.string().max(STAT_BLOCK_LIMITS.maxAlignmentLength).nullable().optional(),

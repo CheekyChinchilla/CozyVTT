@@ -87,7 +87,7 @@ async function doorSightFor(
 
 export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * wall:add — DM adds a single wall segment. Sent with an acknowledgement,
+   * wall:add — GM adds a single wall segment. Sent with an acknowledgement,
    * it is answered once, `{ ok: true }` or `{ ok: false, error }`, the edit
    * ceiling included, so the page can take back a wall it drew and the
    * server refused.
@@ -102,8 +102,8 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         ack?.({ ok: false, error: TOO_MANY_MAP_EDITS_MESSAGE });
         return;
       }
-      if (socket.role !== 'DM') {
-        refuse('Only DMs can add wall segments');
+      if (socket.role !== 'GM') {
+        refuse('Only GMs can add wall segments');
         return;
       }
 
@@ -148,14 +148,14 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
   });
 
   /**
-   * wall:remove — DM removes a wall segment by id.
+   * wall:remove — GM removes a wall segment by id.
    */
   socket.on('wall:remove', async (data: { mapId: string; segmentId: string; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can remove wall segments' });
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only GMs can remove wall segments' });
         return;
       }
 
@@ -217,10 +217,10 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       // A player's sight on a lit map, worked out before the lock is taken,
       // so no edit of this map waits on it; the door is judged against it
       // under the lock, where it is and as it is then.
-      const sight = role === 'DM' ? null : await doorSightFor(mapId, campaignId, role, userId);
+      const sight = role === 'GM' ? null : await doorSightFor(mapId, campaignId, role, userId);
       const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<{ before: WallSegment; after: WallSegment }>> => {
         // A player may toggle doors only on the map the campaign is showing;
-        // a prepared map is the DM's until they switch to it.
+        // a prepared map is the GM's until they switch to it.
         const map = await tx.map.findUnique({
           where: { id: mapId },
           select: { ...EXTENT, wallSegments: true, lightingEnabled: true, fogEnabled: true, fogData: true, campaign: { select: { currentMapId: true } } },
@@ -233,18 +233,18 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         const idx = existing.findIndex((s) => s.id === sent.id);
         if (idx === -1) return { refused: 'Wall segment not found' };
 
-        // Non-DM users may only toggle unlocked doors (door-closed ↔ door-open),
+        // Non-GM users may only toggle unlocked doors (door-closed ↔ door-open),
         // and only that: the segment they send is otherwise ignored, so the door
-        // stays where the DM drew it. Storing the whole segment let a player
+        // stays where the GM drew it. Storing the whole segment let a player
         // move or stretch any unlocked door across the map by toggling it.
         let updated: WallSegment;
-        if (role !== 'DM') {
+        if (role !== 'GM') {
           const isDoor = ['door-open', 'door-closed', 'door-locked'].includes(existing[idx].type);
           if (!isDoor) return { refused: 'Players may only toggle doors', current: existing[idx] };
           // On a lit map, only a door one of their tokens can see, by the rule
           // the map shows doors by; asked before whether it is locked, so a
           // door in the dark tells them nothing. The door is judged where it
-          // is now, so one the DM moved since the sight was worked out is
+          // is now, so one the GM moved since the sight was worked out is
           // refused if it went out of it, and on a map lit since then, with
           // no sight worked out, no door is seen yet.
           const door = existing[idx];
@@ -268,7 +268,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
           if (!isDoorToggle || !currentIsDoor) return { refused: 'Players may only toggle doors', current: existing[idx] };
           updated = { ...existing[idx], type: targetType };
         } else {
-          // The DM may move a wall, within the map's bounds. One stored outside
+          // The GM may move a wall, within the map's bounds. One stored outside
           // them before they existed may stay where it is.
           if (wallOutsideMap([sent], map, [existing[idx]])) return { refused: WALL_OUTSIDE_MAP_MESSAGE };
           updated = sent;
@@ -283,7 +283,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: outcome.refused });
         // The wall as this socket may see it, with no operation id, so its page
         // takes it in place of what it drew; a locked door stays closed to
-        // anyone but the DM.
+        // anyone but the GM.
         if (outcome.current) socket.emit('wall:updated', { mapId, segment: wallSentTo(role, outcome.current) });
         return;
       }
@@ -302,7 +302,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
   });
 
   /**
-   * walls:replace — DM bulk-replaces all wall segments. Answered through an
+   * walls:replace — GM bulk-replaces all wall segments. Answered through an
    * acknowledgement as wall:add is.
    */
   socket.on('walls:replace', async (data: { mapId: string; segments: unknown; opId?: unknown }, ackArg?: unknown) => {
@@ -314,8 +314,8 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         ack?.({ ok: false, error: TOO_MANY_MAP_EDITS_MESSAGE });
         return;
       }
-      if (socket.role !== 'DM') {
-        refuse('Only DMs can replace wall segments');
+      if (socket.role !== 'GM') {
+        refuse('Only GMs can replace wall segments');
         return;
       }
 
@@ -373,11 +373,11 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         select: { campaignId: true, wallSegments: true, campaign: { select: { currentMapId: true } } },
       });
       if (!map || map.campaignId !== socket.campaignId) return;
-      // A prepared map is the DM's alone; a player is answered only about
+      // A prepared map is the GM's alone; a player is answered only about
       // the map the campaign is showing.
       if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
 
-      // A locked door goes to anyone but the DM as a closed one.
+      // A locked door goes to anyone but the GM as a closed one.
       emitNewestState(socket, 'walls:replaced', { mapId, segments: wallsSentTo(socket.role, map.wallSegments) }, mapId);
     } catch (error) {
       logger.error('walls:request failed', { err: error });

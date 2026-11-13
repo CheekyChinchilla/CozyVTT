@@ -67,15 +67,15 @@ function CampaignPageContent() {
   const { user } = useAuth();
 
   /**
-   * Owning a campaign and running it are different things once the DM seat can
+   * Owning a campaign and running it are different things once the GM seat can
    * move. The owner keeps the powers that are theirs — deleting the campaign,
    * and taking the seat back — so they need a way into the settings panel even
-   * when somebody else is the DM. Without this, handing the game over left the
+   * when somebody else is the GM. Without this, handing the game over left the
    * campaign with nobody able to delete it: the owner had the permission and no
-   * route to it, the new DM had the route and no permission.
+   * route to it, the new GM had the route and no permission.
    */
   const isOwner = isCampaignOwner(campaign, user?.id);
-  const canOpenSettings = userRole === 'DM' || isOwner;
+  const canOpenSettings = userRole === 'GM' || isOwner;
   const { socket, joinedEpoch, status } = useWebSocket();
 
   // Mirror combat/initiative state into the game store. Owned here rather than
@@ -153,7 +153,7 @@ function CampaignPageContent() {
 
   // ============================================
   // Session WebSocket listeners
-  // All clients (DM + Players) listen so campaign status stays in sync
+  // All clients (GM + Players) listen so campaign status stays in sync
   // ============================================
   useEffect(() => {
     // Register on the live socket only once it is actually connected. The socket
@@ -244,7 +244,7 @@ function CampaignPageContent() {
   // arrangement remounts none of them.
   const tableParts: Record<TablePart, ReactNode> = {
     map: (
-      // The banner over a map the DM is preparing, then the map below it.
+      // The banner over a map the GM is preparing, then the map below it.
       <div className="flex h-full w-full flex-col">
         <PreparingBanner />
         <div className="min-h-0 flex-1">
@@ -265,8 +265,8 @@ function CampaignPageContent() {
       <div className="space-y-4">
         <CampaignInfo onLeft={endTable} />
         <CampaignRoster />
-        {/* Token Roster — DM only */}
-        {userRole === 'DM' && (
+        {/* Token Roster — GM only */}
+        {userRole === 'GM' && (
           <TokenRoster onEditToken={editToken} />
         )}
       </div>
@@ -308,56 +308,56 @@ function CampaignPageContent() {
         )}
       </TableHosts>
 
-      {/* Map Manager slide-over panel (DM only) */}
-      {userRole === 'DM' && (
+      {/* Map Manager slide-over panel (GM only) */}
+      {userRole === 'GM' && (
         <MapManager
           isOpen={isMapManagerOpen}
           onClose={() => setIsMapManagerOpen(false)}
         />
       )}
 
-      {/* Token Manager slide-over panel (DM only) */}
-      {userRole === 'DM' && (
+      {/* Token Manager slide-over panel (GM only) */}
+      {userRole === 'GM' && (
         <TokenManager
           isOpen={isTokenManagerOpen}
           onClose={() => setIsTokenManagerOpen(false)}
         />
       )}
 
-      {/* Spirit Layer Controls slide-over panel (DM only) */}
-      {userRole === 'DM' && (
+      {/* Spirit Layer Controls slide-over panel (GM only) */}
+      {userRole === 'GM' && (
         <SpiritLayerControls
           isOpen={isSpiritLayerOpen}
           onClose={() => setIsSpiritLayerOpen(false)}
         />
       )}
 
-      {/* Atmosphere Panel slide-over (DM only) */}
-      {userRole === 'DM' && (
+      {/* Atmosphere Panel slide-over (GM only) */}
+      {userRole === 'GM' && (
         <AtmospherePanel
           isOpen={isAtmospherePanelOpen}
           onClose={() => setIsAtmospherePanelOpen(false)}
         />
       )}
 
-      {/* Creature Library slide-over (DM only) */}
-      {userRole === 'DM' && (
+      {/* Creature Library slide-over (GM only) */}
+      {userRole === 'GM' && (
         <CreatureLibrary
           isOpen={isCreatureLibraryOpen}
           onClose={() => setIsCreatureLibraryOpen(false)}
         />
       )}
 
-      {/* Token Template Library slide-over (DM only) */}
-      {userRole === 'DM' && (
+      {/* Token Template Library slide-over (GM only) */}
+      {userRole === 'GM' && (
         <TokenTemplateLibrary
           isOpen={isTokenTemplateLibraryOpen}
           onClose={() => setIsTokenTemplateLibraryOpen(false)}
         />
       )}
 
-      {/* NPC Quick Editor — DM only */}
-      {userRole === 'DM' && quickEdit && campaign && (
+      {/* NPC Quick Editor — GM only */}
+      {userRole === 'GM' && quickEdit && campaign && (
         <NpcQuickEditor
           token={quickEdit.token}
           campaignId={campaign.id}
@@ -365,7 +365,7 @@ function CampaignPageContent() {
           onClose={() => setQuickEdit(null)}
           onTokenUpdate={(updated) => {
             // A stat block saves when the editor closes, so its answer often
-            // arrives after the DM closed the editor or opened another token.
+            // arrives after the GM closed the editor or opened another token.
             // Update the editor only while it still shows this token.
             setQuickEdit((open) => (open?.token.id === updated.id ? { ...open, token: updated } : open));
             useGameStore.getState().replaceToken(updated, quickEdit.mapId);
@@ -373,7 +373,7 @@ function CampaignPageContent() {
         />
       )}
 
-      {/* Campaign Settings slide-over panel — the DM, or the owner, who sees
+      {/* Campaign Settings slide-over panel — the GM, or the owner, who sees
           only the parts that are theirs (see CampaignSettingsModal). */}
       {canOpenSettings && (
         <CampaignSettingsModal
@@ -388,7 +388,7 @@ function CampaignPageContent() {
           isOpen={isDocumentsOpen}
           onClose={() => setIsDocumentsOpen(false)}
           campaignId={campaign.id}
-          isDM={userRole === 'DM'}
+          isGM={userRole === 'GM'}
         />
       )}
 

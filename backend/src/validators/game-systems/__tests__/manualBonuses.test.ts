@@ -1,5 +1,5 @@
 /**
- * The D&D 5e sheet's manual bonuses are held to the same range as a custom
+ * The 5E sheet's manual bonuses are held to the same range as a custom
  * skill's other bonus.
  *
  * Initiative, passive Perception and the two spellcasting "other bonus" boxes
@@ -11,22 +11,22 @@
 import { describe, it, expect } from '@jest/globals';
 import { GameSystem } from '../../../game-systems';
 import { getBlankCharacterTemplate, validateCharacterData } from '../index';
-import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE } from '../../../utils/rules/dnd5e';
+import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE } from '../../../utils/rules/fifthEdition';
 
 function sheet(extra: Record<string, unknown>, spellcasting: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    ...(getBlankCharacterTemplate(GameSystem.DND_5E) as Record<string, unknown>),
+    ...(getBlankCharacterTemplate(GameSystem.FIFTH_EDITION) as Record<string, unknown>),
     ...extra,
     spellcasting: { ability: 'Intelligence', ...spellcasting },
   };
 }
 
 function issuePaths(data: unknown): string[] {
-  const result = validateCharacterData(GameSystem.DND_5E, data);
+  const result = validateCharacterData(GameSystem.FIFTH_EDITION, data);
   return result.success ? [] : result.errors.issues.map((issue) => issue.path.join('.'));
 }
 
-describe('D&D 5e manual bonuses', () => {
+describe('5E manual bonuses', () => {
   it.each([
     ['initiativeBonus', 9999],
     ['initiativeBonus', MAX_BONUS_OVERRIDE + 1],

@@ -1,10 +1,10 @@
 // ============================================
 // CampaignSettingsModal
-// DM-only slide-over panel for campaign settings
+// GM-only slide-over panel for campaign settings
 // General info, member management, danger zone
 // ============================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
   Settings,
@@ -28,7 +28,7 @@ import campaignService from '@/services/campaign.service';
 import InvitePlayerModal from './InvitePlayerModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { CampaignRole } from '@/types';
-import type { AccessRevoked, CampaignMembership, CampaignInvitationSummary } from '@/types';
+import type { AccessRevoked, AssignableCampaignRole, CampaignMembership, CampaignInvitationSummary } from '@/types';
 import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import { apiErrorMessage } from '@/utils/errors';
@@ -52,6 +52,12 @@ interface CampaignSettingsModalProps {
 
 type SettingsTab = 'general' | 'chat' | 'members' | 'danger';
 
+/** What the Role picker beside a member offers, in its order. */
+const ROLE_CHOICES = [CampaignRole.PLAYER, CampaignRole.SPECTATOR] as const satisfies readonly AssignableCampaignRole[];
+
+/** The picker's value as a role it offers. */
+const roleChoice = (value: string): AssignableCampaignRole | undefined => ROLE_CHOICES.find((role) => role === value);
+
 /** A switch's press, a finger's height around its 24 px pill on a touch screen. */
 const SWITCH_PRESS = "pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2.5 pointer-coarse:after:content-['']";
 
@@ -63,16 +69,16 @@ export default function CampaignSettingsModal({
   const { campaign, refreshCampaign, userRole } = useCampaign();
 
   /**
-   * The panel is open to the DM and to the campaign's owner, who are not always
+   * The panel is open to the GM and to the campaign's owner, who are not always
    * the same person once the game has been handed over.
    *
-   * An owner who is no longer the DM keeps exactly two powers, and the server
+   * An owner who is no longer the GM keeps exactly two powers, and the server
    * agrees with this list: they can delete the campaign, and they can take the
-   * DM seat back. Everything else here — renaming, chat settings, exporting,
-   * inviting, removing members — is gated on being the DM, so offering it would
+   * GM seat back. Everything else here — renaming, chat settings, exporting,
+   * inviting, removing members — is gated on being the GM, so offering it would
    * only produce refusals.
    */
-  const isDmViewer = userRole === 'DM';
+  const isGmViewer = userRole === 'GM';
   const { showToast } = useToast();
   const { user } = useAuth();
   const mayDelete = isCampaignOwner(campaign, user?.id) || user?.platformRole === 'ADMIN';
@@ -98,13 +104,21 @@ export default function CampaignSettingsModal({
   // ── Members ──────────────────────────────────
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<CampaignMembership | null>(null);
+  // The member just removed and where their row stood, so the focus can stay
+  // in the list once the removal has finished.
+  const removedMember = useRef<{ userId: string; index: number } | null>(null);
+  const memberListRef = useRef<HTMLDivElement>(null);
+  const inviteButtonRef = useRef<HTMLButtonElement>(null);
   // What Remove's question calls the member asked about.
   const removingRole = memberToRemove ? CAMPAIGN_ROLE_LABEL[memberToRemove.role] : CAMPAIGN_ROLE_LABEL[CampaignRole.PLAYER];
   const [memberToPromote, setMemberToPromote] = useState<CampaignMembership | null>(null);
   const [promotingMemberId, setPromotingMemberId] = useState<string | null>(null);
+  // The role each Role picker shows while its change is on its way, by member;
+  // the membership's own role otherwise.
+  const [pendingRoles, setPendingRoles] = useState<Record<string, AssignableCampaignRole>>({});
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteKey, setInviteKey] = useState(0);
-  // The invitations that still stand, for the DM to see and withdraw.
+  // The invitations that still stand, for the GM to see and withdraw.
   const [invitations, setInvitations] = useState<CampaignInvitationSummary[]>([]);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
 
@@ -120,7 +134,7 @@ export default function CampaignSettingsModal({
   // Seed the form when the dialog opens, or for another campaign. Not on
   // every campaign object: the page fetches the same campaign again when
   // someone joins or leaves and after a reconnect, and re-seeding then threw
-  // away what the DM was typing and jumped back to the first tab.
+  // away what the GM was typing and jumped back to the first tab.
   useEffect(() => {
     if (isOpen && campaign) {
       setName(campaign.name);
@@ -128,9 +142,9 @@ export default function CampaignSettingsModal({
       setChatCooldownEnabled(campaign.chatCooldownEnabled);
       setChatCooldownSeconds(campaign.chatCooldownSeconds);
       setDeleteConfirmName('');
-      setActiveTab(isDmViewer ? 'general' : 'members');
+      setActiveTab(isGmViewer ? 'general' : 'members');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- seeds the form on opening and for another campaign; a refetch of the same one must keep what the DM typed
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- seeds the form on opening and for another campaign; a refetch of the same one must keep what the GM typed
   }, [isOpen, campaign?.id]);
 
   const loadInvitations = useCallback(async () => {
@@ -143,8 +157,38 @@ export default function CampaignSettingsModal({
   }, [campaign?.id, showToast]);
 
   useEffect(() => {
-    if (isOpen && isDmViewer && activeTab === 'members') void loadInvitations();
-  }, [isOpen, isDmViewer, activeTab, loadInvitations]);
+    if (isOpen && isGmViewer && activeTab === 'members') void loadInvitations();
+  }, [isOpen, isGmViewer, activeTab, loadInvitations]);
+
+  // Remove is disabled while the member is removed, so the confirmation
+  // cannot hand the focus back to it. Once the removal has finished the focus
+  // goes to Remove again if the row is still there, or else to the first
+  // control of the next row that has one, the one before when there is none
+  // after, or Invite Player.
+  useEffect(() => {
+    const removed = removedMember.current;
+    const list = memberListRef.current;
+    if (removingMemberId !== null || !removed || !list) return;
+    removedMember.current = null;
+    const rows = Array.from(list.querySelectorAll<HTMLElement>('[data-member-row]'));
+    const firstControl = (row: HTMLElement) =>
+      row.querySelector<HTMLElement>('select:not([disabled]), button:not([disabled])');
+    const stayed = rows.find((row) => row.dataset.memberRow === removed.userId);
+    if (stayed) {
+      (stayed.querySelector<HTMLElement>('[data-remove-member]') ?? firstControl(stayed))?.focus();
+      return;
+    }
+    const after = rows.slice(Math.max(removed.index, 0));
+    const before = rows.slice(0, Math.max(removed.index, 0)).reverse();
+    for (const row of [...after, ...before]) {
+      const control = firstControl(row);
+      if (control) {
+        control.focus();
+        return;
+      }
+    }
+    inviteButtonRef.current?.focus();
+  }, [removingMemberId]);
 
   if (!campaign) return null;
 
@@ -223,6 +267,10 @@ export default function CampaignSettingsModal({
 
   const handleConfirmRemoveMember = async () => {
     if (!memberToRemove) return;
+    removedMember.current = {
+      userId: memberToRemove.userId,
+      index: memberships.findIndex((m) => m.userId === memberToRemove.userId),
+    };
     setRemovingMemberId(memberToRemove.userId);
     setMemberToRemove(null);
     try {
@@ -237,23 +285,48 @@ export default function CampaignSettingsModal({
   };
 
   /**
-   * Hand the game to someone else. One action on the server: they become DM and
+   * Make a member a player or a spectator. The picker shows the role chosen
+   * while the server is asked, and the campaign is read again once it has
+   * answered, so the row keeps it; a refusal puts the row back and says why.
+   * The member's own page follows through `campaign.role.changed`.
+   */
+  const handleChangeRole = async (membership: CampaignMembership, role: AssignableCampaignRole) => {
+    if (role === membership.role) return;
+    const { userId } = membership;
+    setPendingRoles((prev) => ({ ...prev, [userId]: role }));
+    try {
+      await api.changeCampaignMemberRole(campaign.id, userId, role);
+      await refreshCampaign();
+      showToast(`${membership.user?.displayName ?? 'The member'} is now a ${CAMPAIGN_ROLE_LABEL[role].toLowerCase()}`, 'success');
+    } catch (err) {
+      showToast(apiErrorMessage(err) ?? 'Failed to change the role', 'error');
+    } finally {
+      setPendingRoles((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    }
+  };
+
+  /**
+   * Hand the game to someone else. One action on the server: they become GM and
    * you become a player. Ownership of the campaign does not move, so if you own
    * it you still do.
    */
-  const handleConfirmMakeDm = async () => {
+  const handleConfirmMakeGm = async () => {
     if (!memberToPromote) return;
     const promoted = memberToPromote;
     setPromotingMemberId(promoted.userId);
     setMemberToPromote(null);
     try {
-      await api.transferDM(campaign.id, promoted.userId);
+      await api.transferGM(campaign.id, promoted.userId);
       await refreshCampaign();
-      showToast(`${promoted.user?.displayName ?? 'They'} is now the DM`, 'success');
-      // This panel is DM-only, and the caller has just stopped being the DM.
+      showToast(`${promoted.user?.displayName ?? 'They'} is now the GM`, 'success');
+      // This panel is GM-only, and the caller has just stopped being the GM.
       onClose();
     } catch (err) {
-      showToast(apiErrorMessage(err) ?? 'Failed to transfer the DM role', 'error');
+      showToast(apiErrorMessage(err) ?? 'Failed to transfer the GM role', 'error');
     } finally {
       setPromotingMemberId(null);
     }
@@ -290,10 +363,10 @@ export default function CampaignSettingsModal({
     }
   };
 
-  // Nobody the server refuses to remove: yourself, the DM, and the
+  // Nobody the server refuses to remove: yourself, the GM, and the
   // campaign's owner, who keeps their place at the table whoever runs it.
   const mayRemove = (membership: CampaignMembership) =>
-    membership.userId !== user?.id && membership.role !== 'DM' && membership.userId !== campaign.ownerId;
+    membership.userId !== user?.id && membership.role !== 'GM' && membership.userId !== campaign.ownerId;
 
   const deleteNameMatches = deleteConfirmName.trim() === campaign.name;
 
@@ -326,7 +399,7 @@ export default function CampaignSettingsModal({
           <div className="flex gap-1 mt-4">
             {(
               [
-                ...(isDmViewer
+                ...(isGmViewer
                   ? [
                       { id: 'general', label: 'General' },
                       { id: 'chat', label: 'Chat' },
@@ -602,8 +675,9 @@ export default function CampaignSettingsModal({
                   <Users className="w-4 h-4" />
                   <span>{memberships.length} member{memberships.length !== 1 ? 's' : ''}</span>
                 </div>
-                {isDmViewer && (
+                {isGmViewer && (
                 <Button
+                  ref={inviteButtonRef}
                   type="button"
                   onClick={() => { setInviteKey((k) => k + 1); setShowInviteModal(true); }}
                   variant="secondary" className="flex items-center gap-2 text-sm"
@@ -615,18 +689,22 @@ export default function CampaignSettingsModal({
               </div>
 
               {/* Member list */}
-              <div className="space-y-2">
+              <div ref={memberListRef} className="space-y-2">
                 {memberships.map((membership) => {
                   const isSelf = membership.userId === user?.id;
-                  const isDm = membership.role === 'DM';
+                  const isGm = membership.role === 'GM';
                   const isRemoving = removingMemberId === membership.userId;
+                  const pendingRole = pendingRoles[membership.userId];
+                  const memberName = membership.user?.displayName ?? 'this member';
 
+                  // The controls go under the name when they do not fit beside it.
                   return (
                     <div
                       key={membership.userId}
-                      className="flex items-center justify-between p-3 rounded-lg bg-parchment/50 border border-moss-green/10"
+                      data-member-row={membership.userId}
+                      className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 p-3 rounded-lg bg-parchment/50 border border-moss-green/10"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0 flex-1 basis-40">
                         <div className="w-8 h-8 rounded-full bg-moss-green/15 flex items-center justify-center shrink-0">
                           <span className="text-sm font-bold text-brand-ink uppercase">
                             {(membership.user?.displayName ?? '?')[0]}
@@ -642,37 +720,63 @@ export default function CampaignSettingsModal({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Role badge */}
-                        <span
-                          className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                            isDm
-                              ? 'bg-spirit-purple/10 text-spirit-ink border-spirit-purple/20'
-                              : membership.role === 'SPECTATOR'
-                              ? 'bg-stone-gray/10 text-stone-gray border-stone-gray/20'
-                              : 'bg-moss-green/10 text-brand-ink border-moss-green/20'
-                          }`}
-                        >
-                          {isDm ? (
-                            <span className="flex items-center gap-1">
-                              <ShieldCheck className="w-3 h-3" />
-                              {CAMPAIGN_ROLE_LABEL[membership.role]}
-                            </span>
-                          ) : (
-                            CAMPAIGN_ROLE_LABEL[membership.role]
-                          )}
-                        </span>
+                      <div className="flex items-center gap-2 shrink-0 ml-auto">
+                        {/* Role: a picker for the GM beside everyone but
+                            themselves, the campaign's owner included; a
+                            badge otherwise */}
+                        {isGmViewer && !isGm ? (
+                          // Left enabled while busy: a browser moves the
+                          // focus off a control disabled under it, and a
+                          // change from the keyboard is sent at once. A
+                          // change made meanwhile is ignored, and the
+                          // controlled value puts the choice back.
+                          <select
+                            aria-label={`Role of ${memberName}`}
+                            value={pendingRole ?? membership.role}
+                            aria-busy={pendingRole !== undefined || undefined}
+                            aria-disabled={pendingRole !== undefined || isRemoving || undefined}
+                            onChange={(e) => {
+                              if (pendingRole !== undefined || isRemoving) return;
+                              const role = roleChoice(e.target.value);
+                              if (role) void handleChangeRole(membership, role);
+                            }}
+                            className="touch-target rounded-cozy border border-ink-muted/30 bg-paper/80 px-2 py-1 text-xs font-medium text-ink focus:outline-hidden focus:ring-2 focus:ring-brand aria-disabled:opacity-60"
+                          >
+                            {ROLE_CHOICES.map((role) => (
+                              <option key={role} value={role}>{CAMPAIGN_ROLE_LABEL[role]}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span
+                            className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                              isGm
+                                ? 'bg-spirit-purple/10 text-spirit-ink border-spirit-purple/20'
+                                : membership.role === 'SPECTATOR'
+                                ? 'bg-stone-gray/10 text-stone-gray border-stone-gray/20'
+                                : 'bg-moss-green/10 text-brand-ink border-moss-green/20'
+                            }`}
+                          >
+                            {isGm ? (
+                              <span className="flex items-center gap-1">
+                                <ShieldCheck className="w-3 h-3" />
+                                {CAMPAIGN_ROLE_LABEL[membership.role]}
+                              </span>
+                            ) : (
+                              CAMPAIGN_ROLE_LABEL[membership.role]
+                            )}
+                          </span>
+                        )}
 
                         {/* Hand over the game. Offered on anyone who is
-                            not already the DM, including a spectator. */}
-                        {!isDm && (
+                            not already the GM, including a spectator. */}
+                        {!isGm && (
                           <button
                             type="button"
                             onClick={() => setMemberToPromote(membership)}
                             disabled={promotingMemberId === membership.userId}
-                            title={`Make ${membership.user?.displayName ?? 'this player'} the DM`}
-                            className="p-1.5 rounded-lg text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-40"
-                            aria-label={`Make ${membership.user?.displayName} the Dungeon Master`}
+                            title={`Make ${membership.user?.displayName ?? 'this player'} the GM`}
+                            className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-40"
+                            aria-label={`Make ${membership.user?.displayName} the GM`}
                           >
                             {promotingMemberId === membership.userId ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -682,13 +786,14 @@ export default function CampaignSettingsModal({
                           </button>
                         )}
 
-                        {/* Remove button: not for yourself, the DM or the owner */}
-                        {isDmViewer && mayRemove(membership) && (
+                        {/* Remove button: not for yourself, the GM or the owner */}
+                        {isGmViewer && mayRemove(membership) && (
                           <button
                             type="button"
                             onClick={() => handleRemoveMemberClick(membership)}
                             disabled={isRemoving}
-                            className="p-1.5 rounded-lg text-danger-ink hover:text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
+                            data-remove-member
+                            className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-danger-ink hover:text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
                             aria-label={`Remove ${membership.user?.displayName} from campaign`}
                           >
                             {isRemoving ? (
@@ -705,7 +810,7 @@ export default function CampaignSettingsModal({
               </div>
 
               {/* Invitations that still stand: who has been asked, until when */}
-              {isDmViewer && invitations.length > 0 && (
+              {isGmViewer && invitations.length > 0 && (
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide">Invited</h3>
                   {invitations.map((invitation) => (
@@ -725,7 +830,7 @@ export default function CampaignSettingsModal({
                         type="button"
                         onClick={() => handleWithdrawInvitation(invitation)}
                         disabled={withdrawingId === invitation.id}
-                        className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
+                        className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
                         aria-label={`Withdraw the invitation to ${invitation.user.displayName}`}
                         title="Withdraw the invitation"
                       >
@@ -814,14 +919,14 @@ export default function CampaignSettingsModal({
         onCancel={() => setMemberToRemove(null)}
       />
 
-      {/* Transfer DM confirm dialog */}
+      {/* Transfer GM confirm dialog */}
       <ConfirmDialog
         isOpen={!!memberToPromote}
-        title="Hand over the DM role"
-        message={`Make ${memberToPromote?.user?.displayName ?? 'this player'} the DM of "${campaign.name}"? They get the DM's controls and you become a player. You stay in the campaign, and this does not change who owns it — you can be made DM again later.`}
-        confirmLabel="Make them DM"
+        title="Hand over the GM role"
+        message={`Make ${memberToPromote?.user?.displayName ?? 'this player'} the GM of "${campaign.name}"? They get the GM's controls and you become a player. You stay in the campaign, and this does not change who owns it — you can be made GM again later.`}
+        confirmLabel="Make them GM"
         cancelLabel="Cancel"
-        onConfirm={handleConfirmMakeDm}
+        onConfirm={handleConfirmMakeGm}
         onCancel={() => setMemberToPromote(null)}
       />
 

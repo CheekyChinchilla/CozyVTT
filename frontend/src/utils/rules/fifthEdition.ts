@@ -1,0 +1,786 @@
+/**
+ * rules/fifthEdition.ts
+ * 5E rules maths: ability modifiers, proficiency bonus, the skill list,
+ * and the inference used to read proficiency back out of a printed bonus.
+ *
+ * ---------------------------------------------------------------------------
+ * DUPLICATED FILE — these two copies must stay byte-for-byte identical:
+ *   frontend/src/utils/rules/fifthEdition.ts
+ *   backend/src/utils/rules/fifthEdition.ts
+ * ---------------------------------------------------------------------------
+ * The frontend and backend are separate TypeScript projects with no shared
+ * package, and the repo already hand-syncs types across the boundary (see
+ * docs/GAME_SYSTEMS.md). A parity test in each project compares the two files
+ * and fails on any difference, so drift breaks CI rather than silently changing
+ * dice maths on one side only. Edit one, copy it to the other.
+ *
+ * Rules references: SRD 5.1, "Monsters" (proficiency bonus by challenge rating)
+ * and SRD 5.1, "Ability Scores and Modifiers" (modifier derivation). Both were
+ * checked against the published text rather than written from memory.
+ */
+
+// ---------------------------------------------------------------------------
+// Abilities
+// ---------------------------------------------------------------------------
+
+/** The six ability keys, in the canonical stat-block order. */
+export const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
+
+export type AbilityKey = (typeof ABILITY_KEYS)[number];
+
+export const ABILITY_LABELS: Record<AbilityKey, string> = {
+  str: 'Strength',
+  dex: 'Dexterity',
+  con: 'Constitution',
+  int: 'Intelligence',
+  wis: 'Wisdom',
+  cha: 'Charisma',
+};
+
+/**
+ * Ability modifier: floor((score - 10) / 2).
+ *
+ * Handles odd and sub-10 scores the way the rules do — a score of 7 is -2, not
+ * -1.5 truncated toward zero, which is why this uses floor rather than trunc.
+ */
+export function abilityModifier(score: number): number {
+  if (!Number.isFinite(score)) return 0;
+  return Math.floor((score - 10) / 2);
+}
+
+/** Render a modifier the way a stat block does: "+3", "0", "-1". */
+export function formatModifier(mod: number): string {
+  return mod >= 0 ? `+${mod}` : `${mod}`;
+}
+
+// ---------------------------------------------------------------------------
+// Proficiency bonus
+// ---------------------------------------------------------------------------
+
+/**
+ * Proficiency bonus bands. A monster's proficiency bonus is taken from its
+ * challenge rating on exactly the same curve a character's is taken from level,
+ * so a CR 7 monster and a 7th-level character both get +3.
+ *
+ * CR 0, 1/8, 1/4 and 1/2 all fall in the first band.
+ */
+export const PROFICIENCY_BANDS: ReadonlyArray<{ maxCr: number; bonus: number }> = [
+  { maxCr: 4, bonus: 2 },
+  { maxCr: 8, bonus: 3 },
+  { maxCr: 12, bonus: 4 },
+  { maxCr: 16, bonus: 5 },
+  { maxCr: 20, bonus: 6 },
+  { maxCr: 24, bonus: 7 },
+  { maxCr: 28, bonus: 8 },
+  { maxCr: 30, bonus: 9 },
+];
+
+/** Lowest proficiency bonus in the game — the fallback when CR is unknown. */
+export const MIN_PROFICIENCY_BONUS = 2;
+
+/** Highest proficiency bonus in the game (CR 29-30). */
+export const MAX_PROFICIENCY_BONUS = 9;
+
+/**
+ * Parse a challenge rating as written in a stat block into a number.
+ *
+ * Accepts "0", "1/8", "1/4", "1/2", "5", "21", and tolerates surrounding
+ * whitespace. Returns null for anything unparseable (including "—", which some
+ * sources use for creatures without a CR) so callers can decide the fallback.
+ */
+export function parseChallengeRating(cr: string | number | null | undefined): number | null {
+  if (typeof cr === 'number') return Number.isFinite(cr) ? cr : null;
+  if (!cr) return null;
+
+  const trimmed = String(cr).trim();
+  if (!trimmed) return null;
+
+  const fraction = trimmed.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (fraction) {
+    const denominator = Number(fraction[2]);
+    if (denominator === 0) return null;
+    return Number(fraction[1]) / denominator;
+  }
+
+  const value = Number(trimmed);
+  return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Proficiency bonus for a monster of the given challenge rating.
+ *
+ * Unknown or unparseable CRs fall back to +2 rather than throwing: a stat block
+ * with no CR is common (homebrew, imported NPCs) and the lowest bonus is the
+ * least surprising default.
+ */
+export function proficiencyBonusForCR(cr: string | number | null | undefined): number {
+  const parsed = parseChallengeRating(cr);
+  if (parsed === null) return MIN_PROFICIENCY_BONUS;
+
+  for (const band of PROFICIENCY_BANDS) {
+    if (parsed <= band.maxCr) return band.bonus;
+  }
+  return MAX_PROFICIENCY_BONUS;
+}
+
+/**
+ * Proficiency bonus for a character of the given level. Shares the CR curve —
+ * kept here so the relationship is visible in one place rather than implied.
+ */
+export function proficiencyBonusForLevel(level: number): number {
+  if (!Number.isFinite(level) || level < 1) return MIN_PROFICIENCY_BONUS;
+  return proficiencyBonusForCR(Math.min(level, 30));
+}
+
+/**
+ * Every challenge rating a 5e creature can have, in order.
+ *
+ * Offered as a fixed list rather than free text so a typo cannot silently
+ * change a creature's proficiency bonus — "1/3" or "one" would fall back to +2
+ * with no indication anything was wrong.
+ */
+export const CHALLENGE_RATINGS: readonly string[] = [
+  '0',
+  '1/8',
+  '1/4',
+  '1/2',
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '10',
+  '11',
+  '12',
+  '13',
+  '14',
+  '15',
+  '16',
+  '17',
+  '18',
+  '19',
+  '20',
+  '21',
+  '22',
+  '23',
+  '24',
+  '25',
+  '26',
+  '27',
+  '28',
+  '29',
+  '30',
+];
+
+// ---------------------------------------------------------------------------
+// Skills
+// ---------------------------------------------------------------------------
+
+export interface SkillDefinition {
+  /** Canonical camelCase key, matching the player-character sheet's FifthEditionSkills. */
+  key: string;
+  /** Display name as printed in a stat block. */
+  label: string;
+  /** The ability a check with this skill uses. */
+  ability: AbilityKey;
+}
+
+/** The eighteen 5e skills, in the alphabetical order stat blocks print them. */
+export const FIFTH_EDITION_SKILLS: readonly SkillDefinition[] = [
+  { key: 'acrobatics', label: 'Acrobatics', ability: 'dex' },
+  { key: 'animalHandling', label: 'Animal Handling', ability: 'wis' },
+  { key: 'arcana', label: 'Arcana', ability: 'int' },
+  { key: 'athletics', label: 'Athletics', ability: 'str' },
+  { key: 'deception', label: 'Deception', ability: 'cha' },
+  { key: 'history', label: 'History', ability: 'int' },
+  { key: 'insight', label: 'Insight', ability: 'wis' },
+  { key: 'intimidation', label: 'Intimidation', ability: 'cha' },
+  { key: 'investigation', label: 'Investigation', ability: 'int' },
+  { key: 'medicine', label: 'Medicine', ability: 'wis' },
+  { key: 'nature', label: 'Nature', ability: 'int' },
+  { key: 'perception', label: 'Perception', ability: 'wis' },
+  { key: 'performance', label: 'Performance', ability: 'cha' },
+  { key: 'persuasion', label: 'Persuasion', ability: 'cha' },
+  { key: 'religion', label: 'Religion', ability: 'int' },
+  { key: 'sleightOfHand', label: 'Sleight of Hand', ability: 'dex' },
+  { key: 'stealth', label: 'Stealth', ability: 'dex' },
+  { key: 'survival', label: 'Survival', ability: 'wis' },
+];
+
+const SKILL_BY_NORMALIZED = new Map<string, SkillDefinition>();
+for (const skill of FIFTH_EDITION_SKILLS) {
+  // Index by a punctuation-free, lowercase form so every spelling collapses to
+  // one entry: "animalHandling", "animal_handling", "Animal Handling",
+  // "animal-handling" all reduce to "animalhandling".
+  SKILL_BY_NORMALIZED.set(skill.key.toLowerCase(), skill);
+  SKILL_BY_NORMALIZED.set(skill.label.toLowerCase().replace(/[^a-z]/g, ''), skill);
+}
+
+/**
+ * Resolve any spelling of a skill name to its canonical definition.
+ *
+ * This matters for real data, not just tidiness: the SRD importer stores
+ * Open5e's snake_case keys ("animal_handling", "sleight_of_hand"), which never
+ * matched the camelCase lookup the roll picker used, so those skills lost their
+ * ability association. Returns null for unrecognised names, which are kept as
+ * free-form custom skills rather than silently discarded.
+ */
+export function findSkill(name: string): SkillDefinition | null {
+  if (!name) return null;
+  const normalized = name.toLowerCase().replace(/[^a-z]/g, '');
+  return SKILL_BY_NORMALIZED.get(normalized) ?? null;
+}
+
+/** Canonical key for a skill name, or the trimmed input if unrecognised. */
+export function normalizeSkillKey(name: string): string {
+  return findSkill(name)?.key ?? name.trim();
+}
+
+/** Display label for a skill key, falling back to the raw key. */
+export function skillLabel(key: string): string {
+  return findSkill(key)?.label ?? key;
+}
+
+// ---------------------------------------------------------------------------
+// Proficiency levels
+// ---------------------------------------------------------------------------
+
+/**
+ * How proficient a creature is in a save or skill.
+ *
+ * 'custom' means the bonus was set explicitly and is not derived — used for
+ * homebrew and for published creatures whose printed value does not decompose
+ * into ability modifier plus a whole number of proficiency bonuses.
+ */
+export type ProficiencyLevel = 'none' | 'proficient' | 'expertise' | 'custom';
+
+/** Multiplier applied to the proficiency bonus for each derived level. */
+const PROFICIENCY_MULTIPLIER: Record<Exclude<ProficiencyLevel, 'custom'>, number> = {
+  none: 0,
+  proficient: 1,
+  expertise: 2,
+};
+
+/**
+ * The bonus a creature has in a save or skill.
+ *
+ * Expertise doubles the proficiency bonus, matching the player rule. Monsters
+ * do get expertise — it is simply not labelled in printed stat blocks, so a
+ * Goblin's Stealth +6 (Dex +2, PB +2) is doubled proficiency.
+ */
+export function derivedBonus(
+  abilityMod: number,
+  proficiencyBonus: number,
+  level: Exclude<ProficiencyLevel, 'custom'>
+): number {
+  return abilityMod + proficiencyBonus * PROFICIENCY_MULTIPLIER[level];
+}
+
+/**
+ * Work backwards from a printed bonus to the proficiency level that produces it.
+ *
+ * Used to read existing stat blocks — including every seeded SRD creature,
+ * which stores only final totals — so the editor can show the right checkboxes
+ * without changing any number. Anything that does not decompose cleanly is
+ * reported as 'custom' and kept verbatim rather than "corrected".
+ */
+export function decomposeBonus(
+  total: number,
+  abilityMod: number,
+  proficiencyBonus: number
+): ProficiencyLevel {
+  if (total === abilityMod) return 'none';
+  if (total === abilityMod + proficiencyBonus) return 'proficient';
+  if (total === abilityMod + proficiencyBonus * 2) return 'expertise';
+  return 'custom';
+}
+
+// ---------------------------------------------------------------------------
+// Passive scores
+// ---------------------------------------------------------------------------
+
+/**
+ * The base a passive score is measured from: the character takes 10 rather than
+ * rolling, so a passive check is 10 plus the check's total modifier.
+ */
+export const PASSIVE_BASE = 10;
+
+/**
+ * Passive score for a check with the given total bonus.
+ *
+ * The bonus passed in must already be the *complete* modifier for the check —
+ * ability modifier plus proficiency, doubled for expertise. That is the whole
+ * point of taking it as an argument: passive Perception was previously stored
+ * as its own number, computed separately from the Perception bonus, so the two
+ * could and did disagree. A character with expertise in Perception showed the
+ * right +5 on the skill and a passive score that had only counted proficiency
+ * once. Derive the bonus once, then pass it here.
+ *
+ * Advantage on the check adds 5 and disadvantage subtracts 5 (SRD 5.1,
+ * "Passive Checks"). Those are situational rather than properties of the sheet,
+ * so they are not applied here.
+ */
+export function passiveScore(totalBonus: number): number {
+  if (!Number.isFinite(totalBonus)) return PASSIVE_BASE;
+  return PASSIVE_BASE + totalBonus;
+}
+
+// ---------------------------------------------------------------------------
+// Bounds
+// ---------------------------------------------------------------------------
+
+/**
+ * Bounds for a manually overridden save or skill bonus.
+ *
+ * The widest legitimate 5e value is roughly ability +10 with expertise at +9
+ * proficiency (=+28) for a CR 30 creature, so ±30 admits every real stat block
+ * while still rejecting the unbounded input that let "+30" be typed for a
+ * commoner. This is a sanity bound, not a rules bound — deliberately generous
+ * so homebrew is not blocked.
+ */
+export const MIN_BONUS_OVERRIDE = -30;
+export const MAX_BONUS_OVERRIDE = 30;
+
+/** Bounds for an ability score, matching the existing stat-block validation. */
+export const MIN_ABILITY_SCORE = 0;
+export const MAX_ABILITY_SCORE = 30;
+
+// ---------------------------------------------------------------------------
+// Spellcasting
+// ---------------------------------------------------------------------------
+
+/**
+ * The ability a sheet names for its spellcasting, as a `stats` key.
+ *
+ * The field is free text — "Intelligence", "int", "INT" have all been typed
+ * into it — so it is matched loosely. Returns null when it names nothing
+ * recognisable, which includes the common case of a non-caster leaving it
+ * empty.
+ */
+export function spellcastingAbilityKey(ability: unknown): string | null {
+  if (typeof ability !== 'string') return null;
+  const wanted = ability.trim().toLowerCase();
+  if (!wanted) return null;
+  const full = [
+    'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma',
+  ];
+  const match = full.find((name) => name === wanted || name.startsWith(wanted));
+  return match ?? null;
+}
+
+/**
+ * The spellcasting ability modifier a 5e sheet implies, or 0 when it names no
+ * ability. Recomputed from the score, so a stored modifier that has fallen out
+ * of step cannot skew the results below.
+ */
+export function spellcastingAbilityModifier(data: unknown): number {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const spellcasting = sheet?.spellcasting as Record<string, unknown> | undefined;
+  const key = spellcastingAbilityKey(spellcasting?.ability);
+  if (!key) return 0;
+
+  const stats = sheet?.stats as Record<string, unknown> | undefined;
+  const entry = stats?.[key] as Record<string, unknown> | undefined;
+  if (!entry) return 0;
+  return typeof entry.score === 'number'
+    ? abilityModifier(entry.score)
+    : (typeof entry.modifier === 'number' ? entry.modifier : 0);
+}
+
+/** The proficiency bonus a sheet records, falling back to the level-1 value. */
+export function sheetProficiencyBonus(data: unknown): number {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const stored = sheet?.proficiencyBonus;
+  if (typeof stored === 'number' && Number.isFinite(stored)) return stored;
+  const level = sheet?.level;
+  return proficiencyBonusForLevel(typeof level === 'number' ? level : 1);
+}
+
+/** A manual adjustment off the sheet, 0 when absent or unusable. */
+function otherBonus(data: unknown, field: string): number {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const spellcasting = sheet?.spellcasting as Record<string, unknown> | undefined;
+  const value = spellcasting?.[field];
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * Spell save DC.
+ *
+ * SRD 5.1, "Spellcasting Ability": `8 + proficiency bonus + spellcasting
+ * ability modifier`. `spellSaveDCOtherBonus` is added on top for the things
+ * that adjust it without changing either input, such as a Robe of the
+ * Archmagi, in the same way the sheet already handles initiative and passive
+ * Perception.
+ */
+export function fifthEditionSpellSaveDC(data: unknown): number {
+  return (
+    SPELL_SAVE_DC_BASE +
+    sheetProficiencyBonus(data) +
+    spellcastingAbilityModifier(data) +
+    otherBonus(data, 'spellSaveDCOtherBonus')
+  );
+}
+
+/**
+ * Spell attack bonus.
+ *
+ * SRD 5.1, "Spellcasting Ability": `proficiency bonus + spellcasting ability
+ * modifier`. Kept separate from the save DC because items exist that raise one
+ * and not the other — a Wand of the War Mage adds to attack rolls alone.
+ */
+export function fifthEditionSpellAttackBonus(data: unknown): number {
+  return (
+    sheetProficiencyBonus(data) +
+    spellcastingAbilityModifier(data) +
+    otherBonus(data, 'spellAttackOtherBonus')
+  );
+}
+
+/** The 8 every spell save DC starts from. */
+export const SPELL_SAVE_DC_BASE = 8;
+
+/**
+ * The manual adjustment implied by a sheet saved before these were derived, so
+ * a caster's numbers do not change under them.
+ *
+ * Both used to be hand-typed. A wizard with a Robe of the Archmagi typed
+ * DC 17 where the formula gives 15; deriving without reading that back would
+ * quietly take the point away. So the stored total is read as "formula plus the
+ * rest", which is what it always meant.
+ *
+ * Returns null when there is nothing to convert, so a caller can leave the
+ * sheet alone. That covers three cases:
+ *
+ *   - the adjustment field already exists, so the split has been made;
+ *   - the stored value is the one the blank templates ship (DC 8, attack +0),
+ *     which means nobody ever filled it in — converting that would hand a
+ *     non-caster a large negative adjustment;
+ *   - the sheet names no spellcasting ability, so the stored number describes
+ *     nothing and is not worth preserving.
+ */
+export function fifthEditionBackfilledSpellSaveDCBonus(data: unknown): number | null {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const spellcasting = sheet?.spellcasting as Record<string, unknown> | undefined;
+  if (!spellcasting) return null;
+  if (spellcasting.spellSaveDCOtherBonus !== undefined && spellcasting.spellSaveDCOtherBonus !== null) {
+    return null;
+  }
+  const stored = spellcasting.spellSaveDC;
+  if (typeof stored !== 'number' || !Number.isFinite(stored)) return null;
+  if (stored === SPELL_SAVE_DC_BASE) return null;
+  if (!spellcastingAbilityKey(spellcasting.ability)) return null;
+
+  const derived =
+    SPELL_SAVE_DC_BASE + sheetProficiencyBonus(sheet) + spellcastingAbilityModifier(sheet);
+  return stored - derived;
+}
+
+/** As above, for the spell attack bonus. A stored +0 means it was never set. */
+export function fifthEditionBackfilledSpellAttackBonus(data: unknown): number | null {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const spellcasting = sheet?.spellcasting as Record<string, unknown> | undefined;
+  if (!spellcasting) return null;
+  if (spellcasting.spellAttackOtherBonus !== undefined && spellcasting.spellAttackOtherBonus !== null) {
+    return null;
+  }
+  const stored = spellcasting.spellAttackBonus;
+  if (typeof stored !== 'number' || !Number.isFinite(stored)) return null;
+  if (stored === 0) return null;
+  if (!spellcastingAbilityKey(spellcasting.ability)) return null;
+
+  const derived = sheetProficiencyBonus(sheet) + spellcastingAbilityModifier(sheet);
+  return stored - derived;
+}
+
+/**
+ * Whether a sheet describes a character who actually casts spells.
+ *
+ * The `spellcasting` object is present on every sheet, a barbarian's included,
+ * so testing it for truth showed a spellcasting panel to everyone — and since
+ * the templates seeded class "Wizard", a Fighter's sheet announced "Wizard
+ * Spellcasting". What settles it is whether anything has been filled in: an
+ * ability named, or a cantrip, prepared spell or slot recorded.
+ */
+export function hasSpellcasting(data: unknown): boolean {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const spellcasting = sheet?.spellcasting as Record<string, unknown> | undefined;
+  if (!spellcasting) return false;
+
+  if (spellcastingAbilityKey(spellcasting.ability)) return true;
+  if (Array.isArray(spellcasting.cantrips) && spellcasting.cantrips.length > 0) return true;
+  if (Array.isArray(spellcasting.spells) && spellcasting.spells.length > 0) return true;
+
+  const slots = spellcasting.slots as Record<string, unknown> | undefined;
+  if (slots) {
+    for (const slot of Object.values(slots)) {
+      const entry = slot as Record<string, unknown> | undefined;
+      if (entry && typeof entry.total === 'number' && entry.total > 0) return true;
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Exhaustion
+// ---------------------------------------------------------------------------
+
+/**
+ * The six levels of exhaustion and what each one does.
+ *
+ * SRD 5.1, "Exhaustion": six levels, each bringing its own effect on top of
+ * those of every level below it. Level 6 is death.
+ *
+ * The sheet used to offer exhaustion as a single checkbox alongside the other
+ * fourteen conditions, which cannot record which level a character is on — the
+ * difference between disadvantage on ability checks and being dead.
+ */
+export const EXHAUSTION_EFFECTS: readonly string[] = [
+  'Ability checks have disadvantage',
+  'Speed is cut to half',
+  'Attack rolls and saving throws have disadvantage',
+  'Hit point maximum is cut to half',
+  'Speed drops to 0',
+  'The creature dies',
+];
+
+/** Levels run 0 (none) to 6 (death). */
+export const MAX_EXHAUSTION_LEVEL = 6;
+
+/** A stored exhaustion level, clamped to the range the rules define. */
+export function exhaustionLevel(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.min(MAX_EXHAUSTION_LEVEL, Math.max(0, Math.trunc(value)));
+}
+
+/**
+ * Every effect in force at a given level, lowest first.
+ *
+ * Effects are cumulative, so level 3 carries levels 1 and 2 as well.
+ */
+export function exhaustionEffects(level: unknown): string[] {
+  return EXHAUSTION_EFFECTS.slice(0, exhaustionLevel(level));
+}
+
+// ---------------------------------------------------------------------------
+// Skills of the player's own
+// ---------------------------------------------------------------------------
+
+/** The six abilities, spelled as a character sheet's `stats` keys. */
+export const FIFTH_EDITION_ABILITY_NAMES = [
+  'strength',
+  'dexterity',
+  'constitution',
+  'intelligence',
+  'wisdom',
+  'charisma',
+] as const;
+
+export type FifthEditionAbilityName = (typeof FIFTH_EDITION_ABILITY_NAMES)[number];
+
+/**
+ * A check the eighteen skills do not cover.
+ *
+ * Tool proficiencies are the reason this exists: "proficiency with a tool
+ * allows you to add your proficiency bonus to any ability check you make using
+ * that tool" (SRD 5.1, "Tools"), which is the same arithmetic as a skill but
+ * has nowhere on the sheet to live. A player wanting to roll Thieves' Tools had
+ * to either work it out by hand or record it as a weapon, which put a lockpick
+ * on the combat tab and gave it an attack roll it does not have.
+ */
+export interface FifthEditionCustomSkill {
+  name: string;
+  ability: FifthEditionAbilityName;
+  proficient?: boolean;
+  expertise?: boolean;
+  /** Anything the maths cannot know about — a magic item, a feat. */
+  otherBonus?: number;
+}
+
+/** The modifier a sheet's named ability has, recomputed from its score. */
+export function sheetAbilityModifier(data: unknown, ability: string): number {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const stats = sheet?.stats as Record<string, unknown> | undefined;
+  const entry = stats?.[ability] as Record<string, unknown> | undefined;
+  if (!entry) return 0;
+  // Score first: a stored modifier that has fallen out of step with the score
+  // would otherwise quietly skew every check made with it.
+  return typeof entry.score === 'number'
+    ? abilityModifier(entry.score)
+    : (typeof entry.modifier === 'number' ? entry.modifier : 0);
+}
+
+/**
+ * The total bonus for one of the player's own skills.
+ *
+ * Derived rather than stored, like initiative and passive Perception: ability
+ * modifier, plus the proficiency bonus doubled for expertise, plus whatever the
+ * sheet cannot work out for itself. Nothing here is specific to tools — the
+ * same arithmetic covers a homebrew skill or a subsystem a table invented.
+ */
+export function fifthEditionCustomSkillBonus(data: unknown, skill: FifthEditionCustomSkill): number {
+  const abilityMod = sheetAbilityModifier(data, skill.ability);
+  const proficiency = sheetProficiencyBonus(data);
+  const level = skill.expertise ? 'expertise' : skill.proficient ? 'proficient' : 'none';
+  const extra =
+    typeof skill.otherBonus === 'number' && Number.isFinite(skill.otherBonus)
+      ? skill.otherBonus
+      : 0;
+  return derivedBonus(abilityMod, proficiency, level) + extra;
+}
+
+/**
+ * Read the custom skills off a sheet, dropping anything unusable.
+ *
+ * A row exists from the moment it is added and is named afterwards, so a
+ * nameless one is a half-finished edit rather than a skill; an unrecognised
+ * ability would silently roll off Strength, so those go too.
+ */
+export function readCustomSkills(data: unknown): FifthEditionCustomSkill[] {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const raw = sheet?.customSkills;
+  if (!Array.isArray(raw)) return [];
+
+  const abilities = new Set<string>(FIFTH_EDITION_ABILITY_NAMES);
+  const skills: FifthEditionCustomSkill[] = [];
+
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const row = entry as Record<string, unknown>;
+    const name = typeof row.name === 'string' ? row.name.trim() : '';
+    const ability = typeof row.ability === 'string' ? row.ability : '';
+    if (!name || !abilities.has(ability)) continue;
+
+    skills.push({
+      name,
+      ability: ability as FifthEditionAbilityName,
+      proficient: row.proficient === true,
+      expertise: row.expertise === true,
+      ...(typeof row.otherBonus === 'number' && Number.isFinite(row.otherBonus)
+        ? { otherBonus: row.otherBonus }
+        : {}),
+    });
+  }
+
+  return skills;
+}
+
+// ---------------------------------------------------------------------------
+// The eighteen skills and six saving throws of a character sheet
+// ---------------------------------------------------------------------------
+
+/**
+ * The ability a sheet's skill uses, as a `stats` key ("dexterity"), or null for
+ * a key that is not one of the eighteen.
+ */
+export function fifthEditionSkillAbility(skillKey: string): FifthEditionAbilityName | null {
+  const skill = findSkill(skillKey);
+  if (!skill) return null;
+  return FIFTH_EDITION_ABILITY_NAMES[ABILITY_KEYS.indexOf(skill.ability)];
+}
+
+/** One entry of a sheet's `skills` or `savingThrows`, or undefined. */
+function sheetEntry(data: unknown, group: 'skills' | 'savingThrows', key: string): Record<string, unknown> | undefined {
+  const sheet = data as Record<string, unknown> | null | undefined;
+  const entries = sheet?.[group] as Record<string, unknown> | undefined;
+  const entry = entries?.[key];
+  return entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : undefined;
+}
+
+/** A whole number off the sheet, or null when there is none. */
+function wholeNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
+
+/**
+ * A skill's bonus from the ability modifier and proficiency alone: the
+ * proficiency bonus once when proficient and twice with expertise (Basic
+ * Rules, the rogue's Expertise: "your proficiency bonus is doubled").
+ */
+export function fifthEditionDerivedSkillBonus(data: unknown, skillKey: string): number {
+  const ability = fifthEditionSkillAbility(skillKey);
+  const abilityMod = ability ? sheetAbilityModifier(data, ability) : 0;
+  const entry = sheetEntry(data, 'skills', skillKey);
+  const level = entry?.expertise === true ? 'expertise' : entry?.proficient === true ? 'proficient' : 'none';
+  return derivedBonus(abilityMod, sheetProficiencyBonus(data), level);
+}
+
+/**
+ * A saving throw's bonus from the ability modifier and proficiency alone.
+ * Proficiency is never doubled for a save (SRD 5.1, "Proficiency Bonus": "you
+ * don't multiply your proficiency bonus for attack rolls or saving throws").
+ */
+export function fifthEditionDerivedSaveBonus(data: unknown, ability: string): number {
+  const entry = sheetEntry(data, 'savingThrows', ability);
+  const proficient = entry?.proficient === true;
+  return derivedBonus(sheetAbilityModifier(data, ability), sheetProficiencyBonus(data), proficient ? 'proficient' : 'none');
+}
+
+/**
+ * A skill's total: the derived bonus plus its other bonus.
+ *
+ * A sheet saved before the other bonus existed has only a stored total, and
+ * that total is what it has always rolled, so it is used as it is until the
+ * sheet is next saved from the editor, which records the difference as the
+ * other bonus. The same arrangement as initiative.
+ */
+export function fifthEditionSkillBonus(data: unknown, skillKey: string): number {
+  return otherOrStoredTotal(sheetEntry(data, 'skills', skillKey), fifthEditionDerivedSkillBonus(data, skillKey));
+}
+
+/** A saving throw's total, read the same way as a skill's. */
+export function fifthEditionSaveBonus(data: unknown, ability: string): number {
+  return otherOrStoredTotal(sheetEntry(data, 'savingThrows', ability), fifthEditionDerivedSaveBonus(data, ability));
+}
+
+function otherOrStoredTotal(entry: Record<string, unknown> | undefined, derived: number): number {
+  const other = wholeNumber(entry?.otherBonus);
+  if (other !== null) return derived + other;
+  return wholeNumber(entry?.bonus) ?? derived;
+}
+
+/**
+ * The other bonus implied by a sheet saved before skills and saves had one, so
+ * its totals do not change under it: the stored total minus the derived one.
+ *
+ * Null when there is nothing to record: the entry already has an other bonus,
+ * it stores no whole-number total, or the total is what the maths gives. Called
+ * once, as the editor opens, on the sheet as it was stored; reading back a total
+ * the editor itself worked out would turn a change of score into a bonus.
+ */
+export function fifthEditionBackfilledSkillOtherBonus(data: unknown, skillKey: string): number | null {
+  return backfilledOther(sheetEntry(data, 'skills', skillKey), fifthEditionDerivedSkillBonus(data, skillKey));
+}
+
+/** The same for a saving throw. */
+export function fifthEditionBackfilledSaveOtherBonus(data: unknown, ability: string): number | null {
+  return backfilledOther(sheetEntry(data, 'savingThrows', ability), fifthEditionDerivedSaveBonus(data, ability));
+}
+
+function backfilledOther(entry: Record<string, unknown> | undefined, derived: number): number | null {
+  if (!entry || (entry.otherBonus !== undefined && entry.otherBonus !== null)) return null;
+  const stored = wholeNumber(entry.bonus);
+  if (stored === null || stored === derived) return null;
+  return stored - derived;
+}
+
+/** Pounds a character can carry for each point of Strength. */
+export const CARRY_PER_STRENGTH = 15;
+
+/**
+ * What a character can carry, and push, drag or lift, in pounds.
+ *
+ * SRD 5.1, "Lifting and Carrying": carrying capacity is the Strength score
+ * multiplied by 15, and a character can push, drag or lift up to twice that.
+ * The rules double both for each size above Medium and halve them for Tiny;
+ * the sheet records no size, so these are a Small or Medium character's.
+ */
+export function carryingCapacity(strengthScore: number): { carry: number; pushDragLift: number } {
+  const score = Number.isFinite(strengthScore) ? Math.max(0, strengthScore) : 0;
+  const carry = score * CARRY_PER_STRENGTH;
+  return { carry, pushDragLift: carry * 2 };
+}

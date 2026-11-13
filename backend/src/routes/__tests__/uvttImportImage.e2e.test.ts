@@ -7,7 +7,7 @@
  * checked, without the map size limit applying, and without a thumbnail, which
  * left these maps looking broken in the asset library next to every other one.
  *
- * Only a campaign's DM can reach it, so this was never wide open. It was
+ * Only a campaign's GM can reach it, so this was never wide open. It was
  * simply the one door with no lock on it.
  *
  * The picture is identified by the real `file-type`: a real PNG is
@@ -66,12 +66,12 @@ function uvttWithImage(image: Buffer): Buffer {
   );
 }
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const importUvtt = (file: Buffer, name: string) =>
-  dm
+  gm
     .post(`/api/campaigns/${campaignId}/maps/import-uvtt`)
     .attach('file', file, `${name}.uvtt`)
     .field('name', name);
@@ -82,22 +82,22 @@ beforeAll(async () => {
   const stamp = Date.now();
   const user = await createTestUser({
     email: `uvtt-image-${stamp}@test.cozyvtt.local`,
-    displayName: 'UVTT Image DM',
+    displayName: 'UVTT Image GM',
   });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `UVTT image ${stamp}` })).id;
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `UVTT image ${stamp}` })).id;
   await prisma.campaignMembership.create({
-    data: { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+    data: { userId: gmId, campaignId, role: 'GM', characterIds: [] },
   });
-  dm = request.agent(app);
-  const login = await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD });
+  gm = request.agent(app);
+  const login = await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD });
   expect(login.status).toBe(200);
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 });
@@ -153,7 +153,7 @@ describe('a UVTT import whose map name holds U+0000', () => {
   it('is refused, leaving no map, asset or uploaded file', async () => {
     const before = await prisma.asset.count({ where: { campaignId } });
     const uploads = path.join(UPLOAD_DIR, 'temp', 'uvtt');
-    const res = await dm
+    const res = await gm
       .post(`/api/campaigns/${campaignId}/maps/import-uvtt`)
       .attach('file', uvttWithImage(PNG), 'cellar.uvtt')
       .field('name', 'Cel\u0000lar');

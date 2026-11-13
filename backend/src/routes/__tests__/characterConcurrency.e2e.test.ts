@@ -1,7 +1,7 @@
 /**
  * A save made from a sheet that has changed since it was loaded is refused.
  *
- * A player's open sheet holds the hit points it loaded. When the DM took some
+ * A player's open sheet holds the hit points it loaded. When the GM took some
  * away in the meantime, the player's next save put the old number back, with
  * everything else on the sheet. `PUT /api/characters/:id` now takes the
  * `updatedAt` the sheet was loaded with and answers 409 when the character has
@@ -36,12 +36,12 @@ afterAll(async () => {
 type Sheet = Record<string, unknown> & { hp: { current: number; maximum: number; temporary: number } };
 
 const sheet = (current: number): Sheet => {
-  const blank = getBlankTemplate(GameSystem.DND_5E).data as Sheet;
+  const blank = getBlankTemplate(GameSystem.FIFTH_EDITION).data as Sheet;
   return { ...blank, hp: { ...blank.hp, maximum: 20, current } };
 };
 
 async function create(): Promise<{ id: string; updatedAt: string }> {
-  const res = await agent.post('/api/characters').send({ name: 'Versioned', gameSystem: 'DND_5E', data: sheet(20) });
+  const res = await agent.post('/api/characters').send({ name: 'Versioned', gameSystem: 'FIFTH_EDITION', data: sheet(20) });
   expect(res.status).toBe(201);
   return { id: res.body.character.id, updatedAt: res.body.character.updatedAt };
 }
@@ -62,7 +62,7 @@ describe('PUT /api/characters/:id with the updatedAt it was loaded with', () => 
 
   it('refuses with 409 when the character changed after it was loaded', async () => {
     const { id, updatedAt } = await create();
-    // The DM takes 12 hit points while the player's sheet is open.
+    // The GM takes 12 hit points while the player's sheet is open.
     expect((await agent.put(`/api/characters/${id}`).send({ data: sheet(8) })).status).toBe(200);
 
     const res = await agent.put(`/api/characters/${id}`).send({ data: sheet(20), updatedAt });

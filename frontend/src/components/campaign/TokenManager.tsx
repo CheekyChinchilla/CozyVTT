@@ -1,6 +1,6 @@
 // ============================================
 // TokenManager
-// DM slide-over panel for adding and managing tokens on the current map
+// GM slide-over panel for adding and managing tokens on the current map
 // ============================================
 
 import { DISPOSITION_PICKED } from '@/utils/tokenColours';
@@ -23,7 +23,7 @@ import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
 import type { Asset, CreateTokenRequest, Token, TokenDisplayMode } from '@/types';
 import { AssetType, AssetScope, TokenLayer, TokenType, TokenDisposition } from '@/types';
-import { dmTokenControls } from '@/utils/dmTokenMenu';
+import { gmTokenControls } from '@/utils/gmTokenMenu';
 import { apiErrorMessage } from '@/utils/errors';
 import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
@@ -91,7 +91,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   const [initiative, setInitiative] = useState<string>('');
   const [sightRadius, setSightRadius] = useState(0);
   // Placing a token already hidden. Offered for the tokens that are secrets
-  // (see utils/dmTokenMenu.ts). An object defaults to hidden, which is what
+  // (see utils/gmTokenMenu.ts). An object defaults to hidden, which is what
   // a secret door or a trapped chest wants; a creature defaults to visible, so
   // an ordinary monster is not placed invisible by accident. The form opens on
   // NPC, and the type buttons keep the two in step.
@@ -123,7 +123,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
 
   // Picking a character names the token after it, unless a name is typed or
   // it still has the last character's, and gives it to the character's owner
-  // while they are a player; the DM can change either before placing it.
+  // while they are a player; the GM can change either before placing it.
   const pickCharacter = (id: string) => {
     const previous = characters.find((c) => c.id === characterId);
     const next = characters.find((c) => c.id === id);
@@ -246,7 +246,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       // Optimistic local update then broadcast so other clients get the new token
       useGameStore.getState().addToken(result.token, viewedMap.id);
 
-      // Reset form (keep asset selected in case DM wants to place another)
+      // Reset form (keep asset selected in case GM wants to place another)
       setTokenName('');
       setTokenSize({ width: 1, height: 1 });
       setTokenLayer(TokenLayer.TOKEN);
@@ -515,7 +515,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
               type="text"
               value={tokenName}
               onChange={(e) => setTokenName(e.target.value)}
-              placeholder="e.g. Goblin Scout, Party Wizard…"
+              placeholder="e.g. Goblin, Party Wizard…"
               className="input-cozy w-full text-sm"
             />
           </div>
@@ -622,10 +622,10 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                 />
               </div>
 
-              {/* DM Notes */}
+              {/* GM Notes */}
               <div className="mb-3">
                 <label className="text-xs text-stone-gray font-medium block mb-1">
-                  DM Notes <span className="font-normal opacity-60">(not shown to players)</span>
+                  GM Notes <span className="font-normal opacity-60">(not shown to players)</span>
                 </label>
                 <textarea
                   value={tokenNotes}
@@ -639,7 +639,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
           )}
 
           {/* Hidden on placement — NPCs and objects, the tokens that are secrets */}
-          {dmTokenControls(tokenType).placeHidden && (
+          {gmTokenControls(tokenType).placeHidden && (
             <div className="mb-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -659,10 +659,10 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
           {/* Object-specific fields */}
           {tokenType === TokenType.OBJECT && (
             <>
-              {/* DM Notes */}
+              {/* GM Notes */}
               <div className="mb-3">
                 <label className="text-xs text-stone-gray font-medium block mb-1">
-                  DM Notes <span className="font-normal opacity-60">(not shown to players)</span>
+                  GM Notes <span className="font-normal opacity-60">(not shown to players)</span>
                 </label>
                 <textarea
                   value={tokenNotes}
@@ -749,7 +749,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                 onChange={(e) => setAssignTo(e.target.value)}
                 className="input-cozy w-full text-sm"
               >
-                <option value="none">Nobody (DM controls)</option>
+                <option value="none">Nobody (GM controls)</option>
                 {players.map((m) => (
                   <option key={m.userId} value={m.userId}>
                     {m.user?.displayName ?? m.userId}
@@ -894,7 +894,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                         {/* Spirit layer toggle. An object keeps to the material
                            plane, as on the map's right-click menu; one already
                            on the spirit layer is offered only the way back. */}
-                        {(dmTokenControls(token.type).crossPlanes || isSpirit) && (
+                        {(gmTokenControls(token.type).crossPlanes || isSpirit) && (
                           <button
                             onClick={() => handleToggleLayer(token)}
                             disabled={isTogglingLyr}

@@ -1,15 +1,15 @@
 /**
  * creatureSeed.ts
- * Service that fetches D&D 5e SRD monsters from Open5e API and seeds the
+ * Service that fetches 5E SRD monsters from Open5e API and seeds the
  * CreatureTemplate table. Used by both the CLI script and the API endpoint.
  *
  * SRD 5.1 content is used under CC BY 4.0, and reaches us through Open5e.
- * See SRD_ATTRIBUTION.md for the notice and why that licence rather than the OGL.
+ * GAME_CONTENT_NOTICES.md has the attribution that licence asks for.
  */
 
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { normalizeSkillKey } from '../utils/rules/dnd5e';
+import { normalizeSkillKey } from '../utils/rules/fifthEdition';
 import { NpcStatBlockSchema } from '../validators/statBlock';
 import { toJson } from '../utils/prisma-json';
 import logger from '../utils/logger';
@@ -141,7 +141,7 @@ export function transformMonster(m: Open5eMonster) {
     legendaryActions: m.legendary_actions?.map((a) => ({ name: a.name, description: a.desc })) ?? undefined,
     creatureType,
     alignment: m.alignment || undefined,
-    gameSystem: 'DND_5E',
+    gameSystem: 'FIFTH_EDITION',
   };
 
   // Remove undefined keys for clean JSON storage
@@ -149,7 +149,7 @@ export function transformMonster(m: Open5eMonster) {
 
   return {
     name: m.name,
-    gameSystem: 'DND_5E' as const,
+    gameSystem: 'FIFTH_EDITION' as const,
     source: 'srd',
     challengeRating: m.challenge_rating,
     creatureType,
@@ -170,7 +170,7 @@ const FIRST_PAGE = `${OPEN5E_ORIGIN}/v1/monsters/?format=json&limit=50&document_
 /**
  * How long one page may take, from asking to the last byte. The SRD comes in
  * about seven pages of 50; a stalled upstream used to hold the seed, and
- * every other DM's, until the network gave up minutes later.
+ * every other GM's, until the network gave up minutes later.
  */
 export const SEED_PAGE_TIMEOUT_MS = 15_000;
 /** The most pages followed. The SRD's 300-odd creatures are about seven. */
@@ -312,7 +312,7 @@ export function backfillStatBlockHp(
 }
 
 /**
- * Seed the CreatureTemplate table with D&D 5e SRD monsters from Open5e.
+ * Seed the CreatureTemplate table with 5E SRD monsters from Open5e.
  * Safe to call multiple times — existing SRD creatures are skipped, except that
  * ones stored before hit points were tracked get their HP backfilled.
  * Custom creatures are never touched. Each creature's stat block is checked as

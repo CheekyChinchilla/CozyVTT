@@ -9,11 +9,11 @@
  * however many digits they have. jsdom evaluates no media query, so the
  * classes and the grouping are what is checked.
  *
- * A character's menu opened by a right-click only, and the DM's drag of a
+ * A character's menu opened by a right-click only, and the GM's drag of a
  * character onto the map began anywhere on its row, which on an iPad starts
  * the system's own drag at about the time a long-press would open the menu.
  * On a touch screen a long-press on the row now opens the menu a right-click
- * opens, a tap still opens the sheet, and the DM drags a character by a grip
+ * opens, a tap still opens the sheet, and the GM drags a character by a grip
  * at the row's start; with a mouse the row drags as before and has no grip.
  * A touch screen is a stubbed `matchMedia` answering `(pointer: coarse)`.
  */
@@ -28,7 +28,7 @@ const getCampaignCharacters = vi.fn();
 const getCharacter = vi.fn();
 const assignCharacterToCampaign = vi.fn();
 const socket = { on: vi.fn(), off: vi.fn() };
-const seat = vi.hoisted(() => ({ role: 'DM', userId: 'dm' }));
+const seat = vi.hoisted(() => ({ role: 'GM', userId: 'dm' }));
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
@@ -56,12 +56,12 @@ vi.mock('../../character/CharacterSheetViewerModal', () => ({
 import CampaignRoster from '../CampaignRoster';
 
 const member = (userId: string, userName: string, hp: number | null = null): RosterMember => ({
-  userId, userName, userAvatar: null, role: userId === 'dm' ? CampaignRole.DM : CampaignRole.PLAYER, joinedAt: '2026-10-01T00:00:00.000Z',
+  userId, userName, userAvatar: null, role: userId === 'dm' ? CampaignRole.GM : CampaignRole.PLAYER, joinedAt: '2026-10-01T00:00:00.000Z',
   characters: hp === null ? [] : [{ id: `${userId}-char`, name: `${userName}'s hero`, tokenImageUrl: null, gameSystem: null, userId, hp: { current: hp, max: 10, temp: 0 } }],
 });
 
 beforeEach(() => {
-  seat.role = 'DM';
+  seat.role = 'GM';
   seat.userId = 'dm';
   getCampaignCharacters.mockReset().mockResolvedValue({ roster: [member('dm', 'Mara'), member('p1', 'Ash', 7)] });
   getCharacter.mockReset().mockImplementation(async (id: string) => ({ character: { id } }));
@@ -147,7 +147,7 @@ describe("a character's row, pressed and held by a finger", () => {
   }
 
   it.each([
-    ['the DM, on a player\'s character', 'DM', 'dm', "Ash's hero", ['View Character Sheet', 'Roll...', 'Edit Character Sheet', 'Add to Map', 'Remove from Campaign']],
+    ['the GM, on a player\'s character', 'GM', 'dm', "Ash's hero", ['View Character Sheet', 'Roll...', 'Edit Character Sheet', 'Add to Map', 'Remove from Campaign']],
     ['a player, on their own character', 'PLAYER', 'p1', "Ash's hero", ['View Character Sheet', 'Roll...', 'Edit Character Sheet', 'Remove from Campaign']],
     ["a player, on another player's character", 'PLAYER', 'p1', "Bo's hero", ['View Character Sheet']],
   ])('opens the menu a right-click opens, item for item, for %s', async (_who, role, userId, name, items) => {
@@ -249,7 +249,7 @@ describe("a character's row, pressed and held by a finger", () => {
   });
 });
 
-describe("the DM's drag of a character onto the map", () => {
+describe("the GM's drag of a character onto the map", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
@@ -291,7 +291,7 @@ describe("the DM's drag of a character onto the map", () => {
   // takes 24 pixels of the row while its target stays 44 square, reaching
   // into the padding beside it, and the badge goes under the name.
   it('leaves the name room on a touch screen: a grip that takes little of the row, and the badge under the name', async () => {
-    const badged = [{ ...member('p1', 'Ash', 7), characters: [{ ...member('p1', 'Ash', 7).characters[0]!, gameSystem: 'DND_5E' as const }] }];
+    const badged = [{ ...member('p1', 'Ash', 7), characters: [{ ...member('p1', 'Ash', 7).characters[0]!, gameSystem: 'FIFTH_EDITION' as const }] }];
     getCampaignCharacters.mockResolvedValue({ roster: badged });
     onATouchScreen();
     render(<CampaignRoster />);
@@ -299,7 +299,7 @@ describe("the DM's drag of a character onto the map", () => {
 
     expect(classesOf(grip())).toEqual(expect.arrayContaining(['touch-target', '-mx-2.5']));
     const nameAndBadge = name.parentElement!;
-    expect(nameAndBadge).toBe(screen.getByText('D&D 5e').parentElement);
+    expect(nameAndBadge).toBe(screen.getByText('5E').parentElement);
     expect(classesOf(nameAndBadge)).toEqual(expect.arrayContaining(['flex-1', 'min-w-0', 'pointer-coarse:flex-col', 'pointer-coarse:items-start']));
     expect(classesOf(name)).toEqual(expect.arrayContaining(['truncate', 'max-w-full']));
   });

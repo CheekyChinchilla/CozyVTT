@@ -2,7 +2,7 @@
  * The free-form roll offered at the foot of both roll pickers.
  *
  * It lived only in the creature picker, so a player right-clicking their own
- * token got whatever their sheet could express and nothing else — a DM asking
+ * token got whatever their sheet could express and nothing else — a GM asking
  * for "2d6 for the falling rock" sent them to the dice panel, where the roll
  * would be filed under their own name rather than their character's.
  *

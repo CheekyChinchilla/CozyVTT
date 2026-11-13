@@ -33,8 +33,8 @@ vi.mock('@/contexts/WebSocketContext', () => ({
   }),
 }));
 vi.mock('@/services/api', () => ({ api: { getUser: vi.fn().mockRejectedValue(new Error('Forbidden')) } }));
-vi.mock('../../character-sheets/dnd5e/DnD5eCharacterView', () => ({
-  DnD5eCharacterView: ({ onRoll }: { onRoll?: (expression: string, purpose: string) => void }) => (
+vi.mock('../../character-sheets/fifth-edition/FifthEditionCharacterView', () => ({
+  FifthEditionCharacterView: ({ onRoll }: { onRoll?: (expression: string, purpose: string) => void }) => (
     <div>
       <div data-roll="1d20+3" data-roll-purpose="Perception Check" onClick={() => onRoll?.('1d20+3', 'Perception Check')}>
         <span>Perception</span>
@@ -46,7 +46,7 @@ vi.mock('../../character-sheets/dnd5e/DnD5eCharacterView', () => ({
 }));
 
 const character = {
-  id: 'char-1', userId: 'me', name: 'Aria', gameSystem: 'DND_5E', data: {}, campaignId: 'camp-1',
+  id: 'char-1', userId: 'me', name: 'Aria', gameSystem: 'FIFTH_EDITION', data: {}, campaignId: 'camp-1',
   updatedAt: '2026-01-01T00:00:00.000Z', user: { id: 'me', displayName: 'Me', avatarUrl: null },
 } as unknown as Character;
 const membership = { userId: 'me', campaignId: 'camp-1', role: 'PLAYER', characterIds: ['char-1'] } as unknown as CampaignMembership;

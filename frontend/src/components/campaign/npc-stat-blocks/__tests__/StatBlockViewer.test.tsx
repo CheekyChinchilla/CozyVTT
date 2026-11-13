@@ -1,10 +1,10 @@
 /**
  * What a stat block shows in each system.
  *
- * - Pathfinder 2e: the creature's level, its attribute modifiers and Fort,
+ * - Fantasy d20: the creature's level, its attribute modifiers and Fort,
  *   Ref and Will. The viewer showed "Level" only from a challenge rating, so a
- *   Pathfinder creature never showed its level and a D&D creature borrowed
- *   into a Pathfinder campaign had its CR called a level; it showed 5e
+ *   Fantasy d20 creature never showed its level and a 5E creature borrowed
+ *   into a Fantasy d20 campaign had its CR called a level; it showed 5e
  *   scores and modifiers worked out from them, ignoring the modifiers the
  *   editors write; and it cut the saves to "for", "ref" and "wil".
  * - Flexible and other systems: negative saves and skills printed "+-1", and
@@ -19,14 +19,14 @@ import type { NpcStatBlock } from '@/types';
 
 const base: NpcStatBlock = { ac: 18, hpMax: 45, speed: '25 feet', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } };
 
-it('shows a Pathfinder creature\'s level, its modifiers and Fort, Ref and Will', () => {
+it('shows a Fantasy d20 creature\'s level, its modifiers and Fort, Ref and Will', () => {
   const statBlock: NpcStatBlock = {
     ...base,
     level: 3,
     attributeModifiers: { str: 4, dex: 2, con: 3, int: -1, wis: 1, cha: 0 },
     savingThrows: { fortitude: 9, reflex: 7, will: 6 },
   };
-  const { container } = render(<StatBlockViewer statBlock={statBlock} tokenName="Ogre Brute" gameSystem={GameSystem.PATHFINDER_2E} />);
+  const { container } = render(<StatBlockViewer statBlock={statBlock} tokenName="Ogre Brute" gameSystem={GameSystem.FANTASY_D20} />);
 
   expect(container.textContent).toContain('Level 3');
   expect(container.textContent).toContain('Fort +9, Ref +7, Will +6');
@@ -37,15 +37,20 @@ it('shows a Pathfinder creature\'s level, its modifiers and Fort, Ref and Will',
   expect(screen.queryByText('10')).toBeNull();
 });
 
-it('calls a D&D challenge rating borrowed into a Pathfinder campaign a CR', () => {
-  const { container } = render(<StatBlockViewer statBlock={{ ...base, challengeRating: '1/4' }} tokenName="Goblin" gameSystem={GameSystem.PATHFINDER_2E} />);
+it('calls a 5E challenge rating borrowed into a Fantasy d20 campaign a CR', () => {
+  const { container } = render(<StatBlockViewer statBlock={{ ...base, challengeRating: '1/4' }} tokenName="Goblin" gameSystem={GameSystem.FANTASY_D20} />);
   expect(container.textContent).toContain('CR 1/4');
   expect(container.textContent).not.toContain('Level');
 });
 
-it('shows no challenge rating on a Shadowrun creature, which has none, even one kept from before', () => {
-  const { container } = render(<StatBlockViewer statBlock={{ ...base, challengeRating: '1' }} tokenName="Ganger" gameSystem={GameSystem.SHADOWRUN_6E} />);
-  expect(container.textContent).not.toContain('CR');
+// A campaign stored with a system CozyVTT no longer supports shows its
+// creatures as a campaign with no system does.
+it('shows a creature in a campaign of a system it does not know as one with none', () => {
+  const statBlock: NpcStatBlock = { ...base, challengeRating: '1' };
+  const { container } = render(<StatBlockViewer statBlock={statBlock} tokenName="Pond Newt" gameSystem={'SOMETHING_ELSE' as GameSystem} />);
+  const { container: none } = render(<StatBlockViewer statBlock={statBlock} tokenName="Pond Newt" gameSystem={null} />);
+  expect(container.textContent).toContain('CR 1');
+  expect(container.textContent).toBe(none.textContent);
 });
 
 it('prints negative saves and skills with a minus, and names them, in a Flexible campaign', () => {

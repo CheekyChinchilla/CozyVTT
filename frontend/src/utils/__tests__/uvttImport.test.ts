@@ -3,7 +3,7 @@
  *
  * Before importing, the server may want an answer about two things: walls that
  * fall outside the file's own picture, and walls it carries for its furniture.
- * These read that reply and turn it into what the DM sees, so the counts stay
+ * These read that reply and turn it into what the GM sees, so the counts stay
  * accurate, the zeroes stay out of it, and the dialog asks about whichever of
  * the two actually applies.
  */

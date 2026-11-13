@@ -1,7 +1,7 @@
 /**
  * The campaign page says why its table has ended, and leaves it.
  *
- * A member the DM removed, everyone in a campaign its owner deleted, and a
+ * A member the GM removed, everyone in a campaign its owner deleted, and a
  * table whose sign-in ended elsewhere were told only through a socket
  * `error` that was written to the console, so the page sat on a dead
  * connection showing Connected. The server now sends

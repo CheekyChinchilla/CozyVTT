@@ -14,7 +14,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterEditorPage from '../CharacterEditorPage';
-import { dnd5eCharacter } from '@/components/character-sheets/dnd5e/__tests__/dnd5eFixture';
+import { fifthEditionCharacter } from '@/components/character-sheets/fifth-edition/__tests__/fifthEditionFixture';
 import { queryKeys, toCharacterSummary } from '@/hooks/queries';
 import type { Character, CharacterSummary } from '@/types';
 
@@ -42,9 +42,9 @@ const getCharacter = characterService.getCharacter as ReturnType<typeof vi.fn>;
 const updateCharacter = characterService.updateCharacter as ReturnType<typeof vi.fn>;
 const stale = { response: { status: 409, data: { error: 'Conflict', code: 'CHARACTER_CHANGED', message: 'changed' } } };
 
-const latest: Character = { ...dnd5eCharacter({ hp: { maximum: 12, current: 7, temporary: 0 } }), updatedAt: '2026-01-01T00:00:05.000Z' };
+const latest: Character = { ...fifthEditionCharacter({ hp: { maximum: 12, current: 7, temporary: 0 } }), updatedAt: '2026-01-01T00:00:05.000Z' };
 const saved: Character = {
-  ...dnd5eCharacter({ characterName: 'Aldra the Bold', hp: { maximum: 12, current: 7, temporary: 0 } }),
+  ...fifthEditionCharacter({ characterName: 'Aldra the Bold', hp: { maximum: 12, current: 7, temporary: 0 } }),
   updatedAt: '2026-01-01T00:00:09.000Z',
 };
 
@@ -64,19 +64,19 @@ function renderPage(client: QueryClient) {
 // The sheet loads on demand. Loaded here first, the first test does not wait
 // on the import, which on a busy machine outlasted the default wait.
 beforeAll(async () => {
-  await import('@/components/character-sheets/dnd5e/DnD5eCharacterSheet');
+  await import('@/components/character-sheets/fifth-edition/FifthEditionCharacterSheet');
 }, 30_000);
 
 beforeEach(() => {
   showToast.mockReset();
-  getCharacter.mockReset().mockResolvedValueOnce(dnd5eCharacter()).mockResolvedValue(latest);
+  getCharacter.mockReset().mockResolvedValueOnce(fifthEditionCharacter()).mockResolvedValue(latest);
   updateCharacter.mockReset().mockRejectedValueOnce(stale);
 });
 
 describe('a stale save on the full-page editor', () => {
   it('keeps the edits, carries them onto the newest version and saves that when told to', async () => {
     const client = new QueryClient();
-    client.setQueryData<CharacterSummary[]>(queryKeys.characters, [toCharacterSummary(dnd5eCharacter())]);
+    client.setQueryData<CharacterSummary[]>(queryKeys.characters, [toCharacterSummary(fifthEditionCharacter())]);
     renderPage(client);
 
     fireEvent.change(await screen.findByPlaceholderText('Character Name'), { target: { value: 'Aldra the Bold' } });

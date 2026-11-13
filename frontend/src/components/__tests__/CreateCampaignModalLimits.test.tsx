@@ -24,8 +24,8 @@ const open = () => render(<CreateCampaignModal isOpen onClose={() => {}} onSucce
 
 it('stops the name and description at the server\'s limits', () => {
   open();
-  expect((screen.getByPlaceholderText('The Lost Mines of Phandelver') as HTMLInputElement).maxLength).toBe(CAMPAIGN_LIMITS.maxNameLength);
-  expect((screen.getByPlaceholderText(/A classic D&D adventure/) as HTMLTextAreaElement).maxLength).toBe(CAMPAIGN_LIMITS.maxDescriptionLength);
+  expect((screen.getByPlaceholderText('The Lantern Road') as HTMLInputElement).maxLength).toBe(CAMPAIGN_LIMITS.maxNameLength);
+  expect((screen.getByPlaceholderText(/A classic fantasy adventure/) as HTMLTextAreaElement).maxLength).toBe(CAMPAIGN_LIMITS.maxDescriptionLength);
 });
 
 it.each([
@@ -33,7 +33,16 @@ it.each([
   ['a one-letter name', 'Q'],
 ])('creates a campaign with %s', async (_label, name) => {
   open();
-  fireEvent.change(screen.getByPlaceholderText('The Lost Mines of Phandelver'), { target: { value: name } });
+  fireEvent.change(screen.getByPlaceholderText('The Lantern Road'), { target: { value: name } });
   fireEvent.click(screen.getByRole('button', { name: /Create Campaign/ }));
   await waitFor(() => expect(createCampaign).toHaveBeenCalledWith(expect.objectContaining({ name })));
+});
+
+// The first place a new GM reads the role's name says what it is.
+it('tells its creator they become the game master (GM)', () => {
+  open();
+  expect(screen.getByText(/You will be automatically assigned/)).toHaveTextContent(
+    'You will be automatically assigned as the game master (GM) for this campaign.'
+  );
+  expect(document.body.textContent).not.toMatch(/dungeon\s+master/i);
 });

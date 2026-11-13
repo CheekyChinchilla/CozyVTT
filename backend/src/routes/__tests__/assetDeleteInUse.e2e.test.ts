@@ -90,41 +90,41 @@ async function makeMap(campaignId: string, name: string, extra: { imageUrl?: str
 }
 
 let adminId: string;
-let dmId: string;
+let gmId: string;
 let managerId: string;
 let strangerId: string;
 let campaignId: string;
 let otherCampaignId: string;
 let admin: ReturnType<typeof request.agent>;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let manager: ReturnType<typeof request.agent>;
 let stranger: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
   const stamp = Date.now();
   const adminUser = await createTestUser({ email: `inuse-admin-${stamp}@test.invalid`, role: 'ADMIN' });
-  const dmUser = await createTestUser({ email: `inuse-dm-${stamp}@test.invalid`, displayName: 'In Use DM' });
+  const gmUser = await createTestUser({ email: `inuse-dm-${stamp}@test.invalid`, displayName: 'In Use GM' });
   const managerUser = await createTestUser({ email: `inuse-mgr-${stamp}@test.invalid` });
   const strangerUser = await createTestUser({ email: `inuse-str-${stamp}@test.invalid` });
   adminId = adminUser.id;
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   managerId = managerUser.id;
   strangerId = strangerUser.id;
-  userIds.push(adminId, dmId, managerId, strangerId);
+  userIds.push(adminId, gmId, managerId, strangerId);
   await prisma.user.update({ where: { id: managerId }, data: { globalAssetManager: true } });
 
-  campaignId = (await createTestCampaign(dmId, { name: 'Lost Mine' })).id;
+  campaignId = (await createTestCampaign(gmId, { name: 'The Hollow Crown' })).id;
   otherCampaignId = (await createTestCampaign(strangerId, { name: 'Secret Heist' })).id;
   campaignIds.push(campaignId, otherCampaignId);
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
-      { userId: strangerId, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
+      { userId: strangerId, campaignId: otherCampaignId, role: 'GM', characterIds: [] },
     ],
   });
 
   admin = await login(adminUser.email);
-  dm = await login(dmUser.email);
+  gm = await login(gmUser.email);
   manager = await login(managerUser.email);
   stranger = await login(strangerUser.email);
 });
@@ -141,46 +141,46 @@ afterAll(async () => {
 
 describe('an asset a map uses', () => {
   it('is refused with the map named, and is still there', async () => {
-    const id = await makeAsset({ scope: 'USER', uploadedById: dmId });
+    const id = await makeAsset({ scope: 'USER', uploadedById: gmId });
     await makeMap(campaignId, 'Goblin Cave', { imageUrl: `/api/assets/maps/${id}` });
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('ASSET_IN_USE');
     expect(res.body.usage).toEqual([
-      { kind: 'map', name: 'Goblin Cave', campaignId, campaignName: 'Lost Mine', count: 1 },
+      { kind: 'map', name: 'Goblin Cave', campaignId, campaignName: 'The Hollow Crown', count: 1 },
     ]);
     expect(await prisma.asset.findUnique({ where: { id } })).not.toBeNull();
   });
 
   it('is deleted when the request says force=true', async () => {
-    const id = await makeAsset({ scope: 'USER', uploadedById: dmId });
+    const id = await makeAsset({ scope: 'USER', uploadedById: gmId });
     await makeMap(campaignId, 'Forced Cave', { imageUrl: `/api/assets/maps/${id}` });
 
-    const res = await dm.delete(`/api/assets/${id}?force=true`);
+    const res = await gm.delete(`/api/assets/${id}?force=true`);
 
     expect(res.status).toBe(200);
     expect(await prisma.asset.findUnique({ where: { id } })).toBeNull();
   });
 
   it('is not forced by any other value of force', async () => {
-    const id = await makeAsset({ scope: 'USER', uploadedById: dmId });
+    const id = await makeAsset({ scope: 'USER', uploadedById: gmId });
     await makeMap(campaignId, 'Careful Cave', { imageUrl: `/api/assets/maps/${id}` });
 
     for (const value of ['1', 'yes', 'false', '']) {
-      const res = await dm.delete(`/api/assets/${id}?force=${value}`);
+      const res = await gm.delete(`/api/assets/${id}?force=${value}`);
       expect(res.status).toBe(409);
     }
     expect(await prisma.asset.findUnique({ where: { id } })).not.toBeNull();
   });
 
   it('counts the spirit layer too', async () => {
-    const id = await makeAsset({ scope: 'USER', uploadedById: dmId });
+    const id = await makeAsset({ scope: 'USER', uploadedById: gmId });
     const map = await makeMap(campaignId, 'Haunted Hall');
     await prisma.map.update({ where: { id: map.id }, data: { spiritLayerUrl: `/api/assets/maps/${id}` } });
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(409);
     expect(res.body.usage.map((u: Use) => u.name)).toEqual(['Haunted Hall']);
@@ -199,20 +199,20 @@ describe('a picture a document shows', () => {
   }
 
   it('is refused with the document named, and is still there', async () => {
-    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
-    await documentOf(dm, 'The road to Thornwall', `![The road](/api/assets/maps/${id})`, { campaignId });
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: gmId, campaignId, type: 'MAP' });
+    await documentOf(gm, 'The road to Thornwall', `![The road](/api/assets/maps/${id})`, { campaignId });
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(409);
     expect(res.body.usage).toEqual([
-      { kind: 'document', name: 'The road to Thornwall', campaignId, campaignName: 'Lost Mine', count: 1 },
+      { kind: 'document', name: 'The road to Thornwall', campaignId, campaignName: 'The Hollow Crown', count: 1 },
     ]);
     expect(await prisma.asset.findUnique({ where: { id } })).not.toBeNull();
   });
 
   // A document counts only when it can show the picture: its writer can
-  // read the picture, or it is a handout the campaign's DM shared. Only the
+  // read the picture, or it is a handout the campaign's GM shared. Only the
   // picture's uploader's documents and its campaign's members' are looked at.
   let player: ReturnType<typeof request.agent>;
   let playerId: string;
@@ -225,17 +225,17 @@ describe('a picture a document shows', () => {
   });
 
   it("does not count a stranger's document", async () => {
-    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: gmId, campaignId, type: 'MAP' });
     await documentOf(stranger, 'Their notes', `![x](/api/assets/maps/${id})`);
     await documentOf(stranger, 'More of their notes', `![x](/api/assets/maps/${id})`);
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(200);
   });
 
   it("does not count a player's note naming a picture they can no longer read", async () => {
-    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: gmId, campaignId, type: 'MAP' });
     const shown = await makeMap(campaignId, 'Shown for a while', { imageUrl: `/api/assets/maps/${id}` });
     await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: shown.id } });
     try {
@@ -247,29 +247,29 @@ describe('a picture a document shows', () => {
     await prisma.map.delete({ where: { id: shown.id } });
     expect((await player.get(`/api/assets/${id}`)).status).toBe(404);
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(200);
   });
 
   it("counts, without naming it, a player's note naming a picture they can read", async () => {
-    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'TOKEN' });
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: gmId, campaignId, type: 'TOKEN' });
     await documentOf(player, 'Party notes', `![x](/api/assets/tokens/${id})`);
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(409);
     expect(res.body.usage).toEqual([{ kind: 'document', name: null, campaignId: null, campaignName: null, count: 1 }]);
   });
 
-  it("counts a handout the DM shared, and the DM's own note", async () => {
-    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
-    const handout = await documentOf(dm, 'Shared handout', `![x](/api/assets/maps/${id})`);
-    await prisma.campaignDocument.create({ data: { campaignId, assetId: handout, linkedById: dmId } });
-    await documentOf(dm, 'My notes', `![x](/api/assets/maps/${id})`);
+  it("counts a handout the GM shared, and the GM's own note", async () => {
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: gmId, campaignId, type: 'MAP' });
+    const handout = await documentOf(gm, 'Shared handout', `![x](/api/assets/maps/${id})`);
+    await prisma.campaignDocument.create({ data: { campaignId, assetId: handout, linkedById: gmId } });
+    await documentOf(gm, 'My notes', `![x](/api/assets/maps/${id})`);
     await documentOf(stranger, 'Their notes', `![x](/api/assets/maps/${id})`);
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(409);
     expect(res.body.usage).toEqual(expect.arrayContaining([
@@ -284,8 +284,8 @@ describe('a picture a document shows', () => {
   // its plan would come from statistics PostgreSQL gathers now and then,
   // and stale ones made such a join read every document's pictures.
   it('reads what documents name one table at a time', async () => {
-    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
-    await documentOf(dm, 'Handout', `![x](/api/assets/maps/${id})`, { campaignId });
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: gmId, campaignId, type: 'MAP' });
+    await documentOf(gm, 'Handout', `![x](/api/assets/maps/${id})`, { campaignId });
     const sent: string[] = [];
     const realQuery = Client.prototype.query;
     jest.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
@@ -294,7 +294,7 @@ describe('a picture a document shows', () => {
       return (realQuery as (...a: unknown[]) => unknown).apply(this, args);
     } as never);
     try {
-      expect((await dm.delete(`/api/assets/${id}`)).status).toBe(409);
+      expect((await gm.delete(`/api/assets/${id}`)).status).toBe(409);
     } finally {
       jest.restoreAllMocks();
     }
@@ -306,7 +306,7 @@ describe('a picture a document shows', () => {
   // Just after the upgrade the caller's own documents from before are read
   // first, so a note of theirs keeps the picture even with newer ones waiting.
   it("reads the caller's own documents from before first", async () => {
-    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: gmId, campaignId, type: 'MAP' });
     const fs = await import('fs');
     const os = await import('os');
     const path = await import('path');
@@ -324,10 +324,10 @@ describe('a picture a document shows', () => {
       assetIds.push(doc.id);
     };
     try {
-      await unread(dmId, `![x](/api/assets/maps/${id})`);
+      await unread(gmId, `![x](/api/assets/maps/${id})`);
       for (let i = 0; i < 6; i += 1) await unread(strangerId, 'Nothing here');
 
-      const res = await dm.delete(`/api/assets/${id}`);
+      const res = await gm.delete(`/api/assets/${id}`);
 
       expect(res.status).toBe(409);
       expect(res.body.usage).toEqual([{ kind: 'document', name: 'Old note', campaignId: null, campaignName: null, count: 1 }]);
@@ -337,21 +337,21 @@ describe('a picture a document shows', () => {
   });
 
   it('is deleted once no document names it any more, or with force=true', async () => {
-    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
-    const docId = await documentOf(dm, 'Handout', `![x](/api/assets/maps/${id})`, { campaignId });
-    expect((await dm.put(`/api/assets/documents/${docId}/content`).send({ content: 'The picture is gone.' })).status).toBe(200);
-    expect((await dm.delete(`/api/assets/${id}`)).status).toBe(200);
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: gmId, campaignId, type: 'MAP' });
+    const docId = await documentOf(gm, 'Handout', `![x](/api/assets/maps/${id})`, { campaignId });
+    expect((await gm.put(`/api/assets/documents/${docId}/content`).send({ content: 'The picture is gone.' })).status).toBe(200);
+    expect((await gm.delete(`/api/assets/${id}`)).status).toBe(200);
 
-    const forced = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
-    await documentOf(dm, 'Handout', `![x](/api/assets/maps/${forced})`, { campaignId });
-    expect((await dm.delete(`/api/assets/${forced}?force=true`)).status).toBe(200);
+    const forced = await makeAsset({ scope: 'CAMPAIGN', uploadedById: gmId, campaignId, type: 'MAP' });
+    await documentOf(gm, 'Handout', `![x](/api/assets/maps/${forced})`, { campaignId });
+    expect((await gm.delete(`/api/assets/${forced}?force=true`)).status).toBe(200);
     expect(await prisma.documentPicture.count({ where: { pictureId: forced } })).toBe(0);
   });
 });
 
 describe('an asset used as token art', () => {
   it('counts the tokens on each map and names the map', async () => {
-    const id = await makeAsset({ scope: 'USER', uploadedById: dmId });
+    const id = await makeAsset({ scope: 'USER', uploadedById: gmId });
     await makeMap(campaignId, 'Ambush Road', {
       tokens: [
         { id: 't1', name: 'Wolf', imageUrl: `/api/assets/tokens/${id}` },
@@ -360,39 +360,39 @@ describe('an asset used as token art', () => {
       ],
     });
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(409);
     expect(res.body.usage).toEqual([
-      { kind: 'token', name: 'Ambush Road', campaignId, campaignName: 'Lost Mine', count: 2 },
+      { kind: 'token', name: 'Ambush Road', campaignId, campaignName: 'The Hollow Crown', count: 2 },
     ]);
   });
 });
 
 describe('an asset used by everything that can hold a picture', () => {
   it('lists each kind of use', async () => {
-    const id = await makeAsset({ scope: 'USER', uploadedById: dmId });
+    const id = await makeAsset({ scope: 'USER', uploadedById: gmId });
     const address = `/api/assets/tokens/${id}`;
     await makeMap(campaignId, 'Every Map', { tokens: [{ id: 't1', name: 'Imp', imageUrl: address }] });
     await prisma.character.create({
-      data: { userId: dmId, campaignId, name: 'Hero Hannah', tokenImageUrl: address, data: {} },
+      data: { userId: gmId, campaignId, name: 'Hero Hannah', tokenImageUrl: address, data: {} },
     });
     const template = await prisma.characterTemplate.create({
-      data: { name: 'Starter Fighter', tokenImageUrl: address, data: {}, createdById: dmId },
+      data: { name: 'Starter Fighter', tokenImageUrl: address, data: {}, createdById: gmId },
     });
     characterTemplateIds.push(template.id);
     await prisma.creatureTemplate.create({
-      data: { name: 'Boss Bat', imageUrl: address, statBlock: {}, campaignId, createdById: dmId },
+      data: { name: 'Boss Bat', imageUrl: address, statBlock: {}, campaignId, createdById: gmId },
     });
     await prisma.tokenTemplate.create({
-      data: { name: 'Torch Prop', imageUrl: address, campaignId, createdById: dmId },
+      data: { name: 'Torch Prop', imageUrl: address, campaignId, createdById: gmId },
     });
     await prisma.campaign.update({
       where: { id: campaignId },
       data: { vibeSettings: { atmosphereAudio: { assetId: id, volume: 0.5, loop: true } } },
     });
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(409);
     const byKind = Object.fromEntries((res.body.usage as Use[]).map((u) => [u.kind, u.name]));
@@ -402,14 +402,14 @@ describe('an asset used by everything that can hold a picture', () => {
       characterTemplate: 'Starter Fighter',
       creature: 'Boss Bat',
       tokenTemplate: 'Torch Prop',
-      campaignSetting: 'Lost Mine',
+      campaignSetting: 'The Hollow Crown',
     });
 
     await prisma.campaign.update({ where: { id: campaignId }, data: { vibeSettings: {} } });
   });
 });
 
-// A time-of-day period plays its sound when the DM switches to it, so a
+// A time-of-day period plays its sound when the GM switches to it, so a
 // sound only a period names is in use too. The check read only the track
 // playing now, so such a sound could be deleted with no warning, and a deleted
 // account's personal sound was removed although a period still named it.
@@ -427,14 +427,14 @@ describe('a sound a time-of-day period plays', () => {
   });
 
   it('is refused with the period and its campaign named', async () => {
-    const id = await makeAsset({ scope: 'USER', uploadedById: dmId, type: 'AUDIO' });
+    const id = await makeAsset({ scope: 'USER', uploadedById: gmId, type: 'AUDIO' });
     await prisma.campaign.update({ where: { id: campaignId }, data: { vibeSettings: periods(id) } });
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(409);
     expect(res.body.usage).toEqual([
-      { kind: 'vibePeriod', name: 'Dawn', campaignId, campaignName: 'Lost Mine', count: 1 },
+      { kind: 'vibePeriod', name: 'Dawn', campaignId, campaignName: 'The Hollow Crown', count: 1 },
     ]);
     expect(await prisma.asset.findUnique({ where: { id } })).not.toBeNull();
   });
@@ -465,7 +465,7 @@ describe('a sound a time-of-day period plays', () => {
 
 describe('an asset used in a great many places', () => {
   it('lists the first hundred and counts the rest', async () => {
-    const id = await makeAsset({ scope: 'USER', uploadedById: dmId });
+    const id = await makeAsset({ scope: 'USER', uploadedById: gmId });
     await prisma.map.createMany({
       data: Array.from({ length: 105 }, (_, i) => ({
         campaignId,
@@ -480,7 +480,7 @@ describe('an asset used in a great many places', () => {
       })),
     });
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(409);
     expect(res.body.usage).toHaveLength(100);
@@ -490,14 +490,14 @@ describe('an asset used in a great many places', () => {
 
 describe('an address that only contains the asset id', () => {
   it('is not a use', async () => {
-    const id = await makeAsset({ scope: 'USER', uploadedById: dmId });
+    const id = await makeAsset({ scope: 'USER', uploadedById: gmId });
     // Names a different asset, with this id only in the query string.
     await makeMap(campaignId, 'Lookalike', {
       imageUrl: `/api/assets/maps/00000000-0000-4000-8000-000000000002?copy=${id}`,
       tokens: [{ id: 't1', name: 'Imp', imageUrl: `/api/assets/tokens/${id}x` }],
     });
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(200);
   });
@@ -505,7 +505,7 @@ describe('an address that only contains the asset id', () => {
 
 describe('who may ask', () => {
   it('refuses a caller with no right to delete before saying anything about use', async () => {
-    const id = await makeAsset({ scope: 'USER', uploadedById: dmId });
+    const id = await makeAsset({ scope: 'USER', uploadedById: gmId });
     await makeMap(campaignId, 'Private Cave', { imageUrl: `/api/assets/maps/${id}` });
 
     const res = await stranger.delete(`/api/assets/${id}?force=true`);
@@ -516,7 +516,7 @@ describe('who may ask', () => {
   });
 
   it('shows an admin every campaign by name', async () => {
-    const id = await makeAsset({ scope: 'USER', uploadedById: dmId });
+    const id = await makeAsset({ scope: 'USER', uploadedById: gmId });
     await makeMap(campaignId, 'Admin Cave', { imageUrl: `/api/assets/maps/${id}` });
     await makeMap(otherCampaignId, 'Vault', { imageUrl: `/api/assets/maps/${id}` });
 
@@ -524,14 +524,14 @@ describe('who may ask', () => {
 
     expect(res.status).toBe(409);
     expect((res.body.usage as Use[]).map((u) => `${u.campaignName}: ${u.name}`).sort()).toEqual([
-      'Lost Mine: Admin Cave',
       'Secret Heist: Vault',
+      'The Hollow Crown: Admin Cave',
     ]);
   });
 
   it("keeps the names of other people's campaigns from a global asset's owner", async () => {
     const id = await makeAsset({ scope: 'GLOBAL', uploadedById: managerId });
-    await makeMap(campaignId, 'Lost Mine Map', { imageUrl: `/api/assets/maps/${id}` });
+    await makeMap(campaignId, 'The Hollow Crown Map', { imageUrl: `/api/assets/maps/${id}` });
     await makeMap(otherCampaignId, 'Secret Vault', { imageUrl: `/api/assets/maps/${id}` });
 
     const res = await manager.delete(`/api/assets/${id}`);
@@ -541,19 +541,19 @@ describe('who may ask', () => {
       { kind: 'map', name: null, campaignId: null, campaignName: null, count: 2 },
     ]);
     expect(JSON.stringify(res.body)).not.toContain('Secret');
-    expect(JSON.stringify(res.body)).not.toContain('Lost Mine');
+    expect(JSON.stringify(res.body)).not.toContain('The Hollow Crown');
   });
 
-  it('shows a DM the uses in their own campaign and only counts the rest', async () => {
-    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId });
+  it('shows a GM the uses in their own campaign and only counts the rest', async () => {
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: gmId, campaignId });
     await makeMap(campaignId, 'Campaign Map', { imageUrl: `/api/assets/maps/${id}` });
     await makeMap(otherCampaignId, 'Borrowed Map', { imageUrl: `/api/assets/maps/${id}` });
 
-    const res = await dm.delete(`/api/assets/${id}`);
+    const res = await gm.delete(`/api/assets/${id}`);
 
     expect(res.status).toBe(409);
     expect(res.body.usage).toEqual([
-      { kind: 'map', name: 'Campaign Map', campaignId, campaignName: 'Lost Mine', count: 1 },
+      { kind: 'map', name: 'Campaign Map', campaignId, campaignName: 'The Hollow Crown', count: 1 },
       { kind: 'map', name: null, campaignId: null, campaignName: null, count: 1 },
     ]);
   });

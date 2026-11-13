@@ -7,7 +7,7 @@
  *
  * Existing rows are deliberately NOT deleted on upgrade — a chat log is a record
  * of a session and a migration quietly editing it would be hard to undo — so
- * this route is how a DM clears the backlog on purpose.
+ * this route is how a GM clears the backlog on purpose.
  *
  * The important detail pinned below: matching is on `metadata.action`, not on
  * the message text. The wording is display copy that could change or be
@@ -30,10 +30,10 @@ import {
 const app = createTestApp();
 
 describe('DELETE /api/campaigns/:campaignId/messages/join-leave', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let campaignId: string;
-  let dmAgent: ReturnType<typeof request.agent>;
+  let gmAgent: ReturnType<typeof request.agent>;
   let playerAgent: ReturnType<typeof request.agent>;
 
   async function login(email: string) {
@@ -45,21 +45,21 @@ describe('DELETE /api/campaigns/:campaignId/messages/join-leave', () => {
 
   beforeAll(async () => {
     const stamp = Date.now();
-    const dm = await createTestUser({ email: `jl_dm_${stamp}@test.invalid`, isApproved: true });
+    const gm = await createTestUser({ email: `jl_dm_${stamp}@test.invalid`, isApproved: true });
     const player = await createTestUser({ email: `jl_pl_${stamp}@test.invalid`, isApproved: true });
-    dmId = dm.id;
+    gmId = gm.id;
     playerId = player.id;
 
-    const campaign = await createTestCampaign(dmId, { name: `Join Leave ${stamp}` });
+    const campaign = await createTestCampaign(gmId, { name: `Join Leave ${stamp}` });
     campaignId = campaign.id;
     await prisma.campaignMembership.createMany({
       data: [
-        { campaignId, userId: dmId, role: 'DM', characterIds: [] },
+        { campaignId, userId: gmId, role: 'GM', characterIds: [] },
         { campaignId, userId: playerId, role: 'PLAYER', characterIds: [] },
       ],
     });
 
-    dmAgent = await login(`jl_dm_${stamp}@test.invalid`);
+    gmAgent = await login(`jl_dm_${stamp}@test.invalid`);
     playerAgent = await login(`jl_pl_${stamp}@test.invalid`);
   });
 
@@ -70,14 +70,14 @@ describe('DELETE /api/campaigns/:campaignId/messages/join-leave', () => {
         {
           campaignId,
           type: 'SYSTEM',
-          content: 'Test DM has joined the campaign.',
-          metadata: { userId: dmId, action: 'user.joined' },
+          content: 'Test GM has joined the campaign.',
+          metadata: { userId: gmId, action: 'user.joined' },
         },
         {
           campaignId,
           type: 'SYSTEM',
-          content: 'Test DM has left the campaign.',
-          metadata: { userId: dmId, action: 'user.left' },
+          content: 'Test GM has left the campaign.',
+          metadata: { userId: gmId, action: 'user.left' },
         },
         {
           campaignId,
@@ -93,12 +93,12 @@ describe('DELETE /api/campaigns/:campaignId/messages/join-leave', () => {
   afterAll(async () => {
     await prisma.message.deleteMany({ where: { campaignId } });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId]);
+    await cleanupUsers([gmId, playerId]);
     await prisma.$disconnect();
   });
 
   it('removes the join and leave notices', async () => {
-    const res = await dmAgent.delete(`/api/campaigns/${campaignId}/messages/join-leave`);
+    const res = await gmAgent.delete(`/api/campaigns/${campaignId}/messages/join-leave`);
     expect(res.status).toBe(200);
     expect(res.body.deleted).toBe(2);
 
@@ -109,7 +109,7 @@ describe('DELETE /api/campaigns/:campaignId/messages/join-leave', () => {
   });
 
   it('leaves other system messages and the conversation alone', async () => {
-    await dmAgent.delete(`/api/campaigns/${campaignId}/messages/join-leave`);
+    await gmAgent.delete(`/api/campaigns/${campaignId}/messages/join-leave`);
 
     const left = await prisma.message.findMany({ where: { campaignId } });
     expect(left).toHaveLength(2);
@@ -120,8 +120,8 @@ describe('DELETE /api/campaigns/:campaignId/messages/join-leave', () => {
   });
 
   it('is a no-op when there is nothing to clear', async () => {
-    await dmAgent.delete(`/api/campaigns/${campaignId}/messages/join-leave`);
-    const res = await dmAgent.delete(`/api/campaigns/${campaignId}/messages/join-leave`);
+    await gmAgent.delete(`/api/campaigns/${campaignId}/messages/join-leave`);
+    const res = await gmAgent.delete(`/api/campaigns/${campaignId}/messages/join-leave`);
 
     expect(res.status).toBe(200);
     expect(res.body.deleted).toBe(0);

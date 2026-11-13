@@ -1,25 +1,25 @@
 /**
  * The header colour a player picks is drawn where the sheet uses it.
  *
- * The active tab and the Call of Cthulhu header's middle stop and bottom
+ * The active tab and the Horror d100 header's middle stop and bottom
  * border were classes joined to the colour's name at runtime, such as
  * `border-${accent}`. Tailwind generates only class names written out in
  * full, so for most colours they drew nothing. The tab's underline is now the
  * colour itself and its label the theme's text colour, readable on a dark
- * theme's sheet; the Call of Cthulhu header's classes are written out.
+ * theme's sheet; the Horror d100 header's classes are written out.
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { DnD5eCharacterView } from '../dnd5e/DnD5eCharacterView';
-import { DnD5eCharacterEditor } from '../dnd5e/DnD5eCharacterEditor';
-import { Pathfinder2eCharacterEditor } from '../pathfinder2e/Pathfinder2eCharacterEditor';
-import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
-import { COLOR_PRESETS as COC_PRESETS } from '../call-of-cthulhu-7e/colorPresets';
-import { CallOfCthulhu7eCharacterView } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterView';
-import { CallOfCthulhu7eCharacterEditor } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
-import { COC_BLANK_SHEET, cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
+import { FifthEditionCharacterView } from '../fifth-edition/FifthEditionCharacterView';
+import { FifthEditionCharacterEditor } from '../fifth-edition/FifthEditionCharacterEditor';
+import { FantasyD20CharacterEditor } from '../fantasy-d20/FantasyD20CharacterEditor';
+import { fifthEditionCharacter } from '../fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
+import { COLOR_PRESETS as HORROR_D100_PRESETS } from '../horror-d100/colorPresets';
+import { HorrorD100CharacterView } from '../horror-d100/HorrorD100CharacterView';
+import { HorrorD100CharacterEditor } from '../horror-d100/HorrorD100CharacterEditor';
+import { blankSkills, horrorD100Character } from '../horror-d100/__tests__/sheetFixture';
 
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
@@ -28,9 +28,9 @@ const noop = () => Promise.resolve();
 
 describe('the active tab', () => {
   it.each([
-    ['the D&D 5e sheet', () => render(<DnD5eCharacterView character={dnd5eCharacter({ themeColor: 'Royal Blue' })} />)],
-    ['the D&D 5e editor', () => render(<DnD5eCharacterEditor character={dnd5eCharacter({ themeColor: 'Royal Blue' })} onSave={noop} onCancel={vi.fn()} />)],
-    ['the Pathfinder 2e editor', () => render(<Pathfinder2eCharacterEditor character={pf2eCharacter({ themeColor: 'Pathfinder Blue' })} onSave={noop} onCancel={vi.fn()} />)],
+    ['the 5E sheet', () => render(<FifthEditionCharacterView character={fifthEditionCharacter({ themeColor: 'Royal Blue' })} />)],
+    ['the 5E editor', () => render(<FifthEditionCharacterEditor character={fifthEditionCharacter({ themeColor: 'Royal Blue' })} onSave={noop} onCancel={vi.fn()} />)],
+    ['the Fantasy d20 editor', () => render(<FantasyD20CharacterEditor character={fantasyD20Character({ themeColor: 'Royal Blue' })} onSave={noop} onCancel={vi.fn()} />)],
   ])('on %s is underlined in the header colour', (_name, show) => {
     show();
     expect(activeTab()).toHaveStyle({ borderBottomColor: '#1d4ed8' });
@@ -38,7 +38,7 @@ describe('the active tab', () => {
   });
 
   it('is underlined in a custom colour', () => {
-    render(<DnD5eCharacterView character={dnd5eCharacter({ themeColor: '#123456' })} />);
+    render(<FifthEditionCharacterView character={fifthEditionCharacter({ themeColor: '#123456' })} />);
     expect(activeTab()).toHaveStyle({ borderBottomColor: '#123456' });
   });
 });
@@ -46,23 +46,22 @@ describe('the active tab', () => {
 // jsdom keeps any class name, generated or not, so the presets are checked
 // for whole class names; the theme token test refuses a class joined at
 // runtime anywhere.
-describe('the Call of Cthulhu header colours', () => {
-  it.each(COC_PRESETS.map((preset) => [preset.name, preset] as const))('%s has whole class names', (_name, preset) => {
+describe('the Horror d100 header colours', () => {
+  it.each(HORROR_D100_PRESETS.map((preset) => [preset.name, preset] as const))('%s has whole class names', (_name, preset) => {
     expect(preset.via).toMatch(/^via-[a-z]+-\d{2,3}$/);
     expect(preset.border).toMatch(/^border-[a-z]+-\d{2,3}$/);
   });
 });
 
-describe('the Call of Cthulhu sheet', () => {
+describe('the Horror d100 sheet', () => {
   const ticked = (themeColor: string) => {
-    const skills = COC_BLANK_SHEET.skills as Record<string, Record<string, unknown>>;
-    render(<CallOfCthulhu7eCharacterView character={cocCharacter({ themeColor, skills: { ...skills, accounting: { ...skills.accounting, improvementChecked: true } } })} />);
+    render(<HorrorD100CharacterView character={horrorD100Character({ themeColor, skills: blankSkills({ appraise: { value: 15, experienceCheck: true } }) })} />);
     screen.getAllByRole('tab', { name: /^Skills$/ }).forEach((tab) => fireEvent.click(tab));
-    return screen.getAllByRole('img', { name: 'Marked for improvement' })[0];
+    return screen.getAllByRole('img', { name: 'Experience check ticked' })[0];
   };
 
   it('underlines the open tab in a custom colour', () => {
-    render(<CallOfCthulhu7eCharacterView character={cocCharacter({ themeColor: '#123456' })} />);
+    render(<HorrorD100CharacterView character={horrorD100Character({ themeColor: '#123456' })} />);
     expect(screen.getByRole('tab', { name: /^Overview$/ })).toHaveStyle({ borderBottomColor: '#123456' });
   });
 
@@ -83,9 +82,9 @@ describe('the Call of Cthulhu sheet', () => {
 // drawn in fixed colours: in the theme's accent it could match the header.
 describe('the header Save button', () => {
   it.each([
-    ['D&D 5e', () => render(<DnD5eCharacterEditor character={dnd5eCharacter()} onSave={noop} onCancel={vi.fn()} />)],
-    ['Pathfinder 2e', () => render(<Pathfinder2eCharacterEditor character={pf2eCharacter()} onSave={noop} onCancel={vi.fn()} />)],
-    ['Call of Cthulhu', () => render(<CallOfCthulhu7eCharacterEditor character={cocCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+    ['5E', () => render(<FifthEditionCharacterEditor character={fifthEditionCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+    ['Fantasy d20', () => render(<FantasyD20CharacterEditor character={fantasyD20Character()} onSave={noop} onCancel={vi.fn()} />)],
+    ['Horror d100', () => render(<HorrorD100CharacterEditor character={horrorD100Character()} onSave={noop} onCancel={vi.fn()} />)],
   ])('on %s does not take the theme accent', (_name, show) => {
     show();
     const save = screen.getByRole('button', { name: /^Save$/ });
@@ -94,13 +93,13 @@ describe('the header Save button', () => {
   });
 });
 
-// The Call of Cthulhu editor's header text and boxes were always white, so on
-// a pale custom colour the investigator's name could not be read.
-describe('the Call of Cthulhu editor header on a pale colour', () => {
+// The Horror d100 editor's header text and boxes were always white, so on
+// a pale custom colour the character's name could not be read.
+describe('the Horror d100 editor header on a pale colour', () => {
   it('draws its text and boxes dark', () => {
-    render(<CallOfCthulhu7eCharacterEditor character={cocCharacter({ themeColor: '#ffffff' })} onSave={noop} onCancel={vi.fn()} />);
-    expect(screen.getByLabelText('Investigator name')).toHaveClass('text-black');
-    expect(screen.getByLabelText('Occupation')).toHaveClass('text-black');
-    expect(screen.getByLabelText('Occupation')).not.toHaveClass('text-white');
+    render(<HorrorD100CharacterEditor character={horrorD100Character({ themeColor: '#ffffff' })} onSave={noop} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText('Character name')).toHaveClass('text-black');
+    expect(screen.getByLabelText('Profession')).toHaveClass('text-black');
+    expect(screen.getByLabelText('Profession')).not.toHaveClass('text-white');
   });
 });

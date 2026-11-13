@@ -1,7 +1,7 @@
 /**
  * Taking a member out of a campaign, and telling everyone it has happened.
  *
- * The DM's Remove (`DELETE /api/campaigns/:campaignId/members/:userId`) and
+ * The GM's Remove (`DELETE /api/campaigns/:campaignId/members/:userId`) and
  * a member's own leave (`POST /api/campaigns/:campaignId/leave`) do the same
  * two things: one serializable transaction that takes the member out, then
  * the notices to their open connections and to the table. Each route says
@@ -10,32 +10,38 @@
 
 import { inSerializableTransaction } from '../utils/serializable';
 import { clearCampaignFromLiveSockets, announceRosterChange, broadcastPresence, type MemberLeftReason } from '../websocket/utils';
+import { rememberDeparture } from '../websocket/memberDepartures';
 import logger from '../utils/logger';
 
-/** Why a member was not taken out: not a member, the DM, or the campaign's owner. */
-export type TakeOutRefusal = 'not-member' | 'dm' | 'owner';
+/** Why a member was not taken out: not a member, the GM, or the campaign's owner. */
+export type TakeOutRefusal = 'not-member' | 'gm' | 'owner';
 
 /**
  * Take `userId` out of the campaign: their characters in it go back to
  * their own list, and the membership is deleted. Refused, with nothing
- * changed, for someone who is not a member, for the DM, and for the owner.
+ * changed, for someone who is not a member, for the GM, and for the owner.
  * Returns the refusal, or null once it is done.
  *
- * `checkFirst` is which refusal an owner sitting as DM is given. The DM
- * removing someone is told about the seat. A member leaving is told about
+ * `reason` is the GM removing them (`removed`) or the member leaving
+ * (`left`). It decides which refusal an owner sitting as GM is given: the GM
+ * removing someone is told about the seat; a member leaving is told about
  * owning the campaign, since handing the seat over and asking again would
- * only be refused for that.
+ * only be refused for that. It is also recorded, just before the delete, as
+ * why they went out (websocket/memberDepartures.ts), so a tab of theirs
+ * whose join reads the membership as soon as the delete is committed is told
+ * it.
  *
  * Who the member is, and the change, are one serializable transaction
- * (utils/serializable.ts): a DM hand-over landing in between could otherwise
+ * (utils/serializable.ts): a GM hand-over landing in between could otherwise
  * give this member the seat just before they were taken out, leaving the
- * campaign with no DM.
+ * campaign with no GM.
  */
 export async function takeMemberOut(
   campaignId: string,
   userId: string,
-  checkFirst: 'dm' | 'owner' = 'dm'
+  reason: MemberLeftReason
 ): Promise<TakeOutRefusal | null> {
+  const checkFirst = reason === 'left' ? 'owner' : 'gm';
   return inSerializableTransaction(async (tx): Promise<TakeOutRefusal | null> => {
     const membership = await tx.campaignMembership.findUnique({
       where: { userId_campaignId: { userId, campaignId } },
@@ -44,22 +50,25 @@ export async function takeMemberOut(
     if (!membership) return 'not-member';
 
     // The owner stays too, who is often sitting as a player after handing the
-    // seat over. Taking the seat back needs a membership, and only the DM can
+    // seat over. Taking the seat back needs a membership, and only the GM can
     // add one, so taking the owner out would shut them out of their own
     // campaign with no way in except deleting it.
     const owns = async () =>
       (await tx.campaign.findUnique({ where: { id: campaignId }, select: { ownerId: true } }))?.ownerId === userId;
 
     if (checkFirst === 'owner' && (await owns())) return 'owner';
-    // CRITICAL: the campaign keeps its DM.
-    if (membership.role === 'DM') return 'dm';
-    if (checkFirst === 'dm' && (await owns())) return 'owner';
+    // CRITICAL: the campaign keeps its GM.
+    if (membership.role === 'GM') return 'gm';
+    if (checkFirst === 'gm' && (await owns())) return 'owner';
 
     // Delete the membership, and take their characters out of the campaign
     // with it: a character that still named the campaign stayed readable by
-    // every member and editable by the DM, and each save the owner made was
+    // every member and editable by the GM, and each save the owner made was
     // still sent to the table they had left.
     await tx.character.updateMany({ where: { userId, campaignId }, data: { campaignId: null } });
+    // Before the delete commits. Read only while the membership is absent,
+    // so a transaction that is refused or run again leaves nothing wrong.
+    rememberDeparture(userId, campaignId, reason);
     await tx.campaignMembership.delete({ where: { userId_campaignId: { userId, campaignId } } });
     return null;
   });
@@ -67,7 +76,7 @@ export async function takeMemberOut(
 
 /**
  * Tell everyone a member taken out of the campaign is gone: their open
- * connections to it leave it, each told why (`reason`: the DM removed them,
+ * connections to it leave it, each told why (`reason`: the GM removed them,
  * or they left), the table is sent who is online now, and its pages refresh
  * their member lists (`roster.updated`, `member.left`). Never throws: the
  * membership is already gone.

@@ -8,6 +8,12 @@
 import type { Character, CharacterData, GameSystem } from '@/types';
 import { downloadTextFile } from '@/utils/download';
 import { isGameSystem } from '@/constants/game-systems';
+import { normaliseGameSystem } from '@/legacy/gameSystemAliases';
+import { RETIRED_GAME_SYSTEM } from '@/legacy/retiredGameSystem';
+
+/** What the import window says of a file naming the unreleased system versions before 1.7.0 could hold. */
+export const RETIRED_SYSTEM_FILE_NOTICE =
+  "This file's game system is no longer supported, so the character is imported with none, as a Flexible sheet.";
 
 export interface ExportMetadata {
   cozyVttVersion: string;
@@ -65,6 +71,8 @@ export function validateImportedCharacter(data: unknown): {
     gameSystem: GameSystem | null;
     data: CharacterData;
   };
+  /** Something the person importing should know about how the file was read. */
+  notice?: string;
 } {
   // Check basic structure
   if (!data || typeof data !== 'object') {
@@ -107,11 +115,18 @@ export function validateImportedCharacter(data: unknown): {
     return { valid: false, error: 'Character data is required' };
   }
 
-  // A file made on an instance with another game system: this one cannot
-  // store the character, so it is refused here, before the preview.
-  const gameSystem = candidate.character.gameSystem || null;
+  // A file an older version exported names its system by the value that
+  // version used, which is read as the new one. One naming the unreleased
+  // system those versions could hold is read as having no system, as the
+  // upgrade left such characters, and the window says so. A file made on an
+  // instance with another game system cannot be stored here, so it is
+  // refused, before the preview. No code is shown, as no system is shown by
+  // its code anywhere else.
+  const named = candidate.character.gameSystem || null;
+  const retired = named === RETIRED_GAME_SYSTEM;
+  const gameSystem = retired ? null : normaliseGameSystem(named) ?? named;
   if (gameSystem !== null && !isGameSystem(gameSystem)) {
-    return { valid: false, error: `This character is for a game system this CozyVTT does not have: ${String(gameSystem)}` };
+    return { valid: false, error: 'This character is for a game system this CozyVTT does not have.' };
   }
 
   // Return validated character data
@@ -122,6 +137,7 @@ export function validateImportedCharacter(data: unknown): {
       gameSystem,
       data: candidate.character.data as CharacterData,
     },
+    ...(retired ? { notice: RETIRED_SYSTEM_FILE_NOTICE } : {}),
   };
 }
 

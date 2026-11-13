@@ -1,6 +1,6 @@
 /**
  * A sheet's Roll mode: Normal, Advantage or Disadvantage (Fortune and
- * Misfortune in Pathfinder 2e) for every d20 test a click or a tap on the
+ * Misfortune in Fantasy d20) for every d20 test a click or a tap on the
  * sheet rolls, until it is changed. The mode in force is pressed, and marked
  * in the warning colour while it is anything but Normal, so a mode left on
  * is seen. The sheet viewer holds it and shows this where the sheet rolls

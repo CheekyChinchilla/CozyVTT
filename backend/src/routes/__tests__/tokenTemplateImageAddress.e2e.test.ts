@@ -15,48 +15,48 @@ import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
 const app = createTestApp();
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let otherCampaignId: string;
 let artId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
-  const user = await createTestUser({ displayName: 'Template Address DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Templates' })).id;
-  otherCampaignId = (await createTestCampaign(dmId, { name: 'Other templates' })).id;
+  const user = await createTestUser({ displayName: 'Template Address GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Templates' })).id;
+  otherCampaignId = (await createTestCampaign(gmId, { name: 'Other templates' })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
-      { userId: dmId, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
+      { userId: gmId, campaignId: otherCampaignId, role: 'GM', characterIds: [] },
     ],
   });
   artId = (await prisma.asset.create({
     data: {
-      type: 'TOKEN', scope: 'USER', uploadedById: dmId, filename: 'g.png', originalName: 'g.png', mimeType: 'image/png',
+      type: 'TOKEN', scope: 'USER', uploadedById: gmId, filename: 'g.png', originalName: 'g.png', mimeType: 'image/png',
       fileSize: 1, filePath: '/nonexistent/g.png', name: 'Goblin',
     },
   })).id;
-  dm = request.agent(app);
-  await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD }).expect(200);
+  gm = request.agent(app);
+  await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD }).expect(200);
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns([campaignId, otherCampaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
 const templates = () => `/api/campaigns/${campaignId}/token-templates`;
 
 describe.each([
-  ['created', (imageUrl: string) => dm.post(templates()).send({ name: 'Goblin', imageUrl })],
-  ['made from a token', (imageUrl: string) => dm.post(`${templates()}/from-token`).send({ name: 'Goblin', imageUrl })],
+  ['created', (imageUrl: string) => gm.post(templates()).send({ name: 'Goblin', imageUrl })],
+  ['made from a token', (imageUrl: string) => gm.post(`${templates()}/from-token`).send({ name: 'Goblin', imageUrl })],
   ['changed', async (imageUrl: string) => {
-    const made = await dm.post(templates()).send({ name: 'Goblin' });
-    return dm.put(`${templates()}/${made.body.id}`).send({ imageUrl });
+    const made = await gm.post(templates()).send({ name: 'Goblin' });
+    return gm.put(`${templates()}/${made.body.id}`).send({ imageUrl });
   }],
 ])('a template %s', (_label, send) => {
   it('refuses an outside address', async () => {
@@ -74,7 +74,7 @@ describe.each([
 
 it('gives a copy the address in full when the template holds a bare id', async () => {
   const old = await prisma.tokenTemplate.create({ data: { name: 'Old goblin', campaignId, imageUrl: artId } });
-  const res = await dm.post(`${templates()}/${old.id}/copy-to/${otherCampaignId}`);
+  const res = await gm.post(`${templates()}/${old.id}/copy-to/${otherCampaignId}`);
   expect(res.status).toBe(201);
   expect(res.body.imageUrl).toBe(`/api/assets/tokens/${artId}`);
 });

@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import { CampaignStatus } from '@prisma/client';
-import { GameSystem } from '../game-systems';
+import { GameSystemSchema } from './gameSystem';
 import { HEX_COLOR_PATTERN, SPIRIT_STYLE_PATTERN, isSafeVibeFilter } from '../utils/styleAllowlists';
 import { CAMPAIGN_LIMITS } from './campaignLimits';
 
@@ -15,17 +15,17 @@ import { CAMPAIGN_LIMITS } from './campaignLimits';
 export const CreateCampaignSchema = z.object({
   name: z.string().trim().min(1, 'Campaign name is required').max(CAMPAIGN_LIMITS.maxNameLength, `Campaign name must be ${CAMPAIGN_LIMITS.maxNameLength} characters or fewer`),
   description: z.string().max(CAMPAIGN_LIMITS.maxDescriptionLength).optional(),
-  gameSystem: z.nativeEnum(GameSystem).nullish(),
+  gameSystem: GameSystemSchema.nullish(),
 });
 
 export type CreateCampaignInput = z.infer<typeof CreateCampaignSchema>;
 
-/** PUT /api/campaigns/:campaignId/dm */
-export const TransferDMSchema = z.object({
+/** PUT /api/campaigns/:campaignId/gm, and /dm as older versions named it */
+export const TransferGMSchema = z.object({
   userId: z.string().uuid('A campaign member must be named by their user id'),
 });
 
-export type TransferDMInput = z.infer<typeof TransferDMSchema>;
+export type TransferGMInput = z.infer<typeof TransferGMSchema>;
 
 /** The longest a campaign invitation can be set to last. */
 export const MAX_INVITE_EXPIRY_DAYS = 365;
@@ -112,9 +112,7 @@ export const UpdateCampaignSchema = z.object({
   status: z.enum(SETTABLE_STATUSES, {
     error: `Invalid status. Must be one of: ${SETTABLE_STATUSES.join(', ')}; starting, pausing and ending a session set the others`,
   }).optional(),
-  gameSystem: z.nativeEnum(GameSystem, {
-    error: `Invalid game system. Must be one of: ${Object.values(GameSystem).join(', ')}`,
-  }).nullish(),
+  gameSystem: GameSystemSchema.nullish(),
   vibeSettings: VibeSettingsSchema.optional(),
   spiritLayerEnabled: z.boolean({ error: 'spiritLayerEnabled must be true or false' }).optional(),
   spiritLayerStyle: z.string({ error: 'spiritLayerStyle must be a string' }).max(100, { abort: true })

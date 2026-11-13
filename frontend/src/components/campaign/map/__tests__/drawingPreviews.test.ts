@@ -183,18 +183,18 @@ describe('a clear', () => {
     expect(took(drawing({ layer: 'GROUND' }))).toBe(false);
   });
 
-  it('takes a player’s drawings for everyone, and leaves on the DM’s page those they wrote for the DM alone in the seat', () => {
-    const onTheDmsPage = clearedBy({ mapId: 'm', layer: 'MARKUP', authorId: 'mara' }, { role: 'DM', userId: 'dm' });
+  it('takes a player’s drawings for everyone, and leaves on the GM’s page those they wrote for the GM alone in the seat', () => {
+    const onTheGmsPage = clearedBy({ mapId: 'm', layer: 'MARKUP', authorId: 'mara' }, { role: 'GM', userId: 'dm' });
 
-    expect(onTheDmsPage(drawing({}))).toBe(true);
-    expect(onTheDmsPage(drawing({ audience: 'DM' }))).toBe(false);
-    expect(onTheDmsPage(drawing({ authorId: 'tom' }))).toBe(false);
+    expect(onTheGmsPage(drawing({}))).toBe(true);
+    expect(onTheGmsPage(drawing({ audience: 'GM' }))).toBe(false);
+    expect(onTheGmsPage(drawing({ authorId: 'tom' }))).toBe(false);
   });
 
-  it('takes every drawing of the DM’s own, sent from the DM’s other tab', () => {
-    const took = clearedBy({ mapId: 'm', layer: 'MARKUP', authorId: 'dm' }, { role: 'DM', userId: 'dm' });
+  it('takes every drawing of the GM’s own, sent from the GM’s other tab', () => {
+    const took = clearedBy({ mapId: 'm', layer: 'MARKUP', authorId: 'dm' }, { role: 'GM', userId: 'dm' });
 
-    expect(took(drawing({ authorId: 'dm', audience: 'DM' }))).toBe(true);
+    expect(took(drawing({ authorId: 'dm', audience: 'GM' }))).toBe(true);
     expect(took(drawing({ authorId: 'dm' }))).toBe(true);
   });
 });

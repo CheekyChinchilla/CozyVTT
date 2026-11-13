@@ -2,7 +2,7 @@
  * An admin can clear the campaigns that stop a user's deletion.
  *
  * A user who runs campaigns of their own cannot be deleted until each has
- * another DM or is gone. Only the DM, the owner or an admin may hand the seat
+ * another GM or is gone. Only the GM, the owner or an admin may hand the seat
  * over, so without this an admin had no way from the panel to remove someone
  * who would not step down.
  */
@@ -12,10 +12,10 @@ import DeletionBlockers from '../DeletionBlockers';
 import { apiDeletionBlockers } from '@/utils/errors';
 import type { DeletionBlocker } from '@/types';
 
-const transferDM = vi.fn();
+const transferGM = vi.fn();
 const deleteCampaign = vi.fn();
 vi.mock('@/services/api', () => {
-  const client = { transferDM: (...a: unknown[]) => transferDM(...a), deleteCampaign: (...a: unknown[]) => deleteCampaign(...a) };
+  const client = { transferGM: (...a: unknown[]) => transferGM(...a), deleteCampaign: (...a: unknown[]) => deleteCampaign(...a) };
   return { api: client, default: client };
 });
 
@@ -25,7 +25,7 @@ const blockers: DeletionBlocker[] = [
 ];
 
 beforeEach(() => {
-  transferDM.mockReset().mockResolvedValue({ message: 'ok', memberships: [] });
+  transferGM.mockReset().mockResolvedValue({ message: 'ok', memberships: [] });
   deleteCampaign.mockReset().mockResolvedValue({ message: 'ok' });
 });
 
@@ -33,9 +33,9 @@ describe('DeletionBlockers', () => {
   it('hands a campaign to the member the admin picks', async () => {
     const onCleared = vi.fn();
     render(<DeletionBlockers campaigns={blockers} onCleared={onCleared} onError={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText('New DM for Friday Game'), { target: { value: 'cy' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Make DM' }));
-    await waitFor(() => expect(transferDM).toHaveBeenCalledWith('shared', 'cy'));
+    fireEvent.change(screen.getByLabelText('New GM for Friday Game'), { target: { value: 'cy' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Make GM' }));
+    await waitFor(() => expect(transferGM).toHaveBeenCalledWith('shared', 'cy'));
     expect(onCleared).toHaveBeenCalledWith('shared');
   });
 
@@ -51,11 +51,11 @@ describe('DeletionBlockers', () => {
   });
 
   it('reports a refusal and leaves the campaign listed', async () => {
-    transferDM.mockRejectedValue({ response: { status: 400, data: { message: 'Not a member' } } });
+    transferGM.mockRejectedValue({ response: { status: 400, data: { message: 'Not a member' } } });
     const onCleared = vi.fn();
     const onError = vi.fn();
     render(<DeletionBlockers campaigns={blockers} onCleared={onCleared} onError={onError} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Make DM' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Make GM' }));
     await waitFor(() => expect(onError).toHaveBeenCalledWith('Not a member'));
     expect(onCleared).not.toHaveBeenCalled();
   });

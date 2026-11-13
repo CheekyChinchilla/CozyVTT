@@ -1,3 +1,6 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
 import type { CharacterHpInfo } from '@/utils/characterHp';
 // ============================================
 // CozyVTT Frontend Type Definitions
@@ -18,10 +21,17 @@ export enum PlatformRole {
 }
 
 export enum CampaignRole {
-  DM = 'DM',
+  GM = 'GM',
   PLAYER = 'PLAYER',
   SPECTATOR = 'SPECTATOR',
 }
+
+/**
+ * The roles the GM may give a member (PUT .../members/:userId/role). The
+ * route refuses to make anyone the GM while the campaign has one, which it
+ * always has when its GM asks; the seat moves only by hand-over (transferGM).
+ */
+export type AssignableCampaignRole = Exclude<CampaignRole, CampaignRole.GM>;
 
 export enum CampaignStatus {
   PREPARATION = 'PREPARATION',
@@ -55,7 +65,7 @@ export enum AssetScope {
 
 export enum MessageType {
   PLAYER = 'PLAYER',
-  DM = 'DM',
+  GM = 'GM',
   SYSTEM = 'SYSTEM',
   DICE_ROLL = 'DICE_ROLL',
   CHARACTER_ACTION = 'CHARACTER_ACTION',
@@ -151,9 +161,9 @@ export interface NpcStatBlock {
   languages?: string;
   /**
    * Attribute modifiers, used by systems that print modifiers rather than
-   * scores. Pathfinder 2e stat blocks give "Str +4" directly and have no
+   * scores. Fantasy d20 stat blocks give "Str +4" directly and have no
    * underlying score, so deriving one from `abilities` would be an invention.
-   * Absent for D&D 5e, where `abilities` holds scores and the modifier is
+   * Absent for 5E, where `abilities` holds scores and the modifier is
    * derived.
    */
   attributeModifiers?: {
@@ -168,7 +178,7 @@ export interface NpcStatBlock {
   challengeRating?: string;
   /**
    * Creature level, for systems that rate creatures by level rather than
-   * challenge rating (Pathfinder 2e). Kept separate from challengeRating so
+   * challenge rating (Fantasy d20). Kept separate from challengeRating so
    * neither system has to pretend to use the other's scale.
    */
   level?: number;
@@ -566,7 +576,7 @@ export interface Campaign {
   spiritLayerStyle: string;
   chatCooldownEnabled: boolean;
   chatCooldownSeconds: number;
-  /** Players may draw on the map and point the laser; the DM always may. */
+  /** Players may draw on the map and point the laser; the GM always may. */
   playersMayDraw: boolean;
   createdAt: string;
   updatedAt: string;
@@ -636,13 +646,13 @@ export interface CampaignInvitation {
       displayName: string;
     };
     /** The member who runs the game, which is not the owner once it is handed over. */
-    dm?: {
+    gm?: {
       displayName: string;
     } | null;
   };
 }
 
-/** An invitation as the campaign's DM lists them. */
+/** An invitation as the campaign's GM lists them. */
 export interface CampaignInvitationSummary {
   id: string;
   userId: string;
@@ -683,7 +693,7 @@ export interface PersonalNoteSummary {
  * A document as it appears in a campaign's shared list.
  *
  * `id` is the asset id, used with the document serving route. A document is
- * private to whoever uploaded it until a DM shares it with a campaign; this is
+ * private to whoever uploaded it until a GM shares it with a campaign; this is
  * the shape the list of shared documents comes back in.
  */
 export interface CampaignDocument {
@@ -706,7 +716,7 @@ export interface CampaignDocument {
    */
   linkedBy: { id: string; displayName: string } | null;
   /**
-   * True when shared into the campaign by link, which the DM can undo. False
+   * True when shared into the campaign by link, which the GM can undo. False
    * when it is the campaign's own document, created or uploaded at CAMPAIGN
    * scope, where there is no link to remove.
    */
@@ -826,10 +836,9 @@ export type CharacterSummary = Omit<Character, 'data'> & {
  * Import specific types from './game-systems' for type-safe access
  */
 export type CharacterData =
-  | import('./game-systems').DnD5eCharacterData
-  | import('./game-systems').PF2eCharacterData
-  | import('./game-systems').SR6CharacterData
-  | import('./game-systems').CoC7eCharacterData
+  | import('./game-systems').FifthEditionCharacterData
+  | import('./game-systems').FantasyD20CharacterData
+  | import('./game-systems').HorrorD100Sheet
   // A character with no game system stores a flexible sheet here. The union
   // omitted it, so `Character.data` never admitted a shape it demonstrably
   // holds — invisible while the flexible editor's props were `any`.
@@ -887,13 +896,13 @@ export interface Token {
   disposition: TokenDisposition | null;
   hp:          TokenHp | null;
   showHpBar:   boolean;
-  /** The DM's notes. Never sent to players (tokenSentTo), so absent for them. */
+  /** The GM's notes. Never sent to players (tokenSentTo), so absent for them. */
   notes?:      string | null;
   initiative:  number | null;
   /**
    * Darkvision, in grid squares: how far the token makes things out with no
    * light (0 = none; 12 = 60 ft at 5 ft a square). It never limits how far a lit thing can be
-   * noticed. Decides what the server sends, so only the DM may change it.
+   * noticed. Decides what the server sends, so only the GM may change it.
    */
   sightRadius?: number;
   /** Display mode: pog (circular + border), top-down (circular, no border), full-art (rectangular, alpha). Default: pog */
@@ -903,8 +912,8 @@ export interface Token {
   /** ID of the creature template this token was created from (if any). */
   creatureTemplateId?: string | null;
   /**
-   * The DM has hidden what this token is. Players who do not control it are
-   * sent it with its identity masked (utils/tokenMask.ts); only the DM may set it.
+   * The GM has hidden what this token is. Players who do not control it are
+   * sent it with its identity masked (utils/tokenMask.ts); only the GM may set it.
    */
   obscured?: boolean;
 }
@@ -955,8 +964,8 @@ export interface RosterMember {
 // ============================================
 
 /**
- * A campaign that stops an account being deleted: its owner is its DM. An
- * admin clears it by handing the DM seat to one of `members`, or deleting it.
+ * A campaign that stops an account being deleted: its owner is its GM. An
+ * admin clears it by handing the GM seat to one of `members`, or deleting it.
  */
 export interface DeletionBlocker {
   id: string;
@@ -1283,7 +1292,7 @@ export interface CreateTokenRequest {
   showHpBar?: boolean;
   notes?: string | null;
   initiative?: number | null;
-  /** Darkvision in grid squares; 0 = none. DM only on update. */
+  /** Darkvision in grid squares; 0 = none. GM only on update. */
   sightRadius?: number | null;
   /** Display mode: pog, top-down or full-art. Default: pog */
   displayMode?: TokenDisplayMode;
@@ -1291,7 +1300,7 @@ export interface CreateTokenRequest {
   statBlock?: NpcStatBlock | null;
   /** The creature template this token came from, if any. */
   creatureTemplateId?: string | null;
-  /** DM only: hide what the token is from players who do not control it. */
+  /** GM only: hide what the token is from players who do not control it. */
   obscured?: boolean;
 }
 
@@ -1313,12 +1322,12 @@ export interface UpdateTokenRequest {
   showHpBar?: boolean;
   notes?: string;
   initiative?: number | null;
-  /** Darkvision in grid squares; 0 = none. DM only on update. */
+  /** Darkvision in grid squares; 0 = none. GM only on update. */
   sightRadius?: number | null;
   displayMode?: TokenDisplayMode;
   statBlock?: NpcStatBlock | null;
   creatureTemplateId?: string | null;
-  /** DM only: hide what the token is from players who do not control it. */
+  /** GM only: hide what the token is from players who do not control it. */
   obscured?: boolean;
 }
 
@@ -1358,7 +1367,7 @@ export interface TokenMovedEvent {
   mapId: string;
   x: number;
   y: number;
-  /** Null for anyone but the DM and the mover while the token is obscured. */
+  /** Null for anyone but the GM and the mover while the token is obscured. */
   movedBy: string | null;
   /**
    * Set on a frame of a drag still in progress; absent on the drop. A frame is
@@ -1411,7 +1420,7 @@ export interface DiceRolledSecretEvent extends DiceRolledEvent {
 export interface ChatMessageEvent {
   content: string;
   /** The type asked for. The server decides the rest: a player's is PLAYER, and a whisper is WHISPER. */
-  type: MessageType.PLAYER | MessageType.DM;
+  type: MessageType.PLAYER | MessageType.GM;
   /**
    * The sender's own name for the message, 1 to 64 letters, digits, hyphens
    * or underscores. It comes back on the sender's copy of the broadcast, and
@@ -1487,7 +1496,7 @@ export interface VibeUpdatedBroadcast {
   audio?: string;
 }
 
-/** The DM saved the vibe periods: the periods as saved, and the vibe they leave in force. */
+/** The GM saved the vibe periods: the periods as saved, and the vibe they leave in force. */
 export interface VibeSettingsUpdatedBroadcast {
   campaignId: string;
   vibeSettings: VibeSettings;
@@ -1496,7 +1505,7 @@ export interface VibeSettingsUpdatedBroadcast {
   timestamp: string;
 }
 
-/** The DM saved Campaign Settings (`campaign.settings.updated`): the fields every member's page shows. */
+/** The GM saved Campaign Settings (`campaign.settings.updated`): the fields every member's page shows. */
 export interface CampaignSettingsUpdatedBroadcast {
   campaignId: string;
   name: string;
@@ -1548,7 +1557,7 @@ export interface SpiritLayerTokenToggledBroadcast {
   mapId: string;
   tokenId: string;
   visible: boolean;
-  token?: Token; // Present when visible=true or for DM; minimal data when hidden
+  token?: Token; // Present when visible=true or for GM; minimal data when hidden
   toggledBy: string;
   timestamp: string;
 }
@@ -1593,7 +1602,7 @@ export interface CharacterHpUpdatedBroadcast {
 }
 
 /** Why a connection lost its campaign, as `campaign.access.revoked` says. */
-export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out';
+export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out' | 'not-member';
 
 /**
  * `campaign.access.revoked`: this connection may no longer use its campaign.
@@ -1601,7 +1610,10 @@ export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'sig
  * fails if the two differ.
  */
 export interface AccessRevoked {
-  /** The campaign the connection was in, or null when it had not joined one. */
+  /**
+   * The campaign the notice is about: the one the connection was in, or the
+   * one it asked to join; null when it had not joined one.
+   */
   campaignId: string | null;
   reason: AccessRevokedReason;
   /** A sentence for the person, shown as it is. */
@@ -1616,14 +1628,14 @@ export interface MemberRoleChangedBroadcast {
 }
 
 /**
- * The DM seat moved to another member. Campaign ownership is a separate thing
+ * The GM seat moved to another member. Campaign ownership is a separate thing
  * and does not move with it.
  */
-export interface DmTransferredBroadcast {
+export interface GmTransferredBroadcast {
   campaignId: string;
-  /** Null only if the campaign somehow had no DM to demote. */
-  previousDmId: string | null;
-  newDmId: string;
+  /** Null only if the campaign somehow had no GM to demote. */
+  previousGmId: string | null;
+  newGmId: string;
 }
 
 // ============================================
@@ -1657,7 +1669,7 @@ export interface InitiativeSetEvent    { tokenId: string; mapId: string; value: 
 /**
  * `expression` is only a fallback. The server derives initiative from the
  * token's character sheet or stat block, because it is the only side holding
- * either and because some systems (Call of Cthulhu) do not roll for initiative
+ * either and because some systems (Horror d100) do not roll for initiative
  * at all. Send one only for a combatant nothing can be derived for.
  */
 export interface InitiativeRollEvent   { tokenId: string; mapId: string; expression?: string; characterName?: string; }

@@ -77,7 +77,7 @@ describe('the tracker from the keyboard', () => {
   });
 
   it('opens Add Combatant as a dialog named for it', () => {
-    seat.role = 'DM';
+    seat.role = 'GM';
     threeReady();
     render(<InitiativeTracker />);
 
@@ -89,18 +89,18 @@ describe('the tracker from the keyboard', () => {
   // Each choice held a picture whose alt text repeated the name beside it,
   // so it was read as "Orc Orc npc".
   it('names each token in Add Combatant once', () => {
-    seat.role = 'DM';
+    seat.role = 'GM';
     threeReady();
     useGameStore.getState().setTokens([{ ...token('orc', 'Orc'), imageUrl: '/api/assets/tokens/orc' }]);
     render(<InitiativeTracker />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Combatant' }));
 
-    expect(within(screen.getByRole('dialog', { name: 'Add Combatant' })).getByRole('button', { name: 'Orc npc' })).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog', { name: 'Add Combatant' })).getByRole('button', { name: 'Orc NPC' })).toBeInTheDocument();
   });
 
-  it('lets the DM edit a value from a button that says what it holds', () => {
-    seat.role = 'DM';
+  it('lets the GM edit a value from a button that says what it holds', () => {
+    seat.role = 'GM';
     threeReady();
     render(<InitiativeTracker />);
 
@@ -110,7 +110,7 @@ describe('the tracker from the keyboard', () => {
   });
 
   it('moves a combatant one place down with the arrow key, and says where it went', () => {
-    seat.role = 'DM';
+    seat.role = 'GM';
     threeReady();
     render(<InitiativeTracker />);
 
@@ -125,7 +125,7 @@ describe('the tracker from the keyboard', () => {
   // The map listens for the arrow keys on the window to nudge selected walls,
   // so a move from the grip moved them too.
   it('keeps the arrow key from reaching the map', () => {
-    seat.role = 'DM';
+    seat.role = 'GM';
     threeReady();
     render(<InitiativeTracker />);
     const onWindowKey = vi.fn();
@@ -139,7 +139,7 @@ describe('the tracker from the keyboard', () => {
   });
 
   it('moves a combatant up, and goes no further than the top', () => {
-    seat.role = 'DM';
+    seat.role = 'GM';
     threeReady();
     render(<InitiativeTracker />);
 
@@ -157,5 +157,96 @@ describe('the tracker from the keyboard', () => {
     expect(screen.queryByRole('button', { name: /^Move / })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Initiative for / })).toBeNull();
     expect(within(document.body).getByText('18')).toBeInTheDocument();
+  });
+
+  // The GM's Up and Down buttons were drawn on a touch screen only, so with a
+  // keyboard nothing on screen said the grip's arrow keys move a combatant.
+  // jsdom evaluates no selector of this kind, so the classes are what is
+  // checked: the buttons sit over the row's picture, take no room, and show
+  // while a button in the row has the keyboard's focus. A click with a mouse
+  // gives a button no visible focus, so it brings no arrows.
+  describe("the GM's Up and Down buttons with a mouse and a keyboard", () => {
+    // The grip is draggable too: the row is the draggable around it.
+    const rowOf = (name: string) => screen.getByRole('button', { name: `Move ${name}` }).parentElement?.closest('[draggable]') as HTMLElement;
+
+    it('are in the row, after the grip and before the value, and move the combatant one place', () => {
+      seat.role = 'GM';
+      threeReady();
+      render(<InitiativeTracker />);
+
+      const grip = screen.getByRole('button', { name: 'Move Goblin' });
+      const up = within(rowOf('Goblin')).getByRole('button', { name: 'Move Goblin up' });
+      const down = within(rowOf('Goblin')).getByRole('button', { name: 'Move Goblin down' });
+      const value = screen.getByRole('button', { name: 'Initiative for Goblin: 12. Edit' });
+      expect(grip.compareDocumentPosition(up) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(down.compareDocumentPosition(value) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      for (const button of [up, down]) {
+        expect(button).toBeEnabled();
+        expect(button.tabIndex).toBe(0);
+      }
+
+      fireEvent.click(up);
+      expect(emitInitiativeReorder).toHaveBeenCalledWith({ orderedTokenIds: ['g', 'h', 'o'] });
+      expect(screen.getByRole('status')).toHaveTextContent('Goblin moved to 1 of 3');
+      // At the top Up is off, so the cursor goes to the grip, in the same row.
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move Goblin' }));
+    });
+
+    it('show only while a button in the row has the keyboard, over the picture, taking no room', () => {
+      seat.role = 'GM';
+      threeReady();
+      render(<InitiativeTracker />);
+
+      const arrows = screen.getByRole('button', { name: 'Move Goblin up' }).parentElement as HTMLElement;
+      expect(rowOf('Goblin').className.split(/\s+/)).toContain('group/combatant');
+      expect(arrows.className.split(/\s+/)).toEqual(expect.arrayContaining([
+        'absolute', 'opacity-0', 'pointer-events-none',
+        'group-has-[button:focus-visible]/combatant:opacity-100',
+        'group-has-[button:focus-visible]/combatant:pointer-events-auto',
+      ]));
+    });
+
+    it('go no further than the ends', () => {
+      seat.role = 'GM';
+      threeReady();
+      render(<InitiativeTracker />);
+
+      expect(screen.getByRole('button', { name: 'Move Hero up' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Move Ogre down' })).toBeDisabled();
+    });
+
+    it('are not there for a player', () => {
+      threeReady();
+      render(<InitiativeTracker />);
+
+      expect(screen.queryByRole('button', { name: /^Move .* (up|down)$/ })).toBeNull();
+    });
+  });
+
+  // The die and the bin were named by their tooltips alone, which say "this
+  // token": a screen reader moving through the order heard the same two
+  // buttons on every row.
+  describe("a combatant's die and bin", () => {
+    it("name the combatant for the GM", () => {
+      seat.role = 'GM';
+      threeReady();
+      render(<InitiativeTracker />);
+
+      expect(screen.getByRole('button', { name: 'Roll initiative for Goblin' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Remove Goblin from initiative' })).toBeInTheDocument();
+    });
+
+    it("name a player's own combatant on its die, and give them no bin", () => {
+      useGameStore.getState().setTokens([{ ...token('h', 'Hero'), controlledBy: 'alice' }, token('g', 'Goblin')]);
+      useGameStore.getState().setCombatState({
+        active: false, round: 0, currentTokenId: null,
+        combatants: [entry('h', 'Hero', 18), entry('g', 'Goblin', 12)],
+      });
+      render(<InitiativeTracker />);
+
+      expect(screen.getByRole('button', { name: 'Roll initiative for Hero' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Roll initiative for Goblin/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: /from initiative$/ })).toBeNull();
+    });
   });
 });

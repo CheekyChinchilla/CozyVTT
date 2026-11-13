@@ -5,11 +5,11 @@
  * The roster and a character's token offer Temporary HP...: a number, then,
  * for a character that already has some, the choice the rules give, keeping
  * those or taking the new ones (temporary hit points never add together, in
- * D&D 5e and Pathfinder 2e alike). Keeping changes nothing, so the event is
+ * 5E and Fantasy d20 alike). Keeping changes nothing, so the event is
  * the taking: the character's temporary hit points become the number sent.
  * Whoever may change the character's hit points may send it, its owner while
- * a player and the DM, as for the roster's damage buttons; the number is a
- * whole one from 1 to 99,999; and a Call of Cthulhu character, whose sheet
+ * a player and the GM, as for the roster's damage buttons; the number is a
+ * whole one from 1 to 99,999; and a Horror d100 character, whose sheet
  * keeps no temporary hit points a grant could add to, refuses it. The
  * payload is held to its schema: a character's id and the number, and
  * nothing else.
@@ -32,40 +32,40 @@ type Hp = { current: number; maximum: number; temporary: number };
 type Updated = { characterId: string; hp: { current: number; max: number; temp: number } };
 
 let server: WsTestServer;
-const ids: Record<'dm' | 'owner' | 'other' | 'spectator', string> = { dm: '', owner: '', other: '', spectator: '' };
-const cookies: Record<keyof typeof ids, string> = { dm: '', owner: '', other: '', spectator: '' };
+const ids: Record<'gm' | 'owner' | 'other' | 'spectator', string> = { gm: '', owner: '', other: '', spectator: '' };
+const cookies: Record<keyof typeof ids, string> = { gm: '', owner: '', other: '', spectator: '' };
 let campaignId: string;
 let elsewhereId: string;
-/** The owner's D&D 5e fighter, with 10 temporary hit points before each test. */
+/** The owner's 5E fighter, with 10 temporary hit points before each test. */
 let fighterId: string;
 let clericId: string;
-let investigatorId: string;
+let horrorId: string;
 let blankId: string;
 let watcherId: string;
 let strangerId: string;
 
-const dndSheet = (hp: Hp) => ({ hp });
+const fifthEditionSheet = (hp: Hp) => ({ hp });
 const storedHp = async (id: string): Promise<Hp> =>
   ((await prisma.character.findUniqueOrThrow({ where: { id } })).data as unknown as { hp: Hp }).hp;
 
 beforeAll(async () => {
   const users = await Promise.all((Object.keys(ids) as Array<keyof typeof ids>).map((name) =>
     prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Temp ${name}` } })));
-  [ids.dm, ids.owner, ids.other, ids.spectator] = users.map((u) => u.id);
-  campaignId = (await prisma.campaign.create({ data: { name: `Temp HP ${runId}`, ownerId: ids.dm, vibeSettings: {} } })).id;
-  elsewhereId = (await prisma.campaign.create({ data: { name: `Temp HP elsewhere ${runId}`, ownerId: ids.dm, vibeSettings: {} } })).id;
-  const character = async (userId: string, gameSystem: 'DND_5E' | 'PATHFINDER_2E' | 'CALL_OF_CTHULHU_7E', data: object, inCampaign = campaignId) =>
+  [ids.gm, ids.owner, ids.other, ids.spectator] = users.map((u) => u.id);
+  campaignId = (await prisma.campaign.create({ data: { name: `Temp HP ${runId}`, ownerId: ids.gm, vibeSettings: {} } })).id;
+  elsewhereId = (await prisma.campaign.create({ data: { name: `Temp HP elsewhere ${runId}`, ownerId: ids.gm, vibeSettings: {} } })).id;
+  const character = async (userId: string, gameSystem: 'FIFTH_EDITION' | 'FANTASY_D20' | 'HORROR_D100', data: object, inCampaign = campaignId) =>
     (await prisma.character.create({ data: { userId, campaignId: inCampaign, name: `${gameSystem} ${userId.slice(0, 4)}`, gameSystem, data: toJson(data) } })).id;
-  fighterId = await character(ids.owner, 'DND_5E', dndSheet({ current: 20, maximum: 30, temporary: 10 }));
-  clericId = await character(ids.owner, 'PATHFINDER_2E', dndSheet({ current: 15, maximum: 18, temporary: 0 }));
-  investigatorId = await character(ids.owner, 'CALL_OF_CTHULHU_7E', { derivedStats: { hp: { current: 11, maximum: 11 } } });
-  blankId = await character(ids.owner, 'DND_5E', {});
-  watcherId = await character(ids.spectator, 'DND_5E', dndSheet({ current: 8, maximum: 8, temporary: 0 }));
-  strangerId = await character(ids.owner, 'DND_5E', dndSheet({ current: 8, maximum: 8, temporary: 0 }), elsewhereId);
+  fighterId = await character(ids.owner, 'FIFTH_EDITION', fifthEditionSheet({ current: 20, maximum: 30, temporary: 10 }));
+  clericId = await character(ids.owner, 'FANTASY_D20', fifthEditionSheet({ current: 15, maximum: 18, temporary: 0 }));
+  horrorId = await character(ids.owner, 'HORROR_D100', { hitPoints: { current: 11, maximum: 11 } });
+  blankId = await character(ids.owner, 'FIFTH_EDITION', {});
+  watcherId = await character(ids.spectator, 'FIFTH_EDITION', fifthEditionSheet({ current: 8, maximum: 8, temporary: 0 }));
+  strangerId = await character(ids.owner, 'FIFTH_EDITION', fifthEditionSheet({ current: 8, maximum: 8, temporary: 0 }), elsewhereId);
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: ids.dm, campaignId, role: 'DM', characterIds: [] },
-      { userId: ids.owner, campaignId, role: 'PLAYER', characterIds: [fighterId, clericId, investigatorId, blankId] },
+      { userId: ids.gm, campaignId, role: 'GM', characterIds: [] },
+      { userId: ids.owner, campaignId, role: 'PLAYER', characterIds: [fighterId, clericId, horrorId, blankId] },
       { userId: ids.other, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: ids.spectator, campaignId, role: 'SPECTATOR', characterIds: [watcherId] },
       { userId: ids.owner, campaignId: elsewhereId, role: 'PLAYER', characterIds: [strangerId] },
@@ -76,7 +76,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await prisma.character.update({ where: { id: fighterId }, data: { data: toJson(dndSheet({ current: 20, maximum: 30, temporary: 10 })) } });
+  await prisma.character.update({ where: { id: fighterId }, data: { data: toJson(fifthEditionSheet({ current: 20, maximum: 30, temporary: 10 })) } });
 });
 
 afterAll(async () => {
@@ -122,7 +122,7 @@ describe('the character\'s owner', () => {
     });
   });
 
-  it('grants them in Pathfinder 2e too', async () => {
+  it('grants them in Fantasy d20 too', async () => {
     await as('owner', async (owner) => {
       const updated = waitForEvent<Updated>(owner, 'character.hp.updated');
       owner.emit('character.hp.temporary', { characterId: clericId, temporary: 7 });
@@ -130,9 +130,9 @@ describe('the character\'s owner', () => {
     });
   });
 
-  it('is told a Call of Cthulhu sheet keeps none, and a sheet with no hit points has nothing to add them to', async () => {
+  it('is told a Horror d100 sheet keeps none, and a sheet with no hit points has nothing to add them to', async () => {
     await as('owner', async (owner) => {
-      expect(await refused(owner, { characterId: investigatorId, temporary: 3 })).toBe('Call of Cthulhu sheets keep no temporary hit points');
+      expect(await refused(owner, { characterId: horrorId, temporary: 3 })).toBe('Horror d100 sheets keep no temporary hit points');
       expect(await refused(owner, { characterId: blankId, temporary: 3 })).toBe('Character does not have HP tracking');
     });
   });
@@ -170,10 +170,10 @@ describe('the character\'s owner', () => {
 });
 
 describe('who else may grant them', () => {
-  it('is the DM, on any character of the campaign', async () => {
-    await as('dm', async (dm) => {
-      const updated = waitForEvent<Updated>(dm, 'character.hp.updated');
-      dm.emit('character.hp.temporary', { characterId: fighterId, temporary: 15 });
+  it('is the GM, on any character of the campaign', async () => {
+    await as('gm', async (gm) => {
+      const updated = waitForEvent<Updated>(gm, 'character.hp.updated');
+      gm.emit('character.hp.temporary', { characterId: fighterId, temporary: 15 });
       expect((await updated).hp.temp).toBe(15);
     });
   });

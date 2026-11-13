@@ -7,7 +7,7 @@
  * other's change away. Moving tokens to another map fired a create and a
  * delete per token all at once, so every request answered success while
  * some tokens ended on neither map and others on both, and a player moving a
- * token during a DM's add or delete could lose either write. Every write to
+ * token during a GM's add or delete could lose either write. Every write to
  * a map's tokens now runs under an advisory lock on that map, inside one
  * transaction, and reads the list fresh once it holds the lock.
  */

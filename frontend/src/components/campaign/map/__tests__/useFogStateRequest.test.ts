@@ -6,7 +6,7 @@ import { useFogStateRequest } from '../useFogStateRequest';
  * The fog request is only worth sending once the connection has joined the
  * campaign: the server drops anything from a socket it has not authenticated,
  * silently, and nothing asks again. On an instance where the map's REST load
- * finishes before the socket handshake, that left the DM with no fog state on
+ * finishes before the socket handshake, that left the GM with no fog state on
  * every load: no tint, a preview with everything covered, and reveals that
  * could not be dragged.
  *

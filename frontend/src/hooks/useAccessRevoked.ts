@@ -17,9 +17,11 @@ const NOTICE_MS = 10_000;
  * What the campaign page does when the server says its connection may no
  * longer use the campaign (`campaign.access.revoked`).
  *
- * Removed from the campaign, left it, or the campaign deleted: say so and go
- * to the dashboard. An ended sign-in: go to the sign-in page, which shows the
- * reason, and back to this page after. Either way an editor holding unsaved
+ * Removed from the campaign, left it, the campaign deleted, or not a member
+ * of it (a page that reconnects after one of those, or the address of a
+ * campaign the person is not in): say so and go to the dashboard. An ended
+ * sign-in: go to the sign-in page, which shows the reason, and back to this
+ * page after. Either way an editor holding unsaved
  * changes keeps the page where it is (services/unsavedWork): the removal is
  * said and the changes can still be saved, and a lost sign-in is shown in
  * the editor, as any other lost sign-in is.

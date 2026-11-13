@@ -7,7 +7,7 @@
  * Token initiative *values* are persisted via the token.initiative field in the
  * Map.tokens JSON (updated through the existing token update path).
  * The round counter and active combatant are transient and intentionally lost
- * on server restart — the DM can simply start a new combat.
+ * on server restart — the GM can simply start a new combat.
  */
 
 export interface CombatantEntry {
@@ -118,7 +118,7 @@ export function clearState(campaignId: string): void {
 /**
  * The combatants a player has rolled initiative for, by campaign. A player
  * rolls once each time their token joins the order: rolling again until a
- * good number came up was open to anyone. The DM can still change the
+ * good number came up was open to anyone. The GM can still change the
  * number. Kept apart from the state, which is sent to clients as it is; a
  * combatant leaving the order, or the fight ending, forgets its roll.
  */
@@ -143,7 +143,7 @@ export function markPlayerRolled(campaignId: string, tokenId: string, rolled = t
 
 /**
  * Drop the combatants `gone` names, when a token or a whole map is deleted.
- * An entry whose token is gone used to linger for the DM (the projection kept
+ * An entry whose token is gone used to linger for the GM (the projection kept
  * the copy taken when it joined) while players no longer saw it, so the two
  * disagreed about the order. Returns whether anything was dropped.
  */
@@ -213,22 +213,22 @@ export interface CombatantSource {
  * the name, picture, hit points and character exactly as that token is sent
  * to them (the filter has already dropped hidden and off-plane tokens, the
  * hit points they may not know, and an obscured token's identity). The lighting rule is not applied here: the
- * order is public once the DM adds a token to it, so a combatant out of a
+ * order is public once the GM adds a token to it, so a combatant out of a
  * player's sight on a lit or fogged map is still listed, and hiding the
- * token is what keeps it out. The DM gets every combatant with the token as
+ * token is what keeps it out. The GM gets every combatant with the token as
  * it is now, and the copy taken when it joined if the token is gone. The
  * stored state is not changed.
  */
 export function projectCombatState(
   state: CombatState,
   tokens: ReadonlyMap<string, CombatantSource>,
-  isDM: boolean
+  isGM: boolean
 ): CombatState {
   const combatants: CombatantEntry[] = [];
   for (const entry of state.combatants) {
     const token = tokens.get(entry.tokenId);
     if (!token) {
-      if (isDM) combatants.push({ ...entry });
+      if (isGM) combatants.push({ ...entry });
       continue;
     }
     combatants.push({

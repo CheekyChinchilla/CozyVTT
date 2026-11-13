@@ -1,6 +1,6 @@
 // ============================================
 // MapGridPreview
-// Renders the selected map image with a grid overlay so the DM
+// Renders the selected map image with a grid overlay so the GM
 // can verify their Width/Height/GridSize settings line up with
 // any existing grid baked into the image. Create Map and Edit Map
 // both draw it.

@@ -1,5 +1,5 @@
 /**
- * The Token Manager works on the map on screen, which is the one the DM is
+ * The Token Manager works on the map on screen, which is the one the GM is
  * preparing while they prepare one. It named the table's map, so removing a
  * token of the map being prepared was refused, or removed the table's token
  * of the same id.
@@ -46,7 +46,7 @@ const api = vi.hoisted(() => ({
 vi.mock('@/services/api', () => ({ api, default: api }));
 
 const goblin: Token = {
-  id: 'goblin', name: 'Goblin Boss', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
+  id: 'goblin', name: 'Goblin', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
   layer: TokenLayer.TOKEN, visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {},
   type: TokenType.NPC, disposition: null, hp: null, showHpBar: false, notes: '', initiative: null, obscured: false,
 };
@@ -58,10 +58,10 @@ beforeEach(() => {
   useGameStore.getState().setTokens([goblin]);
 });
 
-describe('the Token Manager while the DM prepares a map', () => {
+describe('the Token Manager while the GM prepares a map', () => {
   it('removes a token from the map being prepared', async () => {
     render(<TokenManager isOpen onClose={() => {}} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin Boss from map' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin from map' }));
     await userEvent.click(within(await screen.findByRole('dialog', { name: 'Remove token' })).getByRole('button', { name: 'Remove' }));
 
     await waitFor(() => expect(api.deleteToken).toHaveBeenCalledWith('campaign-1', 'map-prepared', 'goblin'));

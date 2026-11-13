@@ -5,7 +5,7 @@
  * Switching lighting or Global Illumination re-sends the map to the table
  * when it is the map on screen, which first reads the campaign. That read
  * sat outside the guard around the re-send, so an error there answered the
- * DM 500 "Failed to update map" for a change that had been saved.
+ * GM 500 "Failed to update map" for a change that had been saved.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -21,23 +21,23 @@ jest.setTimeout(30000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let mapId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `mapset-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
-  dmId = dmUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Map settings ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  const gmUser = await createTestUser({ email: `mapset-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
+  gmId = gmUser.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Map settings ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
   mapId = (await prisma.map.create({
     data: { campaignId, name: 'Settings', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x', width: 10, height: 10, gridSize: 50, annotations: [], tokens: [], lightingEnabled: false },
   })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
@@ -48,7 +48,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
   await appPrisma.$disconnect();
 });
@@ -61,8 +61,8 @@ function failCurrentMapReads() {
 }
 
 it.each([
-  ['the map update', (on: boolean) => dm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ lightingEnabled: on })],
-  ['the lighting switch', (on: boolean) => dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/lighting`).send({ enabled: on })],
+  ['the map update', (on: boolean) => gm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ lightingEnabled: on })],
+  ['the lighting switch', (on: boolean) => gm.put(`/api/campaigns/${campaignId}/maps/${mapId}/lighting`).send({ enabled: on })],
 ])('%s answers 200 for a saved change when re-sending the map fails', async (_route, send) => {
   const before = (await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { lightingEnabled: true } })).lightingEnabled;
   failCurrentMapReads();

@@ -28,10 +28,10 @@ const h = vi.hoisted(() => ({
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
-    campaign: { id: 'c1', memberships: [{ userId: 'dm', role: 'DM' }] },
+    campaign: { id: 'c1', memberships: [{ userId: 'dm', role: 'GM' }] },
     currentMap: { id: 'map-1', width: 20, height: 20 },
     viewedMap: { id: 'map-1', width: 20, height: 20 },
-    userRole: 'DM',
+    userRole: 'GM',
   }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: { on: vi.fn(), off: vi.fn() } }) }));

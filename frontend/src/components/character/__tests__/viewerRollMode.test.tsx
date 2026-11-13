@@ -1,6 +1,6 @@
 /**
  * Roll mode, in the header of a sheet that rolls at the table: Normal,
- * Advantage or Disadvantage (Fortune and Misfortune in Pathfinder 2e) for
+ * Advantage or Disadvantage (Fortune and Misfortune in Fantasy d20) for
  * every d20 test a click or a tap rolls on that sheet, until changed.
  *
  * Only a right-click opened the menu that rolls with advantage, and Safari on
@@ -13,9 +13,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import type { Character, CampaignMembership } from '@/types';
 import CharacterSheetViewerModal from '../CharacterSheetViewerModal';
-import { dnd5eCharacter } from '../../character-sheets/dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../../character-sheets/pathfinder2e/__tests__/pf2eFixture';
-import { cocCharacter } from '../../character-sheets/call-of-cthulhu-7e/__tests__/cocFixture';
+import { fifthEditionCharacter } from '../../character-sheets/fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../../character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
+import { horrorD100Character } from '../../character-sheets/horror-d100/__tests__/sheetFixture';
 
 const rollDice = vi.fn().mockResolvedValue({ ok: true, id: 'r' });
 let atTheTable = true;
@@ -52,9 +52,9 @@ beforeEach(() => {
   atTheTable = true;
 });
 
-describe('Roll mode on a D&D 5e sheet', () => {
+describe('Roll mode on a 5E sheet', () => {
   it('starts at Normal, offering Normal, Advantage and Disadvantage', () => {
-    open(mine(dnd5eCharacter()));
+    open(mine(fifthEditionCharacter()));
 
     const modes = within(rollMode()!).getAllByRole('button');
     expect(modes.map((mode) => mode.textContent)).toEqual(['Normal', 'Advantage', 'Disadvantage']);
@@ -62,7 +62,7 @@ describe('Roll mode on a D&D 5e sheet', () => {
   });
 
   it('rolls every check, save, skill and attack a click makes with advantage, and the log says so', () => {
-    open(mine(dnd5eCharacter({ attacks: [spear] })));
+    open(mine(fifthEditionCharacter({ attacks: [spear] })));
 
     choose('Advantage');
     fireEvent.click(screen.getByText('dexterity'));
@@ -80,7 +80,7 @@ describe('Roll mode on a D&D 5e sheet', () => {
   });
 
   it('stays set for a run of rolls until it is changed', () => {
-    open(mine(dnd5eCharacter()));
+    open(mine(fifthEditionCharacter()));
 
     choose('Disadvantage');
     fireEvent.click(screen.getByText('dexterity'));
@@ -96,7 +96,7 @@ describe('Roll mode on a D&D 5e sheet', () => {
   });
 
   it('leaves damage and a hit die as written', () => {
-    open(mine(dnd5eCharacter({ attacks: [spear] })));
+    open(mine(fifthEditionCharacter({ attacks: [spear] })));
 
     choose('Advantage');
     fireEvent.click(screen.getByRole('tab', { name: 'Combat' }));
@@ -110,7 +110,7 @@ describe('Roll mode on a D&D 5e sheet', () => {
   });
 
   it('is marked while it is set to anything but Normal', () => {
-    open(mine(dnd5eCharacter()));
+    open(mine(fifthEditionCharacter()));
 
     const advantage = within(rollMode()!).getByRole('button', { name: 'Advantage' });
     expect(advantage.className).not.toMatch(/\btext-warning-ink\b/);
@@ -122,7 +122,7 @@ describe('Roll mode on a D&D 5e sheet', () => {
   });
 
   it("gives way to the roll menu's choice, so the menu's Normal rolls one d20", () => {
-    open(mine(dnd5eCharacter()));
+    open(mine(fifthEditionCharacter()));
 
     choose('Advantage');
     fireEvent.contextMenu(screen.getByText('dexterity'), { clientX: 40, clientY: 40 });
@@ -132,11 +132,11 @@ describe('Roll mode on a D&D 5e sheet', () => {
   });
 
   it('is Normal again each time a sheet opens', () => {
-    const first = open(mine(dnd5eCharacter()));
+    const first = open(mine(fifthEditionCharacter()));
     choose('Advantage');
     first.unmount();
 
-    open(mine(dnd5eCharacter()));
+    open(mine(fifthEditionCharacter()));
 
     expect(within(rollMode()!).getByRole('button', { name: 'Normal' })).toHaveAttribute('aria-pressed', 'true');
   });
@@ -149,7 +149,7 @@ describe('where Roll mode sits in the header', () => {
   // column under the close button. Either way it is drawn after the close
   // button, so Tab reaches it after the close button too.
   it('comes after the close button, as it is drawn', () => {
-    open(mine(dnd5eCharacter()));
+    open(mine(fifthEditionCharacter()));
 
     const close = screen.getByRole('button', { name: 'Close dialog' });
     const group = rollMode()!;
@@ -163,9 +163,9 @@ describe('where Roll mode sits in the header', () => {
   });
 });
 
-describe('Roll mode on a Pathfinder 2e sheet', () => {
+describe('Roll mode on a Fantasy d20 sheet', () => {
   it('reads Normal, Fortune and Misfortune, and Fortune rolls a strike twice keeping the higher, its damage once', () => {
-    open(mine(pf2eCharacter({ strikes: [longsword] })));
+    open(mine(fantasyD20Character({ strikes: [longsword] })));
 
     expect(within(rollMode()!).getAllByRole('button').map((mode) => mode.textContent)).toEqual(['Normal', 'Fortune', 'Misfortune']);
     choose('Fortune');
@@ -179,7 +179,7 @@ describe('Roll mode on a Pathfinder 2e sheet', () => {
   });
 
   it('rolls a save and Perception with Misfortune', () => {
-    open(mine(pf2eCharacter()));
+    open(mine(fantasyD20Character()));
 
     choose('Misfortune');
     fireEvent.click(screen.getByText('will'));
@@ -193,8 +193,8 @@ describe('Roll mode on a Pathfinder 2e sheet', () => {
 });
 
 describe('where Roll mode is not offered', () => {
-  it('on a Call of Cthulhu sheet, whose rolls stay one d100', () => {
-    open(mine(cocCharacter()));
+  it('on a Horror d100 sheet, whose rolls stay one d100', () => {
+    open(mine(horrorD100Character()));
 
     expect(rollMode()).toBeNull();
     fireEvent.click(screen.getByText('STR'));
@@ -203,14 +203,14 @@ describe('where Roll mode is not offered', () => {
 
   it('where the sheet cannot roll: the Characters page has no table', () => {
     atTheTable = false;
-    render(<CharacterSheetViewerModal character={dnd5eCharacter()} onClose={() => {}} />);
+    render(<CharacterSheetViewerModal character={fifthEditionCharacter()} onClose={() => {}} />);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(rollMode()).toBeNull();
   });
 
   it("on another player's character, which a player may read but not roll for", () => {
-    open({ ...dnd5eCharacter(), userId: 'someone-else', campaignId: 'camp-1' } as Character);
+    open({ ...fifthEditionCharacter(), userId: 'someone-else', campaignId: 'camp-1' } as Character);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(rollMode()).toBeNull();

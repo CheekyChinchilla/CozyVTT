@@ -29,8 +29,8 @@ describe('canRollTokenCharacter', () => {
     expect(canRollTokenCharacter(user('alice'), campaign(CampaignRole.PLAYER), { characterId: 'char-bob' })).toBe(false);
   });
 
-  it('lets the DM roll any character of the campaign', () => {
-    expect(canRollTokenCharacter(user('alice'), campaign(CampaignRole.DM), { characterId: 'char-bob' })).toBe(true);
+  it('lets the GM roll any character of the campaign', () => {
+    expect(canRollTokenCharacter(user('alice'), campaign(CampaignRole.GM), { characterId: 'char-bob' })).toBe(true);
   });
 
   it('gives a spectator no rolls, even of their own character', () => {
@@ -38,8 +38,8 @@ describe('canRollTokenCharacter', () => {
   });
 
   it('gives no rolls for a token with no character, or one that has left', () => {
-    expect(canRollTokenCharacter(user('alice'), campaign(CampaignRole.DM), { characterId: null })).toBe(false);
-    expect(canRollTokenCharacter(user('alice'), campaign(CampaignRole.DM), { characterId: 'char-gone' })).toBe(false);
-    expect(canRollTokenCharacter(null, campaign(CampaignRole.DM), { characterId: 'char-bob' })).toBe(false);
+    expect(canRollTokenCharacter(user('alice'), campaign(CampaignRole.GM), { characterId: null })).toBe(false);
+    expect(canRollTokenCharacter(user('alice'), campaign(CampaignRole.GM), { characterId: 'char-gone' })).toBe(false);
+    expect(canRollTokenCharacter(null, campaign(CampaignRole.GM), { characterId: 'char-bob' })).toBe(false);
   });
 });

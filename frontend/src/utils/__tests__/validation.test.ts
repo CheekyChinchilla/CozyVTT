@@ -37,8 +37,8 @@ describe('isValidEmail', () => {
     expect(isValidEmail('first.last+campaign@mail.example.co.uk')).toBe(true);
     expect(isValidEmail('o\'brien@example.ie')).toBe(true);
     expect(isValidEmail('player@a.b.c.d.example.org')).toBe(true);
-    expect(isValidEmail('dm@example.photography')).toBe(true);
-    expect(isValidEmail('DM@EXAMPLE.COM')).toBe(true);
+    expect(isValidEmail('gm@example.photography')).toBe(true);
+    expect(isValidEmail('GM@EXAMPLE.COM')).toBe(true);
   });
 
   // The sign-in page refuses to send an address this rejects, so an address

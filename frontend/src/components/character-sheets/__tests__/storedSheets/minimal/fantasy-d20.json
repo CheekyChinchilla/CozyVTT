@@ -1,0 +1,289 @@
+{
+  "characterName": "New Character",
+  "ancestry": "Human",
+  "heritage": "Versatile Human",
+  "class": "Fighter",
+  "level": 1,
+  "attributes": {
+    "strength": {
+      "score": 10,
+      "modifier": 0
+    },
+    "dexterity": {
+      "score": 10,
+      "modifier": 0
+    },
+    "constitution": {
+      "score": 10,
+      "modifier": 0
+    },
+    "intelligence": {
+      "score": 10,
+      "modifier": 0
+    },
+    "wisdom": {
+      "score": 10,
+      "modifier": 0
+    },
+    "charisma": {
+      "score": 10,
+      "modifier": 0
+    }
+  },
+  "hp": {
+    "maximum": 18,
+    "ancestryHp": 8,
+    "classHpPerLevel": 10,
+    "current": 18,
+    "temporary": 0,
+    "resistances": [],
+    "immunities": [],
+    "weaknesses": []
+  },
+  "armorClass": {
+    "total": 10,
+    "proficiencyRank": "untrained",
+    "capDex": null,
+    "itemBonus": 0,
+    "armorPenalty": 0
+  },
+  "savingThrows": {
+    "fortitude": {
+      "proficiencyRank": "untrained",
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "reflex": {
+      "proficiencyRank": "untrained",
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "will": {
+      "proficiencyRank": "untrained",
+      "itemBonus": 0,
+      "bonus": 0
+    }
+  },
+  "perception": {
+    "proficiencyRank": "untrained",
+    "itemBonus": 0,
+    "bonus": 0,
+    "senses": []
+  },
+  "classDC": {
+    "total": 10,
+    "keyAttribute": "strength",
+    "proficiencyRank": "untrained"
+  },
+  "speed": {
+    "land": 25,
+    "other": []
+  },
+  "strikes": [],
+  "skills": {
+    "acrobatics": {
+      "attribute": "dexterity",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "arcana": {
+      "attribute": "intelligence",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "athletics": {
+      "attribute": "strength",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "crafting": {
+      "attribute": "intelligence",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "deception": {
+      "attribute": "charisma",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "diplomacy": {
+      "attribute": "charisma",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "intimidation": {
+      "attribute": "charisma",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "medicine": {
+      "attribute": "wisdom",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "nature": {
+      "attribute": "wisdom",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "occultism": {
+      "attribute": "intelligence",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "performance": {
+      "attribute": "charisma",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "religion": {
+      "attribute": "wisdom",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "society": {
+      "attribute": "intelligence",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "stealth": {
+      "attribute": "dexterity",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "survival": {
+      "attribute": "wisdom",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "thievery": {
+      "attribute": "dexterity",
+      "proficiencyRank": "untrained",
+      "armorPenalty": 0,
+      "itemBonus": 0,
+      "bonus": 0
+    }
+  },
+  "feats": {
+    "ancestryAndHeritage": [],
+    "class": [],
+    "skill": [],
+    "general": [],
+    "bonus": []
+  },
+  "inventory": [],
+  "bulk": {
+    "current": 0,
+    "encumbered": 5,
+    "maximum": 10
+  },
+  "currency": {
+    "cp": 0,
+    "sp": 0,
+    "gp": 0,
+    "pp": 0
+  },
+  "spellcasting": {
+    "tradition": "arcane",
+    "type": "prepared",
+    "keyAttribute": "intelligence",
+    "spellAttackBonus": {
+      "proficiencyRank": "untrained",
+      "itemBonus": 0,
+      "bonus": 0
+    },
+    "spellDC": {
+      "proficiencyRank": "untrained",
+      "itemBonus": 0,
+      "dc": 10
+    },
+    "cantrips": [],
+    "slots": {
+      "1": {
+        "total": 0,
+        "expended": 0
+      },
+      "2": {
+        "total": 0,
+        "expended": 0
+      },
+      "3": {
+        "total": 0,
+        "expended": 0
+      },
+      "4": {
+        "total": 0,
+        "expended": 0
+      },
+      "5": {
+        "total": 0,
+        "expended": 0
+      },
+      "6": {
+        "total": 0,
+        "expended": 0
+      },
+      "7": {
+        "total": 0,
+        "expended": 0
+      },
+      "8": {
+        "total": 0,
+        "expended": 0
+      },
+      "9": {
+        "total": 0,
+        "expended": 0
+      },
+      "10": {
+        "total": 0,
+        "expended": 0
+      }
+    },
+    "spells": [],
+    "focusSpells": {
+      "focusPoints": {
+        "total": 0,
+        "current": 0
+      },
+      "spells": []
+    },
+    "innateSpells": [],
+    "rituals": []
+  },
+  "languages": [
+    "Common"
+  ],
+  "conditions": [],
+  "notes": ""
+}

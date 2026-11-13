@@ -28,14 +28,14 @@ export function stopTarget(vibeTrackId: string | null, playingAssetId: string): 
 }
 
 /**
- * What the DM's client sets when a non-looping track finishes: the vibe's
+ * What the GM's client sets when a non-looping track finishes: the vibe's
  * track, or nothing, which also clears the finished track from the stored
  * state so a player who joins later does not start it from the top. Only the
- * DM's client answers; everyone else just heard the track end.
+ * GM's client answers; everyone else just heard the track end.
  */
 export function trackEndTarget(
-  isDM: boolean,
+  isGM: boolean,
   vibeTrackId: string | null,
 ): { assetId: string | null } | null {
-  return isDM ? { assetId: vibeTrackId } : null;
+  return isGM ? { assetId: vibeTrackId } : null;
 }

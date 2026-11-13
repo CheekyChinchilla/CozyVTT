@@ -8,7 +8,7 @@
  * socket could send in all, nor how much the server would hold for a
  * client that does not read.
  *
- * A player's wall and light edits were refused for not being the DM's
+ * A player's wall and light edits were refused for not being the GM's
  * before the edit ceiling was counted, so each one sent an `error`, however
  * many came.
  *
@@ -66,7 +66,7 @@ async function settle(done: () => boolean, timeoutMs = 10000): Promise<void> {
   await sleep(300);
 }
 
-async function newUser(role: 'PLAYER' | 'DM' | null): Promise<{ id: string; cookie: string }> {
+async function newUser(role: 'PLAYER' | 'GM' | null): Promise<{ id: string; cookie: string }> {
   counter += 1;
   const user = await prisma.user.create({
     data: { email: `flood-${counter}-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: `Flood ${counter}` },
@@ -265,9 +265,9 @@ describe('what one account holds over all its connections', () => {
 });
 
 describe('a whole state sent to a connection that has not taken the last one', () => {
-  it("replaces the fog the DM's page has not been sent yet", async () => {
-    const dm = await newUser('DM');
-    const client = await server.connectAndAuth(dm.cookie, campaignId);
+  it("replaces the fog the GM's page has not been sent yet", async () => {
+    const gm = await newUser('GM');
+    const client = await server.connectAndAuth(gm.cookie, campaignId);
     const socket = serverEnd(client);
     socket.conn.transport.writable = false;
     const fog = buildWsFogState({ width: 20, height: 20, gridSize: 50 });
@@ -285,8 +285,8 @@ describe('a whole state sent to a connection that has not taken the last one', (
   });
 
   it('answers repeated requests for the walls with the newest answer alone', async () => {
-    const dm = await newUser('DM');
-    const client = await server.connectAndAuth(dm.cookie, campaignId);
+    const gm = await newUser('GM');
+    const client = await server.connectAndAuth(gm.cookie, campaignId);
     const socket = serverEnd(client);
     socket.conn.transport.writable = false;
     const bytes = () => outgoingQueueOf(socket.id)?.bytes ?? 0;
@@ -302,8 +302,8 @@ describe('a whole state sent to a connection that has not taken the last one', (
   });
 
   it('keeps an earlier state that something else was queued after, so the two arrive in order', async () => {
-    const dm = await newUser('DM');
-    const client = await server.connectAndAuth(dm.cookie, campaignId);
+    const gm = await newUser('GM');
+    const client = await server.connectAndAuth(gm.cookie, campaignId);
     const socket = serverEnd(client);
     socket.conn.transport.writable = false;
     const bytes = () => outgoingQueueOf(socket.id)?.bytes ?? 0;
@@ -365,7 +365,7 @@ describe("a player's wall and light edits", () => {
 
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.length).toBeLessThanOrEqual(MAP_EDITS_PER_SECOND);
-    expect(errors.every((message) => /^Only DMs can/.test(message))).toBe(true);
+    expect(errors.every((message) => /^Only GMs can/.test(message))).toBe(true);
     client.disconnect();
   });
 });

@@ -2,7 +2,7 @@
  * The Token Manager says why the server refused.
  *
  * Every action but Move to Map reported a refusal as a fixed sentence, such
- * as "Failed to add token to map", so a DM who hit the limit of 1,000 tokens
+ * as "Failed to add token to map", so a GM who hit the limit of 1,000 tokens
  * on a map, a rate limit or a picture the server would not take had nothing
  * to go on. Each now shows the server's reason, and the fixed sentence only
  * when there is none.
@@ -45,7 +45,7 @@ vi.mock('@/services/api', () => ({ api, default: api }));
 import TokenManager from '../TokenManager';
 
 const goblin: Token = {
-  id: 'goblin', name: 'Goblin Boss', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
+  id: 'goblin', name: 'Goblin', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
   layer: TokenLayer.TOKEN, visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {},
   type: TokenType.NPC, disposition: null, hp: null, showHpBar: false, notes: '', initiative: null, obscured: false,
 };
@@ -62,7 +62,7 @@ it('says why Place on Map was refused', async () => {
   api.addToken.mockRejectedValue(refusal('A map can hold at most 1000 tokens'));
   render(<TokenManager isOpen onClose={() => {}} />);
   await waitForDialogFocus();
-  await userEvent.type(screen.getByPlaceholderText('e.g. Goblin Scout, Party Wizard…'), 'Goblin');
+  await userEvent.type(screen.getByPlaceholderText('e.g. Goblin, Party Wizard…'), 'Goblin');
   await userEvent.click(screen.getByRole('button', { name: 'Place on Map' }));
   expect(await screen.findByText('A map can hold at most 1000 tokens')).toBeInTheDocument();
 });
@@ -81,7 +81,7 @@ it.each([
 it('says why removing a token was refused', async () => {
   api.deleteToken.mockRejectedValue(refusal('Token not found'));
   render(<TokenManager isOpen onClose={() => {}} />);
-  await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin Boss from map' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin from map' }));
   await userEvent.click(within(await screen.findByRole('dialog', { name: 'Remove token' })).getByRole('button', { name: 'Remove' }));
   expect(await screen.findByText('Token not found')).toBeInTheDocument();
 });

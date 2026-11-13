@@ -15,8 +15,8 @@ import type { Character } from '@/types';
 import CharactersPage from '../CharactersPage';
 
 const stored: Character = {
-  id: 'char-1', userId: 'u1', name: 'Sheet A', gameSystem: 'DND_5E', campaignId: null,
-  data: { background: 'Sage' }, updatedAt: '2026-01-01T00:00:00.000Z', createdAt: '2026-01-01T00:00:00.000Z',
+  id: 'char-1', userId: 'u1', name: 'Sheet A', gameSystem: 'FIFTH_EDITION', campaignId: null,
+  data: { background: 'Acolyte' }, updatedAt: '2026-01-01T00:00:00.000Z', createdAt: '2026-01-01T00:00:00.000Z',
 } as unknown as Character;
 const { data: _sheet, ...listed } = stored;
 /** The character as the server holds it now; a save from the editor stands in for a real one. */
@@ -80,7 +80,7 @@ describe('Characters page after an in-page save', () => {
     );
 
     await userEvent.click(await screen.findByText('Sheet A'));
-    expect(await screen.findByText('Background: Sage')).toBeInTheDocument();
+    expect(await screen.findByText('Background: Acolyte')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Save from the editor' }));
     await userEvent.click(screen.getByRole('button', { name: 'Close sheet' }));
 

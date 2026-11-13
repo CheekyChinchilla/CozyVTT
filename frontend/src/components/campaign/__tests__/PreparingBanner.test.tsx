@@ -1,7 +1,7 @@
 /**
- * The banner over a map the DM is preparing.
+ * The banner over a map the GM is preparing.
  *
- * It says which map is on the DM's screen and which the table is on, and
+ * It says which map is on the GM's screen and which the table is on, and
  * offers the two ways out: Back to the table, and Bring everyone here, which
  * moves the table as Set Active does, asking which of the table's tokens go
  * along. Whatever holds the map on screen (an editor with unsaved work) is
@@ -26,7 +26,7 @@ const h = vi.hoisted(() => ({
   moveTokens: vi.fn(),
   showToast: vi.fn(),
   asked: vi.fn(),
-  ended: null as { mapName: string; reason: 'deleted' | 'not-dm' } | null,
+  ended: null as { mapName: string; reason: 'deleted' | 'not-gm' } | null,
   clearEnded: vi.fn(),
   TableKeptMovingError: class TableKeptMovingError extends Error {},
 }));
@@ -223,7 +223,7 @@ describe('what the banner says beyond the two buttons', () => {
     expect(region()).toHaveTextContent('Atmosphere, the vibe and the session controls');
   });
 
-  it('tells the DM why preparing ended when it ended from elsewhere', () => {
+  it('tells the GM why preparing ended when it ended from elsewhere', () => {
     h.preparing = false;
     h.ended = { mapName: 'Crypt', reason: 'deleted' };
     render(<PreparingBanner />);

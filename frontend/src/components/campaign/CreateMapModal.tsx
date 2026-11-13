@@ -1,6 +1,6 @@
 // ============================================
 // CreateMapModal Component
-// Modal for DMs to create a new campaign map: from a picture, or drawn in
+// Modal for GMs to create a new campaign map: from a picture, or drawn in
 // CozyVTT (Draw a map), which starts as a blank picture of the size and
 // colour chosen (map/paint/drawnMapSize.ts)
 // ============================================
@@ -10,7 +10,8 @@ import { MapPin, Loader2, ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
 import type { Asset, CampaignMap, CreateMapRequest } from '@/types';
-import { AssetType } from '@/types';
+import { AssetType, GameSystem } from '@/types';
+import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { detectMapGrid, type GridDetectionResult } from '@/utils/detectMapGrid';
 import { MAP_LIMITS } from '@/constants/mapLimits';
@@ -287,10 +288,10 @@ export default function CreateMapModal({
                 ))}
               </div>
 
-              {/* Map Image. Upload New offers the DM's personal library,
+              {/* Map Image. Upload New offers the GM's personal library,
                   selected at first, or the campaign's. Either way players
                   see the picture only once a map using it is on screen; a
-                  campaign picture stays with the table if the DM leaves. */}
+                  campaign picture stays with the table if the GM leaves. */}
               {!drawing && (<>
               <AssetPicker
                 label="Map Image"
@@ -497,7 +498,7 @@ export default function CreateMapModal({
                             <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
                               Flat — every square costs the same
                             </span>
-                            <p className="text-xs text-stone-gray/50">D&D 5e default</p>
+                            <p className="text-xs text-stone-gray/50">{GAME_SYSTEM_SHORT_LABELS[GameSystem.FIFTH_EDITION]} default</p>
                           </div>
                         </label>
                         <label className="flex items-start gap-3 cursor-pointer group">
@@ -514,7 +515,7 @@ export default function CreateMapModal({
                             <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
                               Alternating — {diagonalStepCosts(feetPerSquare, 'alternating').join('/')} ft diagonals
                             </span>
-                            <p className="text-xs text-stone-gray/50">Pathfinder 2e default</p>
+                            <p className="text-xs text-stone-gray/50">{GAME_SYSTEM_SHORT_LABELS[GameSystem.FANTASY_D20]} default</p>
                           </div>
                         </label>
                       </div>

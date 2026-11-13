@@ -36,7 +36,7 @@ const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 const BACKUP_DIR = path.join(SCRATCH, 'backups');
 const SERVER_SCRIPT = path.join(__dirname, '..', '..', '__tests__', 'helpers', 'serve-test-app.ts');
 
-type Who = 'user' | 'dm' | 'admin';
+type Who = 'user' | 'gm' | 'admin';
 
 interface RunningServer {
   child: ChildProcess;
@@ -97,7 +97,7 @@ async function startServer(emails: Record<Who, string>): Promise<RunningServer> 
 
   const cookies: Record<Who, string> = {
     user: await signIn(port, emails.user),
-    dm: await signIn(port, emails.dm),
+    gm: await signIn(port, emails.gm),
     admin: await signIn(port, emails.admin),
   };
   return { child, port, cookies, stderr: () => stderr };
@@ -263,12 +263,12 @@ describe('malformed multipart upload bodies', () => {
 
   beforeAll(async () => {
     const user = await createTestUser({ displayName: 'Malformed Upload User' });
-    const dm = await createTestUser({ displayName: 'Malformed Upload DM' });
+    const gm = await createTestUser({ displayName: 'Malformed Upload GM' });
     const admin = await createTestUser({ displayName: 'Malformed Upload Admin', role: PlatformRole.ADMIN });
-    userIds = [user.id, dm.id, admin.id];
-    campaignId = (await createTestCampaign(dm.id, { name: `Malformed upload ${Date.now()}` })).id;
-    await prisma.campaignMembership.create({ data: { userId: dm.id, campaignId, role: 'DM', characterIds: [] } });
-    emails = { user: user.email, dm: dm.email, admin: admin.email };
+    userIds = [user.id, gm.id, admin.id];
+    campaignId = (await createTestCampaign(gm.id, { name: `Malformed upload ${Date.now()}` })).id;
+    await prisma.campaignMembership.create({ data: { userId: gm.id, campaignId, role: 'GM', characterIds: [] } });
+    emails = { user: user.email, gm: gm.email, admin: admin.email };
     server = await startServer(emails);
   }, 90_000);
 
@@ -330,7 +330,7 @@ describe('malformed multipart upload bodies', () => {
     ['/api/assets/upload', 'user' as const, ['Upload Error']],
     ['/api/campaigns/import/preview', 'user' as const, ['Upload Error']],
     ['/api/campaigns/import', 'user' as const, ['Upload Error']],
-    ['/api/campaigns/:campaignId/maps/import-uvtt', 'dm' as const, ['Upload Error', 'Validation Error']],
+    ['/api/campaigns/:campaignId/maps/import-uvtt', 'gm' as const, ['Upload Error', 'Validation Error']],
     ['/api/admin/backups/restore', 'admin' as const, ['Upload Error', 'Invalid Backup']],
   ])('POST %s', (route, who, errors) => {
     it.each(MALFORMED_BODIES)('answers 400 and keeps running for $name', async ({ contentType, body }) => {

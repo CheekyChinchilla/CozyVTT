@@ -35,7 +35,7 @@ class CampaignService {
   }
 
   /**
-   * Create a new campaign (user becomes DM)
+   * Create a new campaign (user becomes GM)
    */
   async createCampaign(data: CreateCampaignRequest): Promise<Campaign> {
     const response = await api.createCampaign(data);
@@ -43,7 +43,7 @@ class CampaignService {
   }
 
   /**
-   * Update an existing campaign (DM only)
+   * Update an existing campaign (GM only)
    */
   async updateCampaign(id: string, data: UpdateCampaignRequest): Promise<Campaign> {
     const response = await api.updateCampaign(id, data);

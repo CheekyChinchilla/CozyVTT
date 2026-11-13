@@ -2,7 +2,7 @@
  * Damage in Edit Token takes a creature's temporary hit points first.
  *
  * A character's damage from the roster comes off temporary hit points first
- * and only the rest off current hit points, as D&D 5e and Pathfinder 2e say.
+ * and only the rest off current hit points, as 5E and Fantasy d20 say.
  * A creature's damage in Edit Token came straight off current hit points and
  * left the temporary ones where they were. It now follows the same rule, and
  * healing restores current hit points only.

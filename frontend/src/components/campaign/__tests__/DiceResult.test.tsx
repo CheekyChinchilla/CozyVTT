@@ -77,6 +77,17 @@ describe('DiceResult', () => {
     expect(screen.getByText('1d20:')).toBeInTheDocument();
   });
 
+  // A GM's own secret roll said "your GM can still see it", to the GM.
+  it('says who a secret roll of your own is hidden from: the other players for a player, the players for the GM', () => {
+    const secret = { ...wellFormed(), secret: true };
+    const { unmount } = render(<DiceResult roll={secret} isCurrentUser />);
+    expect(screen.getByTitle('Hidden from the other players — your GM can still see it')).toBeInTheDocument();
+    unmount();
+    render(<DiceResult roll={secret} isCurrentUser rollerIsGM />);
+    expect(screen.getByTitle('Hidden from the players')).toBeInTheDocument();
+    expect(screen.queryByTitle(/your GM/)).toBeNull();
+  });
+
   it('marks a natural 20 as a critical', () => {
     const crit = wellFormed();
     crit.breakdown.rolls[0].results = [20];
@@ -121,9 +132,9 @@ describe('DiceResult', () => {
   /**
    * Who a roll is *for* versus who pressed the button.
    *
-   * The panel used to head every entry with the roller's display name, so a DM
+   * The panel used to head every entry with the roller's display name, so a GM
    * rolling for an NPC or covering for an absent player produced a list of
-   * rolls that all read as the DM's own. The character or token is the subject
+   * rolls that all read as the GM's own. The character or token is the subject
    * of the roll; the person is context.
    */
   describe('attribution', () => {
@@ -136,19 +147,19 @@ describe('DiceResult', () => {
       expect(screen.queryByText('Mara Voss')).not.toBeInTheDocument();
     });
 
-    it('says the DM rolled it when the DM rolled for someone else', () => {
-      render(<DiceResult roll={wellFormed()} isCurrentUser={false} rollerIsDM />);
+    it('says the GM rolled it when the GM rolled for someone else', () => {
+      render(<DiceResult roll={wellFormed()} isCurrentUser={false} rollerIsGM />);
       expect(screen.getByText('Bramble Nettlefoot')).toBeInTheDocument();
-      expect(screen.getByText('(DM rolled)')).toBeInTheDocument();
+      expect(screen.getByText('(GM rolled)')).toBeInTheDocument();
     });
 
     it('says you rolled it, not that you are the character', () => {
-      // A DM rolling for a player sees this on their own screen. "(You)" beside
+      // A GM rolling for a player sees this on their own screen. "(You)" beside
       // a character name would claim they are that character.
-      render(<DiceResult roll={wellFormed()} isCurrentUser rollerIsDM />);
+      render(<DiceResult roll={wellFormed()} isCurrentUser rollerIsGM />);
       expect(screen.getByText('(you rolled)')).toBeInTheDocument();
       expect(screen.queryByText('(You)')).not.toBeInTheDocument();
-      expect(screen.queryByText('(DM rolled)')).not.toBeInTheDocument();
+      expect(screen.queryByText('(GM rolled)')).not.toBeInTheDocument();
     });
 
     it('still says (You) on a plain roll with no character', () => {

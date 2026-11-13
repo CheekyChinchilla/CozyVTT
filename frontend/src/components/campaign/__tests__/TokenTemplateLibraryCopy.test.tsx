@@ -15,7 +15,7 @@ import type { TokenTemplate } from '@/types';
 import { TokenType, TokenDisposition, CampaignRole } from '@/types';
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: 'DND_5E' }, currentMap: null, viewedMap: null }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: 'FIFTH_EDITION' }, currentMap: null, viewedMap: null }),
 }));
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
@@ -39,7 +39,7 @@ const goblin: TokenTemplate = {
 beforeEach(() => {
   vi.clearAllMocks();
   api.listTokenTemplates.mockResolvedValue({ templates: [goblin], total: 1, limit: 100, offset: 0 });
-  api.listCampaigns.mockResolvedValue({ campaigns: [{ id: 'campaign-2', name: 'Curse of the Crow', userRole: CampaignRole.DM }] });
+  api.listCampaigns.mockResolvedValue({ campaigns: [{ id: 'campaign-2', name: 'Curse of the Crow', userRole: CampaignRole.GM }] });
   api.copyTokenTemplateToCampaign.mockResolvedValue({ ...goblin, id: 'copy-1', campaignId: 'campaign-2' });
 });
 
@@ -70,10 +70,10 @@ it('loads the list once on opening, and leaves the message of a copy made soon a
 
 it('says why a copy was refused', async () => {
   api.copyTokenTemplateToCampaign.mockRejectedValue(Object.assign(new Error('Request failed'), {
-    response: { status: 403, data: { error: 'Forbidden', message: 'You must be a DM in the target campaign to copy templates there' } },
+    response: { status: 403, data: { error: 'Forbidden', message: 'You must be a GM in the target campaign to copy templates there' } },
   }));
   await userEvent.click(await openCopyMenu());
-  expect(await screen.findByText('You must be a DM in the target campaign to copy templates there')).toBeInTheDocument();
+  expect(await screen.findByText('You must be a GM in the target campaign to copy templates there')).toBeInTheDocument();
 });
 
 it('sends one copy at a time', async () => {

@@ -46,6 +46,8 @@ interface NumberFieldProps {
   disabled?: boolean;
   id?: string;
   'aria-label'?: string;
+  /** Marks the box as holding a value the form refused, or none where one is needed. */
+  'aria-invalid'?: boolean;
   title?: string;
 }
 
@@ -62,6 +64,7 @@ export default function NumberField({
   disabled,
   id,
   'aria-label': ariaLabel,
+  'aria-invalid': ariaInvalid,
   title,
 }: NumberFieldProps) {
   // What the box shows. Tracks `value` except while the user is mid-edit, which
@@ -124,6 +127,7 @@ export default function NumberField({
       inputMode="numeric"
       id={id}
       aria-label={ariaLabel}
+      aria-invalid={ariaInvalid || undefined}
       title={title}
       value={text}
       min={min}

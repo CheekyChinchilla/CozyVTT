@@ -7,7 +7,7 @@ import path from 'path';
  * which doors to show. If the copies drift, one side is trusting the other,
  * and a token can be drawn that was never sent, or sent that is never drawn.
  * The obscured-token mask is a fourth: the server applies it before sending,
- * the DM's preview applies it to show what was sent. vibeAudio.ts is the
+ * the GM's preview applies it to show what was sent. vibeAudio.ts is the
  * rule for what a vibe period's audio value names: the server plays by it,
  * the period editor displays by it. doorFog.ts is the rule for a door under
  * manual fog: the server refuses a toggle by it, the client offers doors by it.

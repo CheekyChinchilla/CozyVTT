@@ -52,7 +52,7 @@ function age(userId: string, ageDays: number) {
   return prisma.user.update({ where: { id: userId }, data: { createdAt: new Date(Date.now() - ageDays * DAY) } });
 }
 
-/** An administrator created `ageDays` ago, DM of a campaign, with a cookie for a session of theirs. */
+/** An administrator created `ageDays` ago, GM of a campaign, with a cookie for a session of theirs. */
 async function admin(ageDays: number, opts: { mfa?: boolean } = {}) {
   const user = await createTestUser({ displayName: 'Socket admin', role: 'ADMIN' });
   users.push(user.id);
@@ -60,7 +60,7 @@ async function admin(ageDays: number, opts: { mfa?: boolean } = {}) {
   if (opts.mfa) await prisma.user.update({ where: { id: user.id }, data: { mfaEnabled: true, mfaSecret: 'JBSWY3DPEHPK3PXP' } });
   const campaign = await createTestCampaign(user.id);
   campaigns.push(campaign.id);
-  await prisma.campaignMembership.create({ data: { userId: user.id, campaignId: campaign.id, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId: user.id, campaignId: campaign.id, role: 'GM', characterIds: [] } });
   // What a sign-in leaves in the session (routes/auth.ts).
   const cookie = await server.sessionWith({ userId: user.id, platformRole: 'ADMIN', mustChangePassword: false, signedInAt: Date.now() });
   return { user, campaignId: campaign.id, cookie };

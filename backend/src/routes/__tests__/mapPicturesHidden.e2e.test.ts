@@ -3,13 +3,13 @@
  * there.
  *
  * Every member listed and opened every picture in the campaign's library, so
- * a player's Asset Library showed the picture of a map the DM was preparing
+ * a player's Asset Library showed the picture of a map the GM was preparing
  * and every map picture uploaded ahead of time. A campaign picture a map uses
  * (its picture, base layer or spirit layer), and a map picture no map uses
  * yet, is now listed and opened for a player or a spectator only while the
  * table is on a map that shows it, and their own uploads always. The list and
  * the read are decided by one rule, so a picture is listed exactly when it
- * opens. Token pictures, the DM and the instance's administrators are
+ * opens. Token pictures, the GM and the instance's administrators are
  * unchanged.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -48,12 +48,12 @@ const PNG = Buffer.from(
 
 type Agent = ReturnType<typeof request.agent>;
 
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let spectatorId: string;
 let adminId: string;
 let campaignId: string;
-let dm: Agent;
+let gm: Agent;
 let player: Agent;
 let spectator: Agent;
 let admin: Agent;
@@ -111,37 +111,37 @@ async function makeMap(name: string, layers: { image?: string; base?: string; sp
 
 beforeAll(async () => {
   const stamp = Date.now();
-  const [dmUser, playerUser, spectatorUser, adminUser] = await Promise.all([
-    createTestUser({ email: `pictures-dm-${stamp}@test.cozyvtt.local`, displayName: 'Pictures DM' }),
+  const [gmUser, playerUser, spectatorUser, adminUser] = await Promise.all([
+    createTestUser({ email: `pictures-dm-${stamp}@test.cozyvtt.local`, displayName: 'Pictures GM' }),
     createTestUser({ email: `pictures-player-${stamp}@test.cozyvtt.local`, displayName: 'Pictures Player' }),
     createTestUser({ email: `pictures-spec-${stamp}@test.cozyvtt.local`, displayName: 'Pictures Spectator' }),
     createTestUser({ email: `pictures-admin-${stamp}@test.cozyvtt.local`, displayName: 'Pictures Admin', role: 'ADMIN' }),
   ]);
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
   spectatorId = spectatorUser.id;
   adminId = adminUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Pictures ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Pictures ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
     ],
   });
 
-  ids.villagePic = await makeAsset('MAP', dmId, 'village');
-  ids.villageSpirit = await makeAsset('MAP', dmId, 'village-spirit');
-  ids.cryptPic = await makeAsset('MAP', dmId, 'crypt');
-  ids.cryptSpirit = await makeAsset('MAP', dmId, 'crypt-spirit');
-  ids.towerBase = await makeAsset('MAP', dmId, 'tower-base');
-  ids.unusedMapPic = await makeAsset('MAP', dmId, 'next-week');
-  // Uploaded while the player held the DM's seat, before handing it over.
+  ids.villagePic = await makeAsset('MAP', gmId, 'village');
+  ids.villageSpirit = await makeAsset('MAP', gmId, 'village-spirit');
+  ids.cryptPic = await makeAsset('MAP', gmId, 'crypt');
+  ids.cryptSpirit = await makeAsset('MAP', gmId, 'crypt-spirit');
+  ids.towerBase = await makeAsset('MAP', gmId, 'tower-base');
+  ids.unusedMapPic = await makeAsset('MAP', gmId, 'next-week');
+  // Uploaded while the player held the GM's seat, before handing it over.
   ids.ownMapPic = await makeAsset('MAP', playerId, 'from-my-time-as-dm');
-  ids.tokenArt = await makeAsset('TOKEN', dmId, 'lich');
-  ids.unusedTokenArt = await makeAsset('TOKEN', dmId, 'rat');
+  ids.tokenArt = await makeAsset('TOKEN', gmId, 'lich');
+  ids.unusedTokenArt = await makeAsset('TOKEN', gmId, 'rat');
   // A map stored before a map's picture had to be a map asset.
-  ids.tokenAsMapPic = await makeAsset('TOKEN', dmId, 'old-hall');
+  ids.tokenAsMapPic = await makeAsset('TOKEN', gmId, 'old-hall');
 
   maps.village = await makeMap('Village', { image: mapPath(ids.villagePic), spirit: mapPath(ids.villageSpirit) });
   // Duplicated from the village, so it shows the same picture.
@@ -155,7 +155,7 @@ beforeAll(async () => {
   // The spirit plane open to everyone, so only the map decides.
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: maps.village, spiritLayerEnabled: true } });
 
-  dm = await login(dmUser.email);
+  gm = await login(gmUser.email);
   player = await login(playerUser.email);
   spectator = await login(spectatorUser.email);
   admin = await login(adminUser.email);
@@ -166,7 +166,7 @@ afterAll(async () => {
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.asset.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId, spectatorId, adminId]);
+  await cleanupUsers([gmId, playerId, spectatorId, adminId]);
   await prisma.$disconnect();
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 });
@@ -213,7 +213,7 @@ async function filesAnswer(agent: Agent, name: Fixture, status: 200 | 404) {
 }
 
 async function setCurrent(mapId: string) {
-  const res = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/set-current`);
+  const res = await gm.put(`/api/campaigns/${campaignId}/maps/${mapId}/set-current`);
   expect(res.status).toBe(200);
 }
 
@@ -256,9 +256,9 @@ describe('while the table is on the village', () => {
     }
   });
 
-  it('lists and opens everything for the DM', async () => {
-    expect([...(await listings(dm))].sort()).toEqual([...ALL].sort());
-    for (const name of ALL) await filesAnswer(dm, name, 200);
+  it('lists and opens everything for the GM', async () => {
+    expect([...(await listings(gm))].sort()).toEqual([...ALL].sort());
+    for (const name of ALL) await filesAnswer(gm, name, 200);
   });
 });
 

@@ -2,13 +2,13 @@
  * The documents shared with this campaign, from inside the campaign.
  *
  * Every member sees the same list and can read any of it; that is what sharing
- * means. The DM also shares and unshares here, choosing from documents they can
+ * means. The GM also shares and unshares here, choosing from documents they can
  * already read: their own uploads and anything global. The server checks that
- * again on its own, so this picker cannot offer a document the DM has no right
+ * again on its own, so this picker cannot offer a document the GM has no right
  * to hand out.
  *
  * The one place in a session a player can open a file at all. Every other asset
- * surface is the DM's, which is right for maps and tokens and wrong for a
+ * surface is the GM's, which is right for maps and tokens and wrong for a
  * rulebook the whole table is meant to read.
  */
 
@@ -31,10 +31,10 @@ interface CampaignDocumentsModalProps {
   onClose: () => void;
   campaignId: string;
   /** Whether the viewer may share and unshare. The server decides for real. */
-  isDM: boolean;
+  isGM: boolean;
 }
 
-export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, isDM }: CampaignDocumentsModalProps) {
+export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, isGM }: CampaignDocumentsModalProps) {
   const [shared, setShared] = useState<CampaignDocument[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
   const [toDelete, setToDelete] = useState<CampaignDocument | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // DM only: what could be shared.
+  // GM only: what could be shared.
   const [mine, setMine] = useState<Asset[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -58,7 +58,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
     try {
       const { documents } = await api.listCampaignDocuments(campaignId);
       setShared(documents);
-      if (isDM) {
+      if (isGM) {
         setMine(await listEveryAsset({ type: AssetType.DOCUMENT }));
       }
     } catch (err) {
@@ -66,7 +66,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
     } finally {
       setLoading(false);
     }
-  }, [campaignId, isDM]);
+  }, [campaignId, isGM]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -74,9 +74,9 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
     setPickerOpen(false);
   }, [isOpen, load]);
 
-  // The asset list includes documents from other campaigns the DM belongs to
+  // The asset list includes documents from other campaigns the GM belongs to
   // and documents other people uploaded, and for an admin everyone's. The
-  // server only lets a DM share their own or a global one, admin or not, so
+  // server only lets a GM share their own or a global one, admin or not, so
   // only those are offered.
   const ownOrGlobal = mine.filter(
     (a) => a.scope === AssetScope.GLOBAL || a.uploadedById === user?.id
@@ -121,7 +121,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
 
   /**
    * Delete one of the campaign's own documents. The server lets the campaign's
-   * DM delete its campaign assets, and this is where the DM sees them; it is
+   * GM delete its campaign assets, and this is where the GM sees them; it is
    * also the only way to remove one whose uploader has deleted their account.
    */
   const handleDelete = async () => {
@@ -142,9 +142,9 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
       <Modal open={isOpen} onClose={onClose} title="Campaign documents" icon={BookOpen} size="lg">
         <div className="space-y-4">
           <p className="text-xs text-ink-secondary">
-            {isDM
+            {isGM
               ? 'Everyone in the campaign can read what is shared here. Share from your own documents or any global one.'
-              : 'Rulebooks and handouts your DM has shared with this campaign.'}
+              : 'Rulebooks and handouts your GM has shared with this campaign.'}
           </p>
 
           {error && (
@@ -160,7 +160,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
             </div>
           ) : shared.length === 0 ? (
             <p className="text-xs text-ink-secondary italic">
-              {isDM ? 'Nothing shared yet.' : 'Nothing has been shared with this campaign yet.'}
+              {isGM ? 'Nothing shared yet.' : 'Nothing has been shared with this campaign yet.'}
             </p>
           ) : (
             <ul className="space-y-1.5">
@@ -200,7 +200,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                   >
                     <ExternalLink className="w-4 h-4" />
                   </a>
-                  {isDM && doc.shared && (
+                  {isGM && doc.shared && (
                     <button
                       type="button"
                       onClick={() => setToUnshare(doc)}
@@ -212,7 +212,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                       {busyId === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
                     </button>
                   )}
-                  {isDM && !doc.shared && (
+                  {isGM && !doc.shared && (
                     <button
                       type="button"
                       onClick={() => setToDelete(doc)}
@@ -229,7 +229,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
             </ul>
           )}
 
-          {isDM && (
+          {isGM && (
             <div className="pt-3 border-t border-moss-green/20 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-xs text-ink-secondary">Add to this campaign</span>
@@ -316,7 +316,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
         onSaved={(id, fileSize) => setShared((prev) => prev.map((d) => (d.id === id ? { ...d, fileSize } : d)))}
       />
 
-      {isDM && (
+      {isGM && (
         <>
           <AssetUploadModal
             isOpen={showUpload}

@@ -9,14 +9,13 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { z } from 'zod';
-import { GameSystem } from '../../../game-systems';
+import { GameSystem, type SupportedGameSystem } from '../../../game-systems';
 import {
   getBlankCharacterTemplate,
   validateCharacterData,
-  dnd5eCharacterDataSchema,
-  pathfinder2eCharacterDataSchema,
-  callOfCthulhu7eCharacterDataSchema,
-  shadowrun6eCharacterDataSchema,
+  fifthEditionCharacterDataSchema,
+  fantasyD20CharacterDataSchema,
+  HorrorD100SheetSchema,
   flexibleCharacterDataSchema,
 } from '../index';
 import { walkSheetSchema } from '../../../__tests__/helpers/sheetSchemaWalk';
@@ -34,10 +33,12 @@ function unboundedStrings(schema: z.ZodType, path: string): string[] {
 
 describe('every text field on a sheet', () => {
   it.each([
-    ['DND_5E', dnd5eCharacterDataSchema],
-    ['PATHFINDER_2E', pathfinder2eCharacterDataSchema],
-    ['CALL_OF_CTHULHU_7E', callOfCthulhu7eCharacterDataSchema],
-    ['SHADOWRUN_6E', shadowrun6eCharacterDataSchema],
+    ['FIFTH_EDITION', fifthEditionCharacterDataSchema],
+    ['FANTASY_D20', fantasyD20CharacterDataSchema],
+    // The conversion record is the server's: written when a sheet is
+    // converted, kept on every save, and never taken from a request. It holds
+    // text copied from an older sheet, so it has no limit of its own.
+    ['HORROR_D100', HorrorD100SheetSchema.omit({ converted: true })],
     ['Flexible', flexibleCharacterDataSchema],
   ] as Array<[string, z.ZodType]>)('has a length limit in %s', (_system, schema) => {
     expect(unboundedStrings(schema, '')).toEqual([]);
@@ -45,8 +46,8 @@ describe('every text field on a sheet', () => {
 });
 
 describe('the limits', () => {
-  const blank = (system: GameSystem) => getBlankCharacterTemplate(system) as Record<string, unknown>;
-  const paths = (system: GameSystem, data: unknown) => {
+  const blank = (system: SupportedGameSystem) => getBlankCharacterTemplate(system) as Record<string, unknown>;
+  const paths = (system: SupportedGameSystem, data: unknown) => {
     const result = validateCharacterData(system, data);
     return result.success ? [] : result.errors.issues.map((issue) => issue.path.join('.'));
   };
@@ -54,25 +55,24 @@ describe('the limits', () => {
   const long = 'x'.repeat(SHEET_LONG_TEXT_MAX + 1);
 
   it('refuse a one-line box over the short limit', () => {
-    expect(paths(GameSystem.DND_5E, { ...blank(GameSystem.DND_5E), class: short })).toContain('class');
-    expect(paths(GameSystem.PATHFINDER_2E, { ...blank(GameSystem.PATHFINDER_2E), ancestry: short })).toContain('ancestry');
-    expect(paths(GameSystem.CALL_OF_CTHULHU_7E, { ...blank(GameSystem.CALL_OF_CTHULHU_7E), occupation: short })).toContain('occupation');
-    expect(paths(GameSystem.DND_5E, { ...blank(GameSystem.DND_5E), inventory: [{ name: short }] })).toContain('inventory.0.name');
+    expect(paths(GameSystem.FIFTH_EDITION, { ...blank(GameSystem.FIFTH_EDITION), class: short })).toContain('class');
+    expect(paths(GameSystem.FANTASY_D20, { ...blank(GameSystem.FANTASY_D20), ancestry: short })).toContain('ancestry');
+    expect(paths(GameSystem.HORROR_D100, { ...blank(GameSystem.HORROR_D100), profession: short })).toContain('profession');
+    expect(paths(GameSystem.FIFTH_EDITION, { ...blank(GameSystem.FIFTH_EDITION), inventory: [{ name: short }] })).toContain('inventory.0.name');
   });
 
   it('refuse a paragraph box over the long limit', () => {
-    expect(paths(GameSystem.DND_5E, { ...blank(GameSystem.DND_5E), backstory: long })).toContain('backstory');
-    expect(paths(GameSystem.PATHFINDER_2E, { ...blank(GameSystem.PATHFINDER_2E), notes: long })).toContain('notes');
-    const coc = blank(GameSystem.CALL_OF_CTHULHU_7E);
+    expect(paths(GameSystem.FIFTH_EDITION, { ...blank(GameSystem.FIFTH_EDITION), backstory: long })).toContain('backstory');
+    expect(paths(GameSystem.FANTASY_D20, { ...blank(GameSystem.FANTASY_D20), notes: long })).toContain('notes');
     expect(
-      paths(GameSystem.CALL_OF_CTHULHU_7E, { ...coc, backstory: { ...(coc.backstory as object), description: long } })
-    ).toContain('backstory.description');
+      paths(GameSystem.HORROR_D100, { ...blank(GameSystem.HORROR_D100), story: [{ title: 'Background', text: long }] })
+    ).toContain('story.0.text');
   });
 
   it('take a paragraph box at the long limit, and a one-line box at the short one', () => {
     expect(
-      paths(GameSystem.DND_5E, {
-        ...blank(GameSystem.DND_5E),
+      paths(GameSystem.FIFTH_EDITION, {
+        ...blank(GameSystem.FIFTH_EDITION),
         backstory: 'y'.repeat(SHEET_LONG_TEXT_MAX),
         race: 'y'.repeat(SHEET_SHORT_TEXT_MAX),
         featuresAndTraits: [{ name: 'Second Wind', description: 'y'.repeat(SHEET_LONG_TEXT_MAX) }],
@@ -81,32 +81,32 @@ describe('the limits', () => {
   });
 
   it('take a feature written before descriptions existed, however long its line', () => {
-    expect(paths(GameSystem.DND_5E, { ...blank(GameSystem.DND_5E), featuresAndTraits: ['z'.repeat(5000)] })).toEqual([]);
+    expect(paths(GameSystem.FIFTH_EDITION, { ...blank(GameSystem.FIFTH_EDITION), featuresAndTraits: ['z'.repeat(5000)] })).toEqual([]);
   });
 });
 
 describe('the allies name', () => {
-  const paths = (system: GameSystem, data: unknown) => {
+  const paths = (system: SupportedGameSystem, data: unknown) => {
     const result = validateCharacterData(system, data);
     return result.success ? [] : result.errors.issues.map((issue) => issue.path.join('.'));
   };
   const paragraph = 'y'.repeat(SHEET_SHORT_TEXT_MAX * 5);
-  const blank = (system: GameSystem) => getBlankCharacterTemplate(system) as Record<string, unknown>;
+  const blank = (system: SupportedGameSystem) => getBlankCharacterTemplate(system) as Record<string, unknown>;
 
-  it('takes the paragraph a pre-1.3.0 D&D 5e sheet had in its allies field, once that is moved', () => {
-    const older: Record<string, unknown> = { ...blank(GameSystem.DND_5E), allies: paragraph };
+  it('takes the paragraph a 5E sheet from before 1.3.0 had in its allies field, once that is moved', () => {
+    const older: Record<string, unknown> = { ...blank(GameSystem.FIFTH_EDITION), allies: paragraph };
     delete older.alliesAndOrganizations;
-    const moved = migrateLegacySheetFields(GameSystem.DND_5E, older) as { alliesAndOrganizations: { name: string } };
+    const moved = migrateLegacySheetFields(GameSystem.FIFTH_EDITION, older) as { alliesAndOrganizations: { name: string } };
 
     expect(moved.alliesAndOrganizations.name).toBe(paragraph);
-    expect(paths(GameSystem.DND_5E, moved)).toEqual([]);
+    expect(paths(GameSystem.FIFTH_EDITION, moved)).toEqual([]);
   });
 
-  it.each([GameSystem.DND_5E, GameSystem.PATHFINDER_2E])('takes a paragraph in %s', (system) => {
+  it.each([GameSystem.FIFTH_EDITION, GameSystem.FANTASY_D20])('takes a paragraph in %s', (system) => {
     expect(paths(system, { ...blank(system), alliesAndOrganizations: { name: paragraph } })).toEqual([]);
   });
 
-  it.each([GameSystem.DND_5E, GameSystem.PATHFINDER_2E])('is still refused past the paragraph limit in %s', (system) => {
+  it.each([GameSystem.FIFTH_EDITION, GameSystem.FANTASY_D20])('is still refused past the paragraph limit in %s', (system) => {
     const sheet = { ...blank(system), alliesAndOrganizations: { name: 'x'.repeat(SHEET_LONG_TEXT_MAX + 1) } };
     expect(paths(system, sheet)).toContain('alliesAndOrganizations.name');
   });

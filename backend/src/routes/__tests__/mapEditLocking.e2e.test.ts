@@ -20,9 +20,9 @@ jest.setTimeout(20000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 type Wall = { id: string; x1: number; y1: number; x2: number; y2: number; type: string };
 type Light = { id: string; x: number; y: number; brightRadius: number; dimRadius: number; color: string; enabled: boolean };
@@ -49,18 +49,18 @@ const stored = (mapId: string) =>
 beforeAll(async () => {
   const stamp = Date.now();
   const user = await createTestUser({ email: `restlock-${stamp}@test.cozyvtt.local` });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `REST locking ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `REST locking ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
 afterAll(async () => {
   await server.close();
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
@@ -71,9 +71,9 @@ it('keeps every wall of several adds, a remove and a door toggle sent at once', 
   const added = [wall(300), wall(400), wall(500)];
 
   const answers = await Promise.all([
-    ...added.map((w) => dm.post(`${base(mapId)}/walls`).send(w)),
-    dm.delete(`${base(mapId)}/walls/${gone.id}`),
-    dm.patch(`${base(mapId)}/walls/${door.id}`).send({ type: 'door-open' }),
+    ...added.map((w) => gm.post(`${base(mapId)}/walls`).send(w)),
+    gm.delete(`${base(mapId)}/walls/${gone.id}`),
+    gm.patch(`${base(mapId)}/walls/${door.id}`).send({ type: 'door-open' }),
   ]);
   expect(answers.map((r) => r.status)).toEqual([201, 201, 201, 200, 200]);
 
@@ -88,9 +88,9 @@ it('keeps every light of several adds, a remove and an update sent at once', asy
   const added = [light(300), light(400), light(500)];
 
   const answers = await Promise.all([
-    ...added.map((l) => dm.post(`${base(mapId)}/lights`).send(l)),
-    dm.delete(`${base(mapId)}/lights/${gone.id}`),
-    dm.patch(`${base(mapId)}/lights/${dimmed.id}`).send({ enabled: false }),
+    ...added.map((l) => gm.post(`${base(mapId)}/lights`).send(l)),
+    gm.delete(`${base(mapId)}/lights/${gone.id}`),
+    gm.patch(`${base(mapId)}/lights/${dimmed.id}`).send({ enabled: false }),
   ]);
   expect(answers.map((r) => r.status)).toEqual([201, 201, 201, 200, 200]);
 
@@ -102,8 +102,8 @@ it('keeps both of two fog operations sent at once', async () => {
   const mapId = await newMap({ fogEnabled: true });
 
   const answers = await Promise.all([
-    dm.post(`${base(mapId)}/fog/operation`).send({ op: 'reveal', cells: [0, 1, 2] }),
-    dm.post(`${base(mapId)}/fog/operation`).send({ op: 'reveal', cells: [40, 41, 42] }),
+    gm.post(`${base(mapId)}/fog/operation`).send({ op: 'reveal', cells: [0, 1, 2] }),
+    gm.post(`${base(mapId)}/fog/operation`).send({ op: 'reveal', cells: [40, 41, 42] }),
   ]);
   expect(answers.map((r) => r.status)).toEqual([200, 200]);
 
@@ -114,7 +114,7 @@ it('keeps both of two fog operations sent at once', async () => {
 it('keeps a wall added over REST while the page adds one over the socket', async () => {
   const mapId = await newMap();
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
-  const socket = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  const socket = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
   const fromRest = wall(100);
   const fromSocket = wall(300);
 
@@ -124,7 +124,7 @@ it('keeps a wall added over REST while the page adds one over the socket', async
     socket.on('wall:added', () => { seen += 1; if (seen === 2) resolve(); });
   });
   socket.emit('wall:add', { mapId, segment: fromSocket });
-  const res = await dm.post(`${base(mapId)}/walls`).send(fromRest);
+  const res = await gm.post(`${base(mapId)}/walls`).send(fromRest);
   expect(res.status).toBe(201);
   await bothAdded;
 

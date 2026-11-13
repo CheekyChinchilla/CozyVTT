@@ -8,6 +8,7 @@ import {
   FLEXIBLE_SYSTEM_LABEL,
   GAME_SYSTEM_SHORT_LABELS,
   GAME_SYSTEM_TINTS,
+  UNSUPPORTED_SYSTEM_LABEL,
   getGameSystemLabel,
   isGameSystem,
 } from '@/constants/game-systems';
@@ -26,13 +27,13 @@ export default function GameSystemBadge({
   size = 'md',
   showFull = false,
 }: GameSystemBadgeProps) {
-  // A code this build does not know, such as one read from a character file
-  // made on an instance with another system, is shown as it is written.
+  // A code this build does not know, such as the value of a system CozyVTT
+  // no longer supports, is shown as Unsupported system.
   const known = isGameSystem(gameSystem) ? gameSystem : null;
   const colors = known ? GAME_SYSTEM_TINTS[known] : PLAIN_COLORS;
   const label = known
     ? showFull ? getGameSystemLabel(known) : GAME_SYSTEM_SHORT_LABELS[known]
-    : gameSystem || FLEXIBLE_SYSTEM_LABEL;
+    : gameSystem ? UNSUPPORTED_SYSTEM_LABEL : FLEXIBLE_SYSTEM_LABEL;
 
   return (
     <span

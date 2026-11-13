@@ -1,0 +1,498 @@
+{
+  "cozyVttVersion": "1.0",
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "character": {
+    "name": "Elara the Wizard",
+    "gameSystem": "FIFTH_EDITION",
+    "data": {
+      "characterName": "Elara Voss",
+      "playerName": "Jane Doe",
+      "class": "Wizard",
+      "level": 5,
+      "background": "Acolyte",
+      "race": "High Elf",
+      "alignment": "Neutral Good",
+      "experiencePoints": 6500,
+      "inspiration": false,
+      "proficiencyBonus": 3,
+      "stats": {
+        "strength": {
+          "score": 8,
+          "modifier": -1
+        },
+        "dexterity": {
+          "score": 14,
+          "modifier": 2
+        },
+        "constitution": {
+          "score": 12,
+          "modifier": 1
+        },
+        "intelligence": {
+          "score": 18,
+          "modifier": 4
+        },
+        "wisdom": {
+          "score": 13,
+          "modifier": 1
+        },
+        "charisma": {
+          "score": 10,
+          "modifier": 0
+        }
+      },
+      "savingThrows": {
+        "strength": {
+          "proficient": false,
+          "bonus": -1
+        },
+        "dexterity": {
+          "proficient": false,
+          "bonus": 2
+        },
+        "constitution": {
+          "proficient": false,
+          "bonus": 1
+        },
+        "intelligence": {
+          "proficient": true,
+          "bonus": 7
+        },
+        "wisdom": {
+          "proficient": true,
+          "bonus": 4
+        },
+        "charisma": {
+          "proficient": false,
+          "bonus": 0
+        }
+      },
+      "skills": {
+        "acrobatics": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 2
+        },
+        "animalHandling": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 1
+        },
+        "arcana": {
+          "proficient": true,
+          "expertise": false,
+          "bonus": 7
+        },
+        "athletics": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": -1
+        },
+        "deception": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 0
+        },
+        "history": {
+          "proficient": true,
+          "expertise": false,
+          "bonus": 7
+        },
+        "insight": {
+          "proficient": true,
+          "expertise": false,
+          "bonus": 4
+        },
+        "intimidation": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 0
+        },
+        "investigation": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 4
+        },
+        "medicine": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 1
+        },
+        "nature": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 4
+        },
+        "perception": {
+          "proficient": true,
+          "expertise": false,
+          "bonus": 4
+        },
+        "performance": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 0
+        },
+        "persuasion": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 0
+        },
+        "religion": {
+          "proficient": true,
+          "expertise": false,
+          "bonus": 7
+        },
+        "sleightOfHand": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 2
+        },
+        "stealth": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 2
+        },
+        "survival": {
+          "proficient": false,
+          "expertise": false,
+          "bonus": 1
+        }
+      },
+      "passivePerception": 14,
+      "armorClass": 12,
+      "initiative": 2,
+      "speed": 30,
+      "hp": {
+        "maximum": 28,
+        "current": 28,
+        "temporary": 0
+      },
+      "conditions": [
+        "poisoned",
+        "prone"
+      ],
+      "hitDice": [
+        {
+          "class": "Wizard",
+          "die": "d6",
+          "maximum": 5,
+          "remaining": 5
+        }
+      ],
+      "deathSaves": {
+        "successes": 0,
+        "failures": 0
+      },
+      "attacks": [
+        {
+          "name": "Dagger",
+          "attackBonus": 5,
+          "damageRoll": "1d4+2",
+          "damageType": "piercing",
+          "range": 5,
+          "properties": [
+            "finesse",
+            "light",
+            "thrown"
+          ],
+          "notes": "",
+          "additionalDamage": [
+            {
+              "label": "Thrown (20/60)",
+              "damageRoll": "1d4+2",
+              "damageType": "piercing"
+            }
+          ]
+        },
+        {
+          "name": "Fire Bolt",
+          "attackBonus": 7,
+          "damageRoll": "2d10",
+          "damageType": "fire",
+          "range": 120,
+          "properties": [],
+          "notes": ""
+        }
+      ],
+      "currency": {
+        "cp": 0,
+        "sp": 0,
+        "ep": 0,
+        "gp": 150,
+        "pp": 0
+      },
+      "inventory": [
+        {
+          "name": "Spellbook",
+          "quantity": 1,
+          "weight": 3,
+          "notes": "Every wizard spell she has learned",
+          "equippable": false,
+          "equipped": true,
+          "requiresAttunement": false,
+          "attuned": false,
+          "value": 50
+        },
+        {
+          "name": "Wand of Magic Detection",
+          "quantity": 1,
+          "weight": 1,
+          "notes": "Casts detect magic. 3 charges, some come back each dawn",
+          "equippable": false,
+          "equipped": true,
+          "requiresAttunement": false,
+          "attuned": false,
+          "value": 100
+        },
+        {
+          "name": "Robes",
+          "quantity": 1,
+          "weight": 4,
+          "notes": "dark red robes",
+          "equippable": false,
+          "equipped": true,
+          "requiresAttunement": false,
+          "attuned": false,
+          "value": 1
+        },
+        {
+          "name": "Dagger",
+          "quantity": 1,
+          "weight": 1,
+          "notes": "a dull dagger",
+          "equippable": false,
+          "equipped": true,
+          "requiresAttunement": false,
+          "attuned": false,
+          "value": 2
+        },
+        {
+          "name": "Arcane Focus (Crystal)",
+          "quantity": 1,
+          "weight": 1,
+          "notes": "glowing magic crystal",
+          "equippable": false,
+          "equipped": true,
+          "requiresAttunement": false,
+          "attuned": false,
+          "value": 10
+        },
+        {
+          "name": "Backpack",
+          "quantity": 1,
+          "weight": 5,
+          "notes": "a medium sized backpack",
+          "equippable": false,
+          "equipped": true,
+          "requiresAttunement": false,
+          "attuned": false,
+          "value": 2
+        }
+      ],
+      "proficienciesAndLanguages": [
+        "Daggers",
+        "Darts",
+        "Slings",
+        "Quarterstaffs",
+        "Light Crossbows",
+        "Longswords",
+        "Shortswords",
+        "Shortbows",
+        "Longbows",
+        "Common",
+        "Elvish",
+        "Draconic",
+        "Dwarvish",
+        "Celestial"
+      ],
+      "featuresAndTraits": [
+        {
+          "name": "Arcane Recovery",
+          "description": "Once a day, after a short rest, take back used spell slots totalling up to half her wizard level, rounded up (3 at 5th level), all of them below 6th level."
+        },
+        {
+          "name": "Arcane Tradition: School of Evocation",
+          "description": "Her studies centre on spells of raw force and energy."
+        },
+        {
+          "name": "Evocation Savant",
+          "description": "Copying an evocation spell into her spellbook costs half the usual gold and time."
+        },
+        {
+          "name": "Sculpt Spells",
+          "description": "When she casts an evocation spell, up to 1 + the spell's level creatures she can see are spared: each passes its save, and takes nothing where others take half."
+        },
+        {
+          "name": "Darkvision",
+          "description": "Out to 60 feet, dim light looks bright to her and darkness looks dim, though she sees no colours in the dark."
+        },
+        {
+          "name": "Fey Ancestry",
+          "description": "Saves to resist being charmed are rolled with advantage, and no magic can send her to sleep."
+        },
+        {
+          "name": "Trance",
+          "description": "Four hours of quiet meditation each day rest her as fully as eight hours of sleep."
+        },
+        {
+          "name": "Keen Senses",
+          "description": "Perception is one of her trained skills."
+        },
+        {
+          "name": "Elf Weapon Training",
+          "description": "Longswords, shortswords, shortbows and longbows are weapons she is proficient with."
+        },
+        {
+          "name": "Cantrip (High Elf)",
+          "description": "One more wizard cantrip, cast with Intelligence: Minor Illusion."
+        },
+        {
+          "name": "Shelter of the Faithful",
+          "description": "Temples and shrines of her faith heal and shelter her and her party at no charge, though she pays for any spell components."
+        }
+      ],
+      "spellcasting": {
+        "class": "Wizard",
+        "ability": "Intelligence",
+        "spellSaveDC": 15,
+        "spellAttackBonus": 7,
+        "cantrips": [
+          "Fire Bolt",
+          "Mage Hand",
+          "Prestidigitation",
+          "Minor Illusion"
+        ],
+        "slots": {
+          "1": {
+            "total": 4,
+            "expended": 1
+          },
+          "2": {
+            "total": 3,
+            "expended": 0
+          },
+          "3": {
+            "total": 2,
+            "expended": 1
+          },
+          "4": {
+            "total": 0,
+            "expended": 0
+          },
+          "5": {
+            "total": 0,
+            "expended": 0
+          },
+          "6": {
+            "total": 0,
+            "expended": 0
+          },
+          "7": {
+            "total": 0,
+            "expended": 0
+          },
+          "8": {
+            "total": 0,
+            "expended": 0
+          },
+          "9": {
+            "total": 0,
+            "expended": 0
+          }
+        },
+        "spells": [
+          {
+            "level": 1,
+            "name": "Magic Missile",
+            "prepared": true,
+            "ritual": false,
+            "concentration": false
+          },
+          {
+            "level": 1,
+            "name": "Shield",
+            "prepared": true,
+            "ritual": false,
+            "concentration": false
+          },
+          {
+            "level": 1,
+            "name": "Mage Armor",
+            "prepared": true,
+            "ritual": false,
+            "concentration": false
+          },
+          {
+            "level": 1,
+            "name": "Detect Magic",
+            "prepared": false,
+            "ritual": true,
+            "concentration": true
+          },
+          {
+            "level": 2,
+            "name": "Misty Step",
+            "prepared": true,
+            "ritual": false,
+            "concentration": false
+          },
+          {
+            "level": 2,
+            "name": "Shatter",
+            "prepared": false,
+            "ritual": false,
+            "concentration": false
+          },
+          {
+            "level": 3,
+            "name": "Fireball",
+            "prepared": true,
+            "ritual": false,
+            "concentration": false
+          },
+          {
+            "level": 3,
+            "name": "Counterspell",
+            "prepared": true,
+            "ritual": false,
+            "concentration": false
+          }
+        ]
+      },
+      "appearance": {
+        "age": 128,
+        "height": "5'7\"",
+        "weight": "130 lbs",
+        "eyes": "Silver",
+        "skin": "Pale",
+        "hair": "White"
+      },
+      "personality": {
+        "traits": "Counts things when she is nervous: steps, candles, coins.",
+        "ideals": "Every lesson learned should be written down for whoever comes next.",
+        "bonds": "The temple library that taught her to read is worth any risk.",
+        "flaws": "Cannot walk past a locked door without wondering what is behind it."
+      },
+      "backstory": "Raised among the archivists of a riverside temple, Elara learned magic from the books she was meant to be dusting. She left to find out who wrote the oldest of them.",
+      "alliesAndOrganizations": {
+        "name": "The Lamplit Archive",
+        "description": "The temple library where she grew up. Its archivists still answer her letters."
+      },
+      "treasure": "A mysterious encrypted scroll, a silver locket with a portrait inside.",
+      "additionalFeaturesAndTraits": "Elara has developed a sixth sense for magical auras after years of study, often sensing enchantments before identifying them formally.",
+      "customSkills": [
+        {
+          "name": "Calligrapher's Supplies",
+          "ability": "dexterity",
+          "proficient": false,
+          "expertise": false,
+          "otherBonus": 0
+        }
+      ],
+      "initiativeBonus": 0,
+      "passivePerceptionBonus": 0,
+      "exhaustionLevel": 0
+    }
+  }
+}

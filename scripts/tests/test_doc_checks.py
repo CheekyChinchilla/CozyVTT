@@ -11,11 +11,16 @@ read so the run fails.
 Run from the repository root. Standard library only.
 """
 
+import contextlib
+import gc
 import importlib.util
+import io
 import os
 import tempfile
 import textwrap
 import unittest
+import warnings
+from unittest import mock
 
 SCRIPTS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -114,6 +119,16 @@ class SpecCoverage(unittest.TestCase):
         sc = self.inventory(routes={'users': '', 'maps': ''}, server="app.get(`/${x}`, h);\n")
         self.assertTrue(any('server.ts:1' in p for p in sc.unreadable()), sc.unreadable())
 
+    def test_closes_every_file_it_reads(self):
+        # Each file was opened and never closed, so a run printed a
+        # ResourceWarning for every one it read.
+        sc = self.inventory(routes={'users': "router.get('/', h);\n", 'maps': ''})
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always', ResourceWarning)
+            sc.routed()
+            gc.collect()
+        self.assertEqual([str(w.message) for w in caught if issubclass(w.category, ResourceWarning)], [])
+
 
 class ClientCalls(unittest.TestCase):
     """The frontend's requests, read from its API client, against the OpenAPI file."""
@@ -184,6 +199,22 @@ class WebsocketEvents(unittest.TestCase):
         problems = we.unreadable()
         self.assertEqual(len(problems), 4, problems)
 
+    def test_closes_every_file_it_reads_and_writes(self):
+        # Each file was opened and never closed, so a run printed a
+        # ResourceWarning for every handler file and for the document.
+        we = self.events({'handlers/a.ts': 'socket.on("token:move", () => {});\n'})
+        doc = Sources({'doc.md': f'{we.BEGIN}\n{we.END}\n'})
+        self.addCleanup(doc.close)
+        we.DOC = doc.path('doc.md')
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always', ResourceWarning)
+            we.collect()
+            for flag in ('--write', '--check'):
+                with mock.patch('sys.argv', ['websocket-events.py', flag]), contextlib.redirect_stdout(io.StringIO()):
+                    we.main()
+            gc.collect()
+        self.assertEqual([str(w.message) for w in caught if issubclass(w.category, ResourceWarning)], [])
+
     def test_lets_the_broadcast_helpers_pass_on_the_event_they_were_given(self):
         we = self.events({'utils.ts': '''
             export function broadcastToCampaign(campaignId: string, event: string, data: unknown): void {
@@ -210,14 +241,14 @@ class WebsocketEvents(unittest.TestCase):
         inbound, _ = we.collect()
         self.assertEqual(
             we.who_may_send(inbound['wall:update']),
-            'DM; a player may toggle an unlocked door (on a lit map, one their tokens see; '
+            'GM; a player may toggle an unlocked door (on a lit map, one their tokens see; '
             'under manual fog, one beside a square revealed to them)')
-        self.assertEqual(we.who_may_send(inbound['door:plain']), 'DM; a player may toggle an unlocked door')
+        self.assertEqual(we.who_may_send(inbound['door:plain']), 'GM; a player may toggle an unlocked door')
 
     def test_says_when_a_player_may_roll_initiative(self):
         we = self.events({'handlers/initiative.ts': '''
             socket.on('initiative.roll', async (data) => {
-              if (socket.role !== 'DM') {
+              if (socket.role !== 'GM') {
                 if (!canControlToken(socket.role, token.controlledBy, socket.userId)) return;
                 if (existingIndex === -1) return;
                 if (state.active) return;
@@ -232,9 +263,9 @@ class WebsocketEvents(unittest.TestCase):
         inbound, _ = we.collect()
         self.assertEqual(
             we.who_may_send(inbound['initiative.roll']),
-            "DM, or the token's player: once the DM has put it in the order, before the fight starts, "
+            "GM, or the token's player: once the GM has put it in the order, before the fight starts, "
             'once each time it joins the order')
-        self.assertEqual(we.who_may_send(inbound['token.nudge']), "DM, or the token's player")
+        self.assertEqual(we.who_may_send(inbound['token.nudge']), "GM, or the token's player")
 
     def test_says_who_may_draw_and_who_may_erase(self):
         we = self.events({'handlers/drawings.ts': '''
@@ -252,9 +283,29 @@ class WebsocketEvents(unittest.TestCase):
         inbound, _ = we.collect()
         self.assertEqual(
             we.who_may_send(inbound['drawing:add']),
-            'DM, or a player while **Players may draw** is on and the session is live')
-        self.assertEqual(we.who_may_send(inbound['drawing:remove']), "DM, or the drawing's player")
+            'GM, or a player while **Players may draw** is on and the session is live')
+        self.assertEqual(we.who_may_send(inbound['drawing:remove']), "GM, or the drawing's player")
         self.assertEqual(we.who_may_send(inbound['drawing:other']), 'Any member')
+
+    def test_finds_the_body_of_a_helper_after_its_return_type(self):
+        signatures = {
+            'object literal': 'function guard(role: string): { ok: boolean } {',
+            'nested generic': 'async function guard(role: string): Promise<{ a: number; b: { c: string } }> {',
+            'multi-line': 'function guard(\n  role: string,\n  other: number,\n): {\n  ok: boolean;\n} {',
+            'union of literals': 'function guard(role: string): { ok: true } | { ok: false } {',
+            'arrow with object literal': 'const guard = (role: string): { ok: boolean } => {',
+            'arrow with generic': 'const guard = async (role: string): Promise<{ a: number }> => {',
+            'arrow over lines': 'const guard = (\n  role: string,\n): {\n  ok: boolean;\n} => {',
+            'plain': 'function guard(role: string): boolean {',
+        }
+        for label, signature in signatures.items():
+            with self.subTest(label):
+                we = self.events({'handlers/helper.ts': (
+                    "socket.on('token.nudge', async (data) => {\n  guard(socket.role);\n});\n"
+                    + signature + "\n  if (!canControlToken(role, token.controlledBy, userId)) return;\n}\n"
+                )})
+                inbound, _ = we.collect()
+                self.assertEqual(we.who_may_send(inbound['token.nudge']), "GM, or the token's player")
 
     def test_says_who_each_outbound_event_is_sent_to(self):
         we = self.events({

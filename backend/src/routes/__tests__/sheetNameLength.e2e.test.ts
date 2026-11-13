@@ -13,7 +13,7 @@ import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { getBlankCharacterTemplate } from '../../validators/game-systems';
-import { GameSystem } from '../../game-systems';
+import { GameSystem, type SupportedGameSystem } from '../../game-systems';
 
 const app = createTestApp();
 let userId: string;
@@ -32,11 +32,10 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-const systems: Array<[GameSystem, string]> = [
-  [GameSystem.DND_5E, 'characterName'],
-  [GameSystem.PATHFINDER_2E, 'characterName'],
-  [GameSystem.CALL_OF_CTHULHU_7E, 'investigatorName'],
-  [GameSystem.SHADOWRUN_6E, 'characterName'],
+const systems: Array<[SupportedGameSystem, string]> = [
+  [GameSystem.FIFTH_EDITION, 'characterName'],
+  [GameSystem.FANTASY_D20, 'characterName'],
+  [GameSystem.HORROR_D100, 'characterName'],
 ];
 
 describe.each(systems)('a %s sheet', (gameSystem, field) => {

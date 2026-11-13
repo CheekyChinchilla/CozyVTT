@@ -28,28 +28,28 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `fogcap-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let bigMapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 type ErrorEvent = { message: string };
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Fog cap ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Fog cap ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  const campaign = await prisma.campaign.create({ data: { name: `Fog cap ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -64,28 +64,28 @@ beforeAll(async () => {
   bigMapId = map.id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: bigMapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 afterAll(async () => {
   await server?.close();
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
 describe('fog:request_state', () => {
-  it('answers the DM with an error saying why, and no grid', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const noGrid = expectNoEvent(dm, 'fog:updated', 1000);
-    const error = waitForEvent<ErrorEvent>(dm, 'error');
+  it('answers the GM with an error saying why, and no grid', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const noGrid = expectNoEvent(gm, 'fog:updated', 1000);
+    const error = waitForEvent<ErrorEvent>(gm, 'error');
 
-    dm.emit('fog:request_state', { mapId: bigMapId });
+    gm.emit('fog:request_state', { mapId: bigMapId });
 
     expect((await error).message).toMatch(/too big for fog of war/);
     await noGrid;
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('answers a player the same way', async () => {
@@ -103,14 +103,14 @@ describe('fog:request_state', () => {
 
 describe('fog:operation', () => {
   it('refuses with a reason and stores nothing', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const error = waitForEvent<ErrorEvent>(dm, 'error');
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const error = waitForEvent<ErrorEvent>(gm, 'error');
 
-    dm.emit('fog:operation', { mapId: bigMapId, operation: { op: 'reveal_all' } });
+    gm.emit('fog:operation', { mapId: bigMapId, operation: { op: 'reveal_all' } });
 
     expect((await error).message).toMatch(/too big for fog of war/);
     expect((await prisma.map.findUniqueOrThrow({ where: { id: bigMapId } })).fogData).toBeNull();
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 
@@ -138,11 +138,11 @@ describe('explored areas', () => {
 });
 
 it('keeps answering everyone afterwards', async () => {
-  const dm = await server.connectAndAuth(dmCookie, campaignId);
-  const walls = waitForEvent<{ mapId: string }>(dm, 'walls:replaced');
+  const gm = await server.connectAndAuth(gmCookie, campaignId);
+  const walls = waitForEvent<{ mapId: string }>(gm, 'walls:replaced');
 
-  dm.emit('walls:request', { mapId: bigMapId });
+  gm.emit('walls:request', { mapId: bigMapId });
 
   expect((await walls).mapId).toBe(bigMapId);
-  dm.disconnect();
+  gm.disconnect();
 });

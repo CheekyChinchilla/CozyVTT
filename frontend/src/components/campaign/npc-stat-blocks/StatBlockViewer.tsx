@@ -1,3 +1,6 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
 /**
  * StatBlockViewer
  * Renders an NPC stat block in a cozy, parchment-styled panel.
@@ -7,12 +10,12 @@
 
 import type { NpcStatBlock } from '@/types';
 import { GameSystem } from '@/types';
-import Dnd5eStatBlock from './Dnd5eStatBlock';
+import FifthEditionStatBlock from './FifthEditionStatBlock';
 import GenericStatBlock from './GenericStatBlock';
 import { formatSaveList, formatSkillList } from './statBlockProficiency';
-import { PF2E_ATTRIBUTE_LABELS, PF2E_SAVES, formatPf2eSaves, readAttributeModifiers } from './pf2eStatBlock';
-import { ABILITY_KEYS, formatModifier } from '@/utils/rules/dnd5e';
-import { creatureModel, scoreLabel } from './creatureModel';
+import { FANTASY_D20_ATTRIBUTE_LABELS, FANTASY_D20_SAVES, formatFantasyD20Saves, readAttributeModifiers } from './fantasyD20StatBlock';
+import { ABILITY_KEYS, formatModifier } from '@/utils/rules/fifthEdition';
+import { scoreLabel } from './creatureModel';
 
 interface StatBlockViewerProps {
   statBlock: NpcStatBlock;
@@ -22,22 +25,22 @@ interface StatBlockViewerProps {
 
 export default function StatBlockViewer({ statBlock, tokenName, gameSystem }: StatBlockViewerProps) {
   switch (gameSystem) {
-    case GameSystem.DND_5E:
-      return <Dnd5eStatBlock statBlock={statBlock} tokenName={tokenName} />;
-    case GameSystem.PATHFINDER_2E:
-      return <Pf2eStatBlock statBlock={statBlock} tokenName={tokenName} />;
-    case GameSystem.CALL_OF_CTHULHU_7E:
-      return <CoCStatBlock statBlock={statBlock} tokenName={tokenName} />;
+    case GameSystem.FIFTH_EDITION:
+      return <FifthEditionStatBlock statBlock={statBlock} tokenName={tokenName} />;
+    case GameSystem.FANTASY_D20:
+      return <FantasyD20StatBlock statBlock={statBlock} tokenName={tokenName} />;
+    case GameSystem.HORROR_D100:
+      return <HorrorD100StatBlock statBlock={statBlock} tokenName={tokenName} />;
     default:
-      return <GenericStatBlock statBlock={statBlock} tokenName={tokenName} showRating={creatureModel(gameSystem) !== 'printed'} />;
+      return <GenericStatBlock statBlock={statBlock} tokenName={tokenName} />;
   }
 }
 
-// ─── Pathfinder 2e ───────────────────────────────────────────────
-// As a Pathfinder stat block prints it: the creature's level, its attribute
-// modifiers (there is no score behind them) and Fort, Ref and Will. A D&D
+// ─── Fantasy d20 ───────────────────────────────────────────────
+// As a Fantasy d20 stat block prints it: the creature's level, its attribute
+// modifiers (there is no score behind them) and Fort, Ref and Will. A 5E
 // creature borrowed into the campaign keeps its challenge rating, called CR.
-function Pf2eStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; tokenName: string }) {
+function FantasyD20StatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; tokenName: string }) {
   const modifiers = readAttributeModifiers(statBlock);
 
   return (
@@ -72,14 +75,14 @@ function Pf2eStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; toke
       <div className="grid grid-cols-6 gap-1 text-center bg-danger/10 rounded-sm p-1.5">
         {ABILITY_KEYS.map((ab) => (
           <div key={ab}>
-            <div className="text-[9px] font-bold text-danger-ink uppercase">{PF2E_ATTRIBUTE_LABELS[ab]}</div>
+            <div className="text-[9px] font-bold text-danger-ink uppercase">{FANTASY_D20_ATTRIBUTE_LABELS[ab]}</div>
             <div className="text-ink">{formatModifier(modifiers[ab])}</div>
           </div>
         ))}
       </div>
 
       {/* Defenses & senses */}
-      <StatBlockDetailLines statBlock={statBlock} accentColor="danger" pf2e />
+      <StatBlockDetailLines statBlock={statBlock} accentColor="danger" fantasyD20 />
 
       {/* Abilities and actions */}
       <StatBlockActionSections statBlock={statBlock} accentColor="danger" />
@@ -87,8 +90,8 @@ function Pf2eStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; toke
   );
 }
 
-// ─── Call of Cthulhu 7e ──────────────────────────────────────────
-function CoCStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; tokenName: string }) {
+// ─── Horror d100 ──────────────────────────────────────────
+function HorrorD100StatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; tokenName: string }) {
   return (
     <div className="space-y-2 text-xs">
       {/* Header */}
@@ -103,7 +106,7 @@ function CoCStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; token
       <div className="grid grid-cols-6 gap-1 text-center bg-success/10 rounded-sm p-1.5">
         {ABILITY_KEYS.map((ab) => (
           <div key={ab}>
-            <div className="text-[9px] font-bold text-success-ink uppercase">{scoreLabel(GameSystem.CALL_OF_CTHULHU_7E, ab)}</div>
+            <div className="text-[9px] font-bold text-success-ink uppercase">{scoreLabel(GameSystem.HORROR_D100, ab)}</div>
             <div className="text-ink">{statBlock.abilities[ab]}</div>
           </div>
         ))}
@@ -142,17 +145,17 @@ const ACCENTS = {
 
 type AccentName = keyof typeof ACCENTS;
 
-function StatBlockDetailLines({ statBlock, accentColor, pf2e = false }: { statBlock: NpcStatBlock; accentColor: AccentName; pf2e?: boolean }) {
+function StatBlockDetailLines({ statBlock, accentColor, fantasyD20 = false }: { statBlock: NpcStatBlock; accentColor: AccentName; fantasyD20?: boolean }) {
   const accent = ACCENTS[accentColor].text;
   const lines: Array<{ label: string; value: string }> = [];
 
   if (statBlock.savingThrows && Object.keys(statBlock.savingThrows).length > 0) {
-    // Pathfinder's three saves as it prints them; anything else (a D&D
+    // Fantasy d20's three saves as it prints them; anything else (a 5E
     // creature's six) as written.
     const saves = statBlock.savingThrows;
-    const pf2eKeys: string[] = PF2E_SAVES.map((save) => save.key);
-    const others = Object.fromEntries(Object.entries(saves).filter(([key]) => !pf2e || !pf2eKeys.includes(key)));
-    const value = [pf2e ? formatPf2eSaves(saves) : '', formatSaveList(others)].filter(Boolean).join(', ');
+    const fantasyD20Keys: string[] = FANTASY_D20_SAVES.map((save) => save.key);
+    const others = Object.fromEntries(Object.entries(saves).filter(([key]) => !fantasyD20 || !fantasyD20Keys.includes(key)));
+    const value = [fantasyD20 ? formatFantasyD20Saves(saves) : '', formatSaveList(others)].filter(Boolean).join(', ');
     if (value) lines.push({ label: 'Saving Throws', value });
   }
   if (statBlock.skills && Object.keys(statBlock.skills).length > 0) {

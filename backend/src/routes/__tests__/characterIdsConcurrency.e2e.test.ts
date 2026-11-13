@@ -37,14 +37,14 @@ let campaignB: string;
 let player: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
-  const [dm, p] = await Promise.all([createTestUser({ displayName: 'Lists DM' }), createTestUser({ displayName: 'Lists Player' })]);
+  const [gm, p] = await Promise.all([createTestUser({ displayName: 'Lists GM' }), createTestUser({ displayName: 'Lists Player' })]);
   playerId = p.id;
-  campaignA = (await createTestCampaign(dm.id, { name: 'Lists A', gameSystem: null })).id;
-  campaignB = (await createTestCampaign(dm.id, { name: 'Lists B', gameSystem: null })).id;
+  campaignA = (await createTestCampaign(gm.id, { name: 'Lists A', gameSystem: null })).id;
+  campaignB = (await createTestCampaign(gm.id, { name: 'Lists B', gameSystem: null })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dm.id, campaignId: campaignA, role: 'DM', characterIds: [] },
-      { userId: dm.id, campaignId: campaignB, role: 'DM', characterIds: [] },
+      { userId: gm.id, campaignId: campaignA, role: 'GM', characterIds: [] },
+      { userId: gm.id, campaignId: campaignB, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId: campaignA, role: 'PLAYER', characterIds: [] },
       { userId: playerId, campaignId: campaignB, role: 'PLAYER', characterIds: [] },
     ],
@@ -98,21 +98,21 @@ function staleMembershipRead() {
 it('keeps a listed character when another is created into the campaign', async () => {
   const kept = await character('Aldra', campaignA);
   staleMembershipRead();
-  const res = await player.post('/api/characters').send({ name: 'Brann', campaignId: campaignA, data: {} });
+  const res = await player.post('/api/characters').send({ name: 'Corvel', campaignId: campaignA, data: {} });
   expect(res.status).toBe(201);
   expect((await listOf(campaignA)).sort()).toEqual([kept, res.body.character.id].sort());
 });
 
 it('keeps a listed character when another is assigned to the campaign', async () => {
   const kept = await character('Aldra', campaignA);
-  const moving = await character('Brann', null);
+  const moving = await character('Corvel', null);
   staleMembershipRead();
   expect((await player.post(`/api/characters/${moving}/assign`).send({ campaignId: campaignA })).status).toBe(200);
   expect((await listOf(campaignA)).sort()).toEqual([kept, moving].sort());
 });
 
 it('lists a character in one campaign only when it moved while being assigned', async () => {
-  const moving = await character('Brann', campaignA);
+  const moving = await character('Corvel', campaignA);
   // The route reads the character as it was before another assign took it
   // into campaign A.
   const real = appPrisma.character.findUnique.bind(appPrisma.character);
@@ -135,7 +135,7 @@ it('takes a deleted character out of its campaign\'s list, and tells the campaig
 });
 
 it('tells the campaign about a character created straight into it', async () => {
-  const res = await player.post('/api/characters').send({ name: 'Brann', campaignId: campaignA, data: {} });
+  const res = await player.post('/api/characters').send({ name: 'Corvel', campaignId: campaignA, data: {} });
   expect(res.status).toBe(201);
   expect(broadcastToCampaign).toHaveBeenCalledWith(campaignA, 'roster.updated', expect.objectContaining({
     action: 'character.assigned', characterId: res.body.character.id, userId: playerId, campaignId: campaignA,

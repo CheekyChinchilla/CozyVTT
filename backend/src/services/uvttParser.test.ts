@@ -3,7 +3,7 @@
  *
  * A UVTT holds one map image and the geometry that goes with it. Some exporters
  * crop the image to part of the map and then write out the walls for all of it,
- * which imports as a map with bare areas the DM cannot explain. The parser
+ * which imports as a map with bare areas the GM cannot explain. The parser
  * counts that geometry so the import can ask before going ahead.
  *
  * A wall counts as outside only when **both** ends are. Walls that sit on the
@@ -196,7 +196,7 @@ describe('parseUVTT', () => {
 
   describe('object walls, which Dungeondraft keeps separately', () => {
     // Furniture, pillars and crates live in objects_line_of_sight. They block
-    // sight, but whether a table should is the DM's call, so they come in only
+    // sight, but whether a table should is the GM's call, so they come in only
     // when asked for.
     const walls = [square(2, 2)];
     const furniture = [square(4, 4)];

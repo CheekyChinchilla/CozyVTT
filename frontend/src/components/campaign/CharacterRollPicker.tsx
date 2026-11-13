@@ -3,9 +3,9 @@
  * A small floating modal that lets a player pick a roll from their character sheet
  * via the right-click context menu on the Campaign Roster or a token on the map.
  *
- * Shows: Abilities | Skills | Saving Throws | Combat
+ * Shows: Abilities (Characteristics for Horror d100) | Skills | Saving Throws | Combat
  * For d20 systems also shows a roll-mode selector: Normal / Advantage / Disadvantage
- * (labelled Fortune / Misfortune for Pathfinder 2e).
+ * (labelled Fortune / Misfortune for Fantasy d20).
  *
  * Drawn on the body (components/ui/FloatingLayer.tsx), where the panel
  * dividers cannot take the presses on it. On the compact layout it is a
@@ -303,7 +303,7 @@ export default function CharacterRollPicker({
               className={rollRow(compact)}
             >
               <Dices className="w-3 h-3 text-brand-ink shrink-0" />
-              {/* The wording follows the system. Call of Cthulhu ranks
+              {/* The wording follows the system. Horror d100 ranks
                   combatants by Dexterity with no die involved, so offering to
                   "roll" would promise something that does not happen. */}
               <span className="flex-1">
@@ -326,7 +326,8 @@ export default function CharacterRollPicker({
 
         {!loading && !error && rolls && (
           <div className="divide-y divide-moss-green/10">
-            <Section title="Abilities" rolls={rolls.abilities} mode={mode} onRoll={handleRollOption} compact={compact} />
+            {/* Headed as the sheet names them: a Horror d100 sheet has characteristics. */}
+            <Section title={gameSystem === 'HORROR_D100' ? 'Characteristics' : 'Abilities'} rolls={rolls.abilities} mode={mode} onRoll={handleRollOption} compact={compact} />
             <Section title="Skills" rolls={rolls.skills} mode={mode} onRoll={handleRollOption} compact={compact} />
             {rolls.savingThrows.length > 0 && (
               <Section title="Saving Throws" rolls={rolls.savingThrows} mode={mode} onRoll={handleRollOption} compact={compact} />

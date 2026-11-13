@@ -1,0 +1,23 @@
+{
+  "cozyVttVersion": "1.0",
+  "exportedAt": "2026-11-12T00:00:00.000Z",
+  "character": {
+    "name": "Minimal Scholar",
+    "gameSystem": "HORROR_D100",
+    "data": {
+      "characterName": "Dr. Sarah Chen",
+      "profession": "Scholar",
+      "era": "1920s",
+      "characteristics": {
+        "STR": 10,
+        "CON": 12,
+        "SIZ": 11,
+        "DEX": 10,
+        "CHA": 13,
+        "INT": 16,
+        "POW": 14,
+        "EDU": 17
+      }
+    }
+  }
+}

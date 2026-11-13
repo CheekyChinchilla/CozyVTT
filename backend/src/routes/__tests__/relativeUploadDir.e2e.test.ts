@@ -22,8 +22,8 @@ process.chdir(SCRATCH);
 process.env.UPLOAD_DIR = 'uploads';
 
 import request from 'supertest';
-import unzipper from 'unzipper';
 import { createTestApp } from '../../__tests__/helpers/test-app';
+import { readZip } from '../../__tests__/helpers/zipFixtures';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
 const app = createTestApp();
@@ -31,26 +31,26 @@ const app = createTestApp();
 /** A real 1x1 PNG: the upload route decodes what it is given. */
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let assetId: string;
 let stored: { filePath: string; thumbnailPath: string | null };
 
 beforeAll(async () => {
   expect(process.cwd()).toBe(SCRATCH);
-  const user = await createTestUser({ displayName: 'Relative Uploads DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Relative uploads' })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD }).expect(200);
+  const user = await createTestUser({ displayName: 'Relative Uploads GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Relative uploads' })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD }).expect(200);
 });
 
 afterAll(async () => {
   try {
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId]);
+    await cleanupUsers([gmId]);
     await prisma.$disconnect();
   } finally {
     process.chdir(STARTED_IN);
@@ -59,7 +59,7 @@ afterAll(async () => {
 });
 
 it('stores an upload under uploads in the working directory, by a relative path', async () => {
-  const res = await dm
+  const res = await gm
     .post('/api/assets/upload')
     .attach('file', PNG, 'room.png')
     .field('type', 'MAP')
@@ -79,7 +79,7 @@ it('stores an upload under uploads in the working directory, by a relative path'
 });
 
 it('serves the picture from its relative path', async () => {
-  const res = await dm.get(`/api/assets/maps/${assetId}`).buffer(true);
+  const res = await gm.get(`/api/assets/maps/${assetId}`).buffer(true);
   expect(res.status).toBe(200);
   expect(Buffer.from(res.body as Buffer)).toEqual(PNG);
 });
@@ -89,7 +89,7 @@ it('puts the picture in a campaign export', async () => {
   await prisma.map.create({
     data: { campaignId, name: 'Room', imageUrl: address, baseLayerUrl: address, width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
   });
-  const res = await dm
+  const res = await gm
     .get(`/api/campaigns/${campaignId}/export`)
     .buffer(true)
     .parse((r, done) => {
@@ -98,15 +98,14 @@ it('puts the picture in a campaign export', async () => {
       r.on('end', () => done(null, Buffer.concat(chunks)));
     });
   expect(res.status).toBe(200);
-  const archive = await unzipper.Open.buffer(res.body as Buffer);
-  const entry = archive.files.find((f) => f.path === `assets/${assetId}.png`);
+  const entry = (await readZip(res.body as Buffer)).find((f) => f.path === `assets/${assetId}.png`);
   expect(entry).toBeDefined();
-  expect(await entry?.buffer()).toEqual(PNG);
+  expect(entry?.data).toEqual(PNG);
 });
 
 it('removes the picture from the disk when the asset is deleted', async () => {
   await prisma.map.deleteMany({ where: { campaignId } });
-  const res = await dm.delete(`/api/assets/${assetId}`);
+  const res = await gm.delete(`/api/assets/${assetId}`);
   expect(res.status).toBe(200);
   expect(await prisma.asset.findUnique({ where: { id: assetId } })).toBeNull();
   expect(fs.existsSync(path.join(SCRATCH, stored.filePath))).toBe(false);

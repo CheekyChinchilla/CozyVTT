@@ -22,7 +22,7 @@ import {
 const app = createTestApp();
 
 describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let campaignId: string;
   let otherCampaignId: string;
@@ -30,14 +30,14 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
   let otherPlayerId: string;
   let characterId: string;
   let strayCharacterId: string;
-  let dm: ReturnType<typeof request.agent>;
+  let gm: ReturnType<typeof request.agent>;
 
   beforeAll(async () => {
-    const dmUser = await createTestUser({ displayName: 'Controller DM' });
-    dmId = dmUser.id;
-    const campaign = await createTestCampaign(dmId, { name: 'Controller' });
+    const gmUser = await createTestUser({ displayName: 'Controller GM' });
+    gmId = gmUser.id;
+    const campaign = await createTestCampaign(gmId, { name: 'Controller' });
     campaignId = campaign.id;
-    await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
 
     const playerUser = await createTestUser({ displayName: 'Controller Player' });
     playerId = playerUser.id;
@@ -48,7 +48,7 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
     otherPlayerId = otherPlayerUser.id;
     await prisma.campaignMembership.create({ data: { userId: otherPlayerId, campaignId, role: 'PLAYER', characterIds: [] } });
 
-    const other = await createTestCampaign(dmId, { name: 'Elsewhere' });
+    const other = await createTestCampaign(gmId, { name: 'Elsewhere' });
     otherCampaignId = other.id;
     strayCharacterId = (await prisma.character.create({ data: { userId: playerId, campaignId: otherCampaignId, name: 'Stray', data: {} } })).id;
 
@@ -66,18 +66,18 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
       },
     })).id;
 
-    dm = request.agent(app);
-    const res = await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD });
+    gm = request.agent(app);
+    const res = await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD });
     expect(res.status).toBe(200);
   });
 
   afterAll(async () => {
     await cleanupCampaigns([campaignId, otherCampaignId]);
-    await cleanupUsers([dmId, playerId, otherPlayerId]);
+    await cleanupUsers([gmId, playerId, otherPlayerId]);
   });
 
   const create = (body: Record<string, unknown>) =>
-    dm.post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens`).send({ name: 'Aldra', position: { x: 1, y: 1 }, type: 'player', ...body });
+    gm.post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens`).send({ name: 'Aldra', position: { x: 1, y: 1 }, type: 'player', ...body });
 
   it("is controlled by the character's owner when no controller is given", async () => {
     const res = await create({ characterId });
@@ -85,7 +85,7 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
     expect(res.body.token.controlledBy).toBe(playerId);
   });
 
-  // An explicit null is the DM saying "nobody": a character's token the DM
+  // An explicit null is the GM saying "nobody": a character's token the GM
   // took control of used to come back to its owner whenever it was moved or
   // duplicated, because the copy carried `controlledBy: null` and null read
   // as "not given".
@@ -101,19 +101,19 @@ describe('POST /api/campaigns/:campaignId/maps/:id/tokens with a characterId', (
     expect(res.body.token.controlledBy).toBe(otherPlayerId);
   });
 
-  // The DM controls every token without being named on one, and a spectator
+  // The GM controls every token without being named on one, and a spectator
   // controls nothing, so `controlledBy` may only ever name a player.
   it('refuses a controller who is not a player of the campaign', async () => {
-    const res = await create({ characterId, controlledBy: dmId });
+    const res = await create({ characterId, controlledBy: gmId });
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/controlledBy/);
   });
 
   // The client names no controller when it places a character, so these two
-  // are what a DM's own character and a spectator's come out as: nobody's,
-  // which the DM moves. Naming their owner would be refused above.
-  it("is placed with no controller when the character's owner is the DM", async () => {
-    const own = await prisma.character.create({ data: { userId: dmId, campaignId, name: 'Ser DM', data: {} } });
+  // are what a GM's own character and a spectator's come out as: nobody's,
+  // which the GM moves. Naming their owner would be refused above.
+  it("is placed with no controller when the character's owner is the GM", async () => {
+    const own = await prisma.character.create({ data: { userId: gmId, campaignId, name: 'Ser GM', data: {} } });
     const res = await create({ characterId: own.id });
     expect(res.status).toBe(201);
     expect(res.body.token.controlledBy).toBeNull();

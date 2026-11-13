@@ -6,7 +6,7 @@
  * on a map using it. "The table" is any table the player sits at: a picture
  * on the current map of another of their campaigns shows to them as it does
  * to that campaign's other players, provided its uploader sits at that table
- * too. A picture the DM embedded in a document shared with the campaign
+ * too. A picture the GM embedded in a document shared with the campaign
  * shows to its members, as the handout it is in does. Nothing else a
  * player can point at, such as a character's picture, opens it.
  *
@@ -47,12 +47,12 @@ const PNG = Buffer.from(
 
 type Agent = ReturnType<typeof request.agent>;
 
-/** The campaigns: A and B run by the DM, D run by the player, E by another DM. */
+/** The campaigns: A and B run by the GM, D run by the player, E by another GM. */
 const camp = { a: '', b: '', d: '', e: '' };
-const user = { dm: '', player: '', spectator: '', otherDm: '', deputy: '' };
+const user = { gm: '', player: '', spectator: '', otherGm: '', deputy: '' };
 let player: Agent;
 let spectator: Agent;
-let dm: Agent;
+let gm: Agent;
 
 /** The fixture's pictures by what they are, and where each is filed. */
 const ids = {
@@ -87,11 +87,11 @@ async function picture(campaignId: string, uploadedById: string, label: string):
 }
 
 /**
- * A Markdown handout of the DM's: their own (`USER`), shared with
+ * A Markdown handout of the GM's: their own (`USER`), shared with
  * `sharedWith` when given, or written in a campaign (`CAMPAIGN`), which its
  * members read with no share.
  */
-async function handout(text: string, where: { sharedWith?: string; writtenIn?: string }, uploadedById = user.dm): Promise<void> {
+async function handout(text: string, where: { sharedWith?: string; writtenIn?: string }, uploadedById = user.gm): Promise<void> {
   const filename = `handout-${Date.now()}-${docs.length}.md`;
   const filePath = path.join(UPLOAD_DIR, filename);
   fs.writeFileSync(filePath, text);
@@ -104,7 +104,7 @@ async function handout(text: string, where: { sharedWith?: string; writtenIn?: s
   });
   const sharedWith = where.sharedWith;
   docs.push(doc.id);
-  if (sharedWith) await prisma.campaignDocument.create({ data: { campaignId: sharedWith, assetId: doc.id, linkedById: user.dm } });
+  if (sharedWith) await prisma.campaignDocument.create({ data: { campaignId: sharedWith, assetId: doc.id, linkedById: user.gm } });
 }
 
 const mapPath = (id: string) => `/api/assets/maps/${id}`;
@@ -121,46 +121,46 @@ async function makeMap(campaignId: string, name: string, image: string, spirit?:
 
 beforeAll(async () => {
   const stamp = Date.now();
-  const made = await Promise.all((['dm', 'player', 'spectator', 'otherDm', 'deputy'] as const).map((who) =>
+  const made = await Promise.all((['gm', 'player', 'spectator', 'otherGm', 'deputy'] as const).map((who) =>
     createTestUser({ email: `tables-${who}-${stamp}@test.cozyvtt.local`, displayName: `Tables ${who}` })));
-  [user.dm, user.player, user.spectator, user.otherDm, user.deputy] = made.map((u) => u.id);
-  camp.a = (await createTestCampaign(user.dm, { name: `Tables A ${stamp}` })).id;
-  camp.b = (await createTestCampaign(user.dm, { name: `Tables B ${stamp}` })).id;
+  [user.gm, user.player, user.spectator, user.otherGm, user.deputy] = made.map((u) => u.id);
+  camp.a = (await createTestCampaign(user.gm, { name: `Tables A ${stamp}` })).id;
+  camp.b = (await createTestCampaign(user.gm, { name: `Tables B ${stamp}` })).id;
   camp.d = (await createTestCampaign(user.player, { name: `Tables D ${stamp}` })).id;
-  camp.e = (await createTestCampaign(user.otherDm, { name: `Tables E ${stamp}` })).id;
+  camp.e = (await createTestCampaign(user.otherGm, { name: `Tables E ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: user.dm, campaignId: camp.a, role: 'DM', characterIds: [] },
+      { userId: user.gm, campaignId: camp.a, role: 'GM', characterIds: [] },
       { userId: user.player, campaignId: camp.a, role: 'PLAYER', characterIds: [] },
       { userId: user.spectator, campaignId: camp.a, role: 'SPECTATOR', characterIds: [] },
       { userId: user.deputy, campaignId: camp.a, role: 'PLAYER', characterIds: [] },
-      { userId: user.dm, campaignId: camp.b, role: 'DM', characterIds: [] },
+      { userId: user.gm, campaignId: camp.b, role: 'GM', characterIds: [] },
       { userId: user.player, campaignId: camp.b, role: 'PLAYER', characterIds: [] },
-      { userId: user.player, campaignId: camp.d, role: 'DM', characterIds: [] },
-      // A's DM sits at the player's table D too, so their pictures could count there.
-      { userId: user.dm, campaignId: camp.d, role: 'PLAYER', characterIds: [] },
-      { userId: user.otherDm, campaignId: camp.e, role: 'DM', characterIds: [] },
+      { userId: user.player, campaignId: camp.d, role: 'GM', characterIds: [] },
+      // A's GM sits at the player's table D too, so their pictures could count there.
+      { userId: user.gm, campaignId: camp.d, role: 'PLAYER', characterIds: [] },
+      { userId: user.otherGm, campaignId: camp.e, role: 'GM', characterIds: [] },
       { userId: user.player, campaignId: camp.e, role: 'PLAYER', characterIds: [] },
     ],
   });
 
-  ids.aPic = await picture(camp.a, user.dm, 'a-current');
-  ids.aSpirit = await picture(camp.a, user.dm, 'a-spirit');
-  ids.aPrepPic = await picture(camp.a, user.dm, 'a-prepared');
-  // Filed in A, and the picture of B's current map: the same DM runs both.
-  ids.tavern = await picture(camp.a, user.dm, 'tavern');
-  // Filed in A, and the picture of E's current map, whose table the DM is not at.
-  ids.farTavern = await picture(camp.a, user.dm, 'far-tavern');
-  ids.handout = await picture(camp.a, user.dm, 'letter-scan');
-  ids.ownHandout = await picture(camp.a, user.dm, 'wanted-poster');
-  ids.secretHandout = await picture(camp.a, user.dm, 'unsent-letter');
-  ids.handoutElsewhere = await picture(camp.a, user.dm, 'other-letter');
-  ids.playersHandout = await picture(camp.a, user.dm, 'copied-map');
-  ids.deputysHandout = await picture(camp.a, user.dm, 'deputy-letter');
-  ids.bPic = await picture(camp.b, user.dm, 'b-prepared');
+  ids.aPic = await picture(camp.a, user.gm, 'a-current');
+  ids.aSpirit = await picture(camp.a, user.gm, 'a-spirit');
+  ids.aPrepPic = await picture(camp.a, user.gm, 'a-prepared');
+  // Filed in A, and the picture of B's current map: the same GM runs both.
+  ids.tavern = await picture(camp.a, user.gm, 'tavern');
+  // Filed in A, and the picture of E's current map, whose table the GM is not at.
+  ids.farTavern = await picture(camp.a, user.gm, 'far-tavern');
+  ids.handout = await picture(camp.a, user.gm, 'letter-scan');
+  ids.ownHandout = await picture(camp.a, user.gm, 'wanted-poster');
+  ids.secretHandout = await picture(camp.a, user.gm, 'unsent-letter');
+  ids.handoutElsewhere = await picture(camp.a, user.gm, 'other-letter');
+  ids.playersHandout = await picture(camp.a, user.gm, 'copied-map');
+  ids.deputysHandout = await picture(camp.a, user.gm, 'deputy-letter');
+  ids.bPic = await picture(camp.b, user.gm, 'b-prepared');
   ids.dPic = await picture(camp.d, user.player, 'd-prepared');
   // Filed in A, and put by the player on a map of their own table D, which D is not on.
-  ids.borrowed = await picture(camp.a, user.dm, 'borrowed');
+  ids.borrowed = await picture(camp.a, user.gm, 'borrowed');
 
   maps.aCurrent = await makeMap(camp.a, 'A now', ids.aPic, ids.aSpirit);
   maps.aPrepared = await makeMap(camp.a, 'A later', ids.aPrepPic);
@@ -177,14 +177,14 @@ beforeAll(async () => {
   await handout(`Wanted: ![poster](/api/assets/maps/${ids.ownHandout}).`, { writtenIn: camp.a });
   await handout(`Not yet: ![later](/api/assets/maps/${ids.secretHandout})`, {});
   await handout(`![elsewhere](/api/assets/maps/${ids.handoutElsewhere})`, { sharedWith: camp.b });
-  // A campaign document of a member who is not the DM: one a former DM
-  // wrote, or a player got in by any way. Theirs, not the DM's, to show.
+  // A campaign document of a member who is not the GM: one a former GM
+  // wrote, or a player got in by any way. Theirs, not the GM's, to show.
   await handout(`I kept this: ![copy](/api/assets/maps/${ids.playersHandout})`, { writtenIn: camp.a }, user.player);
-  // Written by the member the DM seat will be handed to.
+  // Written by the member the GM seat will be handed to.
   await handout(`![mine](/api/assets/maps/${ids.deputysHandout})`, { writtenIn: camp.a }, user.deputy);
 
   const emails = made.map((u) => u.email);
-  dm = await login(emails[0]);
+  gm = await login(emails[0]);
   player = await login(emails[1]);
   spectator = await login(emails[2]);
 });
@@ -278,18 +278,18 @@ describe('a picture in a handout', () => {
     }
   });
 
-  it("stays hidden in a campaign document of anyone but the campaign's DM", async () => {
+  it("stays hidden in a campaign document of anyone but the campaign's GM", async () => {
     for (const agent of [player, spectator]) {
       expect((await agent.get(`/api/assets/maps/${ids.playersHandout}`)).status).toBe(404);
       expect((await agent.get(`/api/assets/maps/${ids.deputysHandout}`)).status).toBe(404);
     }
   });
 
-  it('follows the DM seat: the new DM\'s handouts show, the former DM\'s no longer do', async () => {
-    const seat = (who: string, role: 'DM' | 'PLAYER') =>
+  it('follows the GM seat: the new GM\'s handouts show, the former GM\'s no longer do', async () => {
+    const seat = (who: string, role: 'GM' | 'PLAYER') =>
       prisma.campaignMembership.update({ where: { userId_campaignId: { userId: who, campaignId: camp.a } }, data: { role } });
-    await seat(user.dm, 'PLAYER');
-    await seat(user.deputy, 'DM');
+    await seat(user.gm, 'PLAYER');
+    await seat(user.deputy, 'GM');
     try {
       expect((await spectator.get(`/api/assets/maps/${ids.deputysHandout}`)).status).toBe(200);
       expect((await spectator.get(`/api/assets/maps/${ids.handout}`)).status).toBe(404);
@@ -297,14 +297,14 @@ describe('a picture in a handout', () => {
       expect(await listings(spectator, [camp.a])).toEqual(await readable(spectator));
     } finally {
       await seat(user.deputy, 'PLAYER');
-      await seat(user.dm, 'DM');
+      await seat(user.gm, 'GM');
     }
   });
 
-  it('follows the handout when the DM saves its text', async () => {
+  it('follows the handout when the GM saves its text', async () => {
     const { assetId } = await prisma.campaignDocument.findFirstOrThrow({ where: { campaignId: camp.a }, select: { assetId: true } });
     const save = async (content: string) =>
-      expect((await dm.put(`/api/assets/documents/${assetId}/content`).send({ content })).status).toBe(200);
+      expect((await gm.put(`/api/assets/documents/${assetId}/content`).send({ content })).status).toBe(200);
     try {
       await save('# From the Baron\n\nThe letter is gone.\n');
       expect((await player.get(`/api/assets/maps/${ids.handout}`)).status).toBe(404);

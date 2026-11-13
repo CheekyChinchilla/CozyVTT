@@ -8,11 +8,11 @@ interface DiceResultProps {
   roll: DiceRolledEvent;
   isCurrentUser: boolean;
   /**
-   * Whether the person who rolled is a DM of this campaign. Read from the
+   * Whether the person who rolled is a GM of this campaign. Read from the
    * campaign's own membership list rather than sent with the roll, so it
    * cannot be claimed by whoever is rolling.
    */
-  rollerIsDM?: boolean;
+  rollerIsGM?: boolean;
   /** Two lines, as the compact layout's log draws a roll; the full card otherwise. */
   dense?: boolean;
 }
@@ -20,14 +20,14 @@ interface DiceResultProps {
 /**
  * Display a single dice roll result with breakdown and animations
  */
-export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = false }: DiceResultProps) {
+export default function DiceResult({ roll, isCurrentUser, rollerIsGM, dense = false }: DiceResultProps) {
   const { userName, characterName, expression, result, breakdown, purpose, timestamp, secret } = roll;
 
   /**
    * A roll is about a character or a creature; the person who pressed the
-   * button is context for it. Heading every entry with the roller meant a DM
+   * button is context for it. Heading every entry with the roller meant a GM
    * covering for an absent player, or working through a room of NPCs, produced
-   * a list that read as though the DM had rolled for themselves throughout.
+   * a list that read as though the GM had rolled for themselves throughout.
    *
    * Whoever rolled is still named — the point is to show both, in the order
    * that answers "who is this roll for?" first.
@@ -40,8 +40,8 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
     // the tag names the action instead: who pressed the button, not who it is.
     ? isCurrentUser
       ? '(you rolled)'
-      : rollerIsDM
-        ? '(DM rolled)'
+      : rollerIsGM
+        ? '(GM rolled)'
         : `(rolled by ${roller})`
     // A plain dice-panel roll still heads with the person, where "(You)" is
     // about identity and reads correctly.
@@ -61,6 +61,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
    * which is the part anyone actually reads.
    */
   const detail = Array.isArray(breakdown?.rolls) ? breakdown.rolls : [];
+  const operators = operatorsOf(breakdown?.formula, detail);
 
   // A critical is a single d20 kept, however it was written: `1d20`, `d20`,
   // advantage (`2d20kh1`) or disadvantage (`2d20kl1`). Looking only for a
@@ -94,13 +95,14 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
       : 'bg-surface/30';
   };
 
-  // A secret roll's mark. The wording differs because the two cases mean
-  // different things: yours is hidden from the other players, and the one
-  // you are reading as DM is somebody else's.
+  // A secret roll's mark. The wording differs because the cases mean
+  // different things: yours is hidden from the other players (from the
+  // players, when you are the GM, who has no GM to see it), and the one you
+  // are reading as GM is somebody else's.
   const secretTitle = isCurrentUser
-    ? 'Hidden from the other players — your DM can still see it'
-    : 'A player rolled this secretly; you see it as DM';
-  const secretWhose = isCurrentUser ? '' : ' (DM view)';
+    ? rollerIsGM ? 'Hidden from the players' : 'Hidden from the other players — your GM can still see it'
+    : 'A player rolled this secretly; you see it as GM';
+  const secretWhose = isCurrentUser ? '' : ' (GM view)';
 
   // Format timestamp
   const formatTimestamp = (ts: string) => {
@@ -196,7 +198,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
             <span className="font-medium text-sm text-ink truncate">
               {subject}
               {/* Every secret roll in the list is labelled, whoever is looking.
-                  It used to be marked only on someone *else's* roll — the DM's
+                  It used to be marked only on someone *else's* roll — the GM's
                   audit view — which left your own secret rolls indistinguishable
                   from open ones now that they appear in the list at all. */}
               {secret && (
@@ -297,9 +299,9 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
                 )}
 
                 {roll.type === 'modifier' && roll.value !== undefined && (
-                  <div className="inline-flex items-center gap-1 bg-warm-amber/10 px-2 py-1 rounded-sm">
+                  <div data-modifier className="inline-flex items-center gap-1 bg-warm-amber/10 px-2 py-1 rounded-sm">
                     <span className="font-mono text-xs opacity-80">
-                      {roll.value >= 0 ? '+' : ''}{roll.value}
+                      {modifierText(roll.value, operators[idx])}
                     </span>
                   </div>
                 )}
@@ -351,6 +353,28 @@ function workingOf(formula: string | undefined, detail: DiceRollDetail[]): React
       {part}
     </Fragment>
   ));
+}
+
+/**
+ * The operator the formula writes before each group of a roll, in the
+ * groups' order ('' for the first, or after a bracket), or an empty list
+ * where the formula does not name the groups one for one. The server stores
+ * a modifier as the number written, and what was done with it only here:
+ * `1d20-1` is the groups 1d20 and 1, with the formula "13 - 1".
+ */
+function operatorsOf(formula: string | undefined, detail: DiceRollDetail[]): string[] {
+  const tokens = typeof formula === 'string' ? formula.split(' ').filter(Boolean) : [];
+  const numbers = tokens.flatMap((token, at) => (FORMULA_NUMBER.test(token) ? [at] : []));
+  if (numbers.length !== detail.length) return [];
+  return numbers.map((at) => (at > 0 && /^[-+*/]$/.test(tokens[at - 1]) ? tokens[at - 1] : ''));
+}
+
+/** A modifier's chip: the number with what the roll did with it, "+2", "-1", "×2" or "÷2". */
+function modifierText(value: number, operator: string | undefined): string {
+  if (operator === '-') return `-${value}`;
+  if (operator === '*') return `×${value}`;
+  if (operator === '/') return `÷${value}`;
+  return `${value >= 0 ? '+' : ''}${value}`;
 }
 
 /** A group of a roll as text: its dice's faces, or a modifier, signed where no formula gives the sign. */

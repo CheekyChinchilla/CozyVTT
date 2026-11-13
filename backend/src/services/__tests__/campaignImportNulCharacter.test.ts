@@ -34,10 +34,10 @@ async function archive(contents: { campaign?: Record<string, unknown>; maps?: ob
   const files: Record<string, string> = {
     'manifest.json': JSON.stringify({
       formatVersion: 1, exportedAt: '2026-11-01T00:00:00.000Z', exportedFrom: 'CozyVTT test', campaignName: 'Nul',
-      gameSystem: 'DND_5E', mapCount: maps.length, tokenCount: 0, creatureCount: contents.creatures?.length ?? 0,
+      gameSystem: 'FIFTH_EDITION', mapCount: maps.length, tokenCount: 0, creatureCount: contents.creatures?.length ?? 0,
       tokenTemplateCount: contents.templates?.length ?? 0, assetCount: 0, includesAudio: false, totalSizeBytes: 0,
     }),
-    'campaign.json': JSON.stringify({ name: 'Nul', gameSystem: 'DND_5E', ...contents.campaign }),
+    'campaign.json': JSON.stringify({ name: 'Nul', gameSystem: 'FIFTH_EDITION', ...contents.campaign }),
   };
   maps.forEach((m, i) => { files[`maps/map-${i}.json`] = JSON.stringify(m); });
   if (contents.creatures) files['creatures/creatures.json'] = JSON.stringify(contents.creatures);
@@ -86,7 +86,7 @@ describe('an archive whose text holds U+0000', () => {
   it("imports a creature's stat block without it, in a value or in a key", async () => {
     const result = await importCampaign(
       await archive({
-        creatures: [{ name: 'Bandit', gameSystem: 'DND_5E', statBlock: statBlock({ speed: '30\u0000 ft.', 'lair\u0000Notes': 'Cave' }) }],
+        creatures: [{ name: 'Bandit', gameSystem: 'FIFTH_EDITION', statBlock: statBlock({ speed: '30\u0000 ft.', 'lair\u0000Notes': 'Cave' }) }],
       }),
       userId
     );
@@ -98,7 +98,7 @@ describe('an archive whose text holds U+0000', () => {
 
   it('checks a name left empty without it as one that was empty', async () => {
     const result = await importCampaign(
-      await archive({ creatures: [{ name: '\u0000', gameSystem: 'DND_5E', statBlock: statBlock() }], templates: [{ name: 'Guard\u0000', type: 'npc' }] }),
+      await archive({ creatures: [{ name: '\u0000', gameSystem: 'FIFTH_EDITION', statBlock: statBlock() }], templates: [{ name: 'Guard\u0000', type: 'npc' }] }),
       userId
     );
 

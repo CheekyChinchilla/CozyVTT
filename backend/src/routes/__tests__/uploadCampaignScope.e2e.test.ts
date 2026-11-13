@@ -6,7 +6,7 @@
  * upload route stored whatever the client sent alongside the file, so anyone
  * holding a campaign's id could put named rows in that campaign's library
  * without being a member of it, and a player could do it to their own campaign
- * despite uploads there being the DM's alone.
+ * despite uploads there being the GM's alone.
  *
  * The permitted id now comes back from `canPlaceAssetAtScope` with the rest of
  * the decision, so the route stores what the rules allow and not what was
@@ -29,12 +29,12 @@ import {
 
 const app = createTestApp();
 
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let outsiderId: string;
 let campaignId: string;
 let otherCampaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let player: ReturnType<typeof request.agent>;
 let outsider: ReturnType<typeof request.agent>;
 
@@ -70,32 +70,32 @@ beforeAll(async () => {
   const stamp = Date.now();
   // Not platform admins: an admin is allowed more, which would hide the bug.
   const [d, p, o] = await Promise.all([
-    createTestUser({ email: `scope-dm-${stamp}@test.cozyvtt.local`, displayName: 'Scope DM' }),
+    createTestUser({ email: `scope-dm-${stamp}@test.cozyvtt.local`, displayName: 'Scope GM' }),
     createTestUser({ email: `scope-player-${stamp}@test.cozyvtt.local`, displayName: 'Scope Player' }),
     createTestUser({ email: `scope-outsider-${stamp}@test.cozyvtt.local`, displayName: 'Scope Outsider' }),
   ]);
-  dmId = d.id; playerId = p.id; outsiderId = o.id;
+  gmId = d.id; playerId = p.id; outsiderId = o.id;
 
-  campaignId = (await createTestCampaign(dmId, { name: `Scope ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Scope ${stamp}` })).id;
   otherCampaignId = (await createTestCampaign(outsiderId, { name: `Other ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
-      { userId: outsiderId, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
+      { userId: outsiderId, campaignId: otherCampaignId, role: 'GM', characterIds: [] },
     ],
   });
 
   // One at a time: one address may have only two sign-ins checked at once.
-  dm = await login(d.email);
+  gm = await login(d.email);
   player = await login(p.email);
   outsider = await login(o.email);
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: { in: [dmId, playerId, outsiderId] } } });
+  await prisma.asset.deleteMany({ where: { uploadedById: { in: [gmId, playerId, outsiderId] } } });
   await cleanupCampaigns([campaignId, otherCampaignId]);
-  await cleanupUsers([dmId, playerId, outsiderId]);
+  await cleanupUsers([gmId, playerId, outsiderId]);
   await prisma.$disconnect();
 });
 
@@ -112,7 +112,7 @@ describe('uploading with a campaign id the caller has no right to use', () => {
     expect(res.body.asset.campaignId).toBeNull();
 
     // And it must not appear in that campaign's library.
-    const listed = await dm.get('/api/assets').query({ campaignId });
+    const listed = await gm.get('/api/assets').query({ campaignId });
     const names = (listed.body.assets as { name: string }[]).map((a) => a.name);
     expect(names).not.toContain('INJECTED');
   });
@@ -121,8 +121,8 @@ describe('uploading with a campaign id the caller has no right to use', () => {
     expect((await upload(outsider, 'CAMPAIGN', campaignId, 'nope')).status).toBe(403);
   });
 
-  it('still lets the DM upload into their own campaign', async () => {
-    const res = await upload(dm, 'CAMPAIGN', campaignId, 'Proper campaign map');
+  it('still lets the GM upload into their own campaign', async () => {
+    const res = await upload(gm, 'CAMPAIGN', campaignId, 'Proper campaign map');
     expect(res.status).toBe(201);
     expect(res.body.asset.campaignId).toBe(campaignId);
   });

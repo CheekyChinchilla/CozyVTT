@@ -21,43 +21,43 @@ jest.setTimeout(30000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `rolechg-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gmUser = await createTestUser({ email: `rolechg-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const playerUser = await createTestUser({ email: `rolechg-p-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Role change ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Role change ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
 afterAll(async () => {
   await server.close();
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
 it("tells the member's open connections, and everyone else in the campaign, the new role", async () => {
   const member = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
-  const table = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  const table = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
   const toMember = waitForEvent<{ campaignId: string; userId: string; role: string }>(member, 'campaign.role.changed');
   const toTable = waitForEvent<{ userId: string; role: string }>(table, 'campaign.role.changed');
 
-  const res = await dm.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'SPECTATOR' });
+  const res = await gm.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'SPECTATOR' });
   expect(res.status).toBe(200);
 
   expect(await toMember).toEqual({ campaignId, userId: playerId, role: 'SPECTATOR' });
@@ -93,13 +93,13 @@ it("sends the member the map the table is on again, as their new role sees it", 
   try {
     const member = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
     const promoted = waitForEvent<Resent>(member, 'map.changed');
-    expect((await dm.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'PLAYER' })).status).toBe(200);
+    expect((await gm.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'PLAYER' })).status).toBe(200);
     const asPlayer = await promoted;
     expect(asPlayer.mapId).toBe(mapId);
     expect(asPlayer.mapData.tokens.map((t) => t.id)).toEqual(['theirs']);
 
     const demoted = waitForEvent<Resent>(member, 'map.changed');
-    expect((await dm.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'SPECTATOR' })).status).toBe(200);
+    expect((await gm.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'SPECTATOR' })).status).toBe(200);
     expect((await demoted).mapData.tokens).toEqual([]);
     member.disconnect();
   } finally {
@@ -109,15 +109,43 @@ it("sends the member the map the table is on again, as their new role sees it", 
   }
 });
 
-// Handing over the DM's seat changes two roles at once, and the open pages
+// On a map with no lighting a spectator is sent every token, with who
+// controls it, and a spectator made a player again is sent theirs as their
+// own: the page decides what it may pick up from that and its own role.
+it("sends a spectator made a player again their token, naming them its controller", async () => {
+  const mapId = await litMapWith([mapToken('theirs', playerId, { hp: { current: 7, max: 9 } })]);
+  await prisma.map.update({ where: { id: mapId }, data: { lightingEnabled: false } });
+  type Sent = { mapData: { tokens: { id: string; controlledBy?: string | null; hp?: unknown }[] } };
+  try {
+    const member = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const demoted = waitForEvent<Sent>(member, 'map.changed');
+    expect((await gm.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'SPECTATOR' })).status).toBe(200);
+    const asSpectator = (await demoted).mapData.tokens;
+    expect(asSpectator).toEqual([expect.objectContaining({ id: 'theirs', controlledBy: playerId })]);
+    expect(asSpectator[0].hp).toBeUndefined();
+
+    const promoted = waitForEvent<Sent>(member, 'map.changed');
+    expect((await gm.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'PLAYER' })).status).toBe(200);
+    expect((await promoted).mapData.tokens).toEqual([
+      expect.objectContaining({ id: 'theirs', controlledBy: playerId, hp: { current: 7, max: 9 } }),
+    ]);
+    member.disconnect();
+  } finally {
+    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: playerId, campaignId } }, data: { role: 'PLAYER' } });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
+    await prisma.map.deleteMany({ where: { id: mapId } });
+  }
+});
+
+// Handing over the GM's seat changes two roles at once, and the open pages
 // need what a role change gives them: the roster regrouped, and the map as
-// each new role sees it. The new DM's page held a player's map, with no
-// hidden creatures and no notes; the old DM's held the DM's.
-it('re-sends the map to both sides of a DM handover, and regroups the roster', async () => {
+// each new role sees it. The new GM's page held a player's map, with no
+// hidden creatures and no notes; the old GM's held the GM's.
+it('re-sends the map to both sides of a GM handover, and regroups the roster', async () => {
   const mapId = await litMapWith([mapToken('theirs', playerId), mapToken('lurker', null, { visible: false, notes: 'ambush' })]);
   try {
     const incoming = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
-    const outgoing = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const outgoing = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
     const toIncoming = waitForEvent<Resent>(incoming, 'map.changed');
     const toOutgoing = waitForEvent<Resent>(outgoing, 'map.changed');
     const regrouped = new Promise<string[]>((resolve) => {
@@ -128,13 +156,13 @@ it('re-sends the map to both sides of a DM handover, and regroups the roster', a
       });
     });
 
-    expect((await dm.put(`/api/campaigns/${campaignId}/dm`).send({ userId: playerId })).status).toBe(200);
+    expect((await gm.put(`/api/campaigns/${campaignId}/gm`).send({ userId: playerId })).status).toBe(200);
 
-    const asDm = await toIncoming;
-    expect(asDm.mapId).toBe(mapId);
-    expect(asDm.mapData.tokens.find((t) => t.id === 'lurker')?.notes).toBe('ambush');
+    const asGm = await toIncoming;
+    expect(asGm.mapId).toBe(mapId);
+    expect(asGm.mapData.tokens.find((t) => t.id === 'lurker')?.notes).toBe('ambush');
     expect((await toOutgoing).mapData.tokens.map((t) => t.id)).toEqual([]);
-    expect((await regrouped).sort()).toEqual([dmId, playerId].sort());
+    expect((await regrouped).sort()).toEqual([gmId, playerId].sort());
     incoming.disconnect();
     outgoing.disconnect();
   } finally {
@@ -143,35 +171,35 @@ it('re-sends the map to both sides of a DM handover, and regroups the roster', a
   }
 });
 
-// A drawing the DM keeps for themselves goes to whoever holds the seat. After
-// a handover the new DM's page held none of them and the old DM's kept them
+// A drawing the GM keeps for themselves goes to whoever holds the seat. After
+// a handover the new GM's page held none of them and the old GM's kept them
 // all, until a reload; each is now sent the map's drawings as it may see them.
-it('sends both sides of a DM handover the drawings as each new role sees them', async () => {
+it('sends both sides of a GM handover the drawings as each new role sees them', async () => {
   const mapId = await litMapWith([]);
-  await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: dmId, campaignId } }, data: { role: 'DM' } });
+  await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: gmId, campaignId } }, data: { role: 'GM' } });
   await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: playerId, campaignId } }, data: { role: 'PLAYER' } });
-  const drawn = (audience: 'ALL' | 'DM') => prisma.mapDrawing.create({
-    data: { mapId, authorId: dmId, audience, kind: 'line', color: '#1a1a1a', width: 2, points: [[0, 0], [50, 50]] },
+  const drawn = (audience: 'ALL' | 'GM') => prisma.mapDrawing.create({
+    data: { mapId, authorId: gmId, audience, kind: 'line', color: '#1a1a1a', width: 2, points: [[0, 0], [50, 50]] },
   });
   const shared = await drawn('ALL');
-  const secret = await drawn('DM');
+  const secret = await drawn('GM');
   try {
     const incoming = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
-    const outgoing = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const outgoing = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
     type State = { mapId: string; drawings: Array<{ id: string }> };
     const toIncoming = waitForEvent<State>(incoming, 'drawings:state');
     const toOutgoing = waitForEvent<State>(outgoing, 'drawings:state');
 
-    expect((await dm.put(`/api/campaigns/${campaignId}/dm`).send({ userId: playerId })).status).toBe(200);
+    expect((await gm.put(`/api/campaigns/${campaignId}/gm`).send({ userId: playerId })).status).toBe(200);
 
-    const asDm = await toIncoming;
-    expect(asDm.mapId).toBe(mapId);
-    expect(asDm.drawings.map((d) => d.id).sort()).toEqual([shared.id, secret.id].sort());
+    const asGm = await toIncoming;
+    expect(asGm.mapId).toBe(mapId);
+    expect(asGm.drawings.map((d) => d.id).sort()).toEqual([shared.id, secret.id].sort());
     expect((await toOutgoing).drawings.map((d) => d.id)).toEqual([shared.id]);
     incoming.disconnect();
     outgoing.disconnect();
   } finally {
-    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: dmId, campaignId } }, data: { role: 'DM' } });
+    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: gmId, campaignId } }, data: { role: 'GM' } });
     await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: playerId, campaignId } }, data: { role: 'PLAYER' } });
     await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
     await prisma.map.deleteMany({ where: { id: mapId } });

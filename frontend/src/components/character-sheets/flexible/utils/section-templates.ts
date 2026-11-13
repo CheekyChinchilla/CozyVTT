@@ -19,7 +19,7 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
   {
     id: 'attributes',
     name: 'Attributes',
-    description: 'Standard D&D-style attributes',
+    description: 'Standard 5E-style attributes',
     icon: 'Target',
     create: (): StatsSection => ({
       id: generateId(),

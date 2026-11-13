@@ -22,7 +22,9 @@ import type { Campaign, CampaignInvitation } from '@/types';
 import { CampaignRole, PlatformRole } from '@/types';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
+import { CAMPAIGN_ROLE_LABEL } from '@/utils/campaignRoles';
 import { gameSystemName } from '@/constants/game-systems';
+import { AboutButton } from '@/components/common/AboutDialog';
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
@@ -331,7 +333,7 @@ export default function DashboardPage() {
                     Read Without Leaving the Table
                   </p>
                   <p className="text-xs text-warm-gray">
-                    Upload a PDF, text or Markdown file and read it here or in any campaign a DM shares it with
+                    Upload a PDF, text or Markdown file and read it here or in any campaign a GM shares it with
                   </p>
                 </div>
               </div>
@@ -412,7 +414,7 @@ export default function DashboardPage() {
                     )}
                     <div className="flex items-center justify-between text-xs text-warm-gray">
                       <span>
-                        {invitation.campaign?.dm && `DM: ${invitation.campaign.dm.displayName}`}
+                        {invitation.campaign?.gm && `${CAMPAIGN_ROLE_LABEL[CampaignRole.GM]}: ${invitation.campaign.gm.displayName}`}
                       </span>
                       <button className="text-brand-ink hover:underline font-medium">
                         View Invitation →
@@ -484,7 +486,7 @@ export default function DashboardPage() {
                     No campaigns yet
                   </h3>
                   <p className="text-warm-gray mb-6">
-                    Create your first campaign to begin your adventure! As a DM, you'll be able
+                    Create your first campaign to begin your adventure! As its game master (GM), you'll be able
                     to invite players, create maps, and manage game sessions.
                   </p>
                   <Button
@@ -524,9 +526,9 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="text-center p-4 rounded-lg bg-moss-green/5">
                   <p className="text-3xl font-bold text-brand-ink">
-                    {campaigns.filter(c => getUserRole(c) === CampaignRole.DM).length}
+                    {campaigns.filter(c => getUserRole(c) === CampaignRole.GM).length}
                   </p>
-                  <p className="text-sm text-warm-gray mt-1">Campaigns as DM</p>
+                  <p className="text-sm text-warm-gray mt-1">Campaigns as GM</p>
                 </div>
                 <div className="text-center p-4 rounded-lg bg-spirit-purple/5">
                   <p className="text-3xl font-bold text-spirit-ink">
@@ -545,6 +547,10 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
+
+      <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 flex justify-center">
+        <AboutButton />
+      </footer>
 
       {/* Create Campaign Modal */}
       <CreateCampaignModal

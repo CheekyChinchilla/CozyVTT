@@ -1,0 +1,669 @@
+{
+  "cozyVttVersion": "1.0",
+  "exportedAt": "2026-03-15T00:00:00.000Z",
+  "character": {
+    "name": "Seraphina the Wizard",
+    "gameSystem": "FANTASY_D20",
+    "data": {
+      "characterName": "Seraphina Ashveil",
+      "playerName": "Jane Doe",
+      "class": "Wizard",
+      "level": 5,
+      "ancestry": "Elf",
+      "heritage": "Whisper Elf",
+      "background": "Scholar",
+      "experiencePoints": 4500,
+      "heroPoints": 1,
+      "attributes": {
+        "strength": {
+          "score": 10,
+          "modifier": 0
+        },
+        "dexterity": {
+          "score": 14,
+          "modifier": 2
+        },
+        "constitution": {
+          "score": 12,
+          "modifier": 1
+        },
+        "intelligence": {
+          "score": 18,
+          "modifier": 4
+        },
+        "wisdom": {
+          "score": 13,
+          "modifier": 1
+        },
+        "charisma": {
+          "score": 10,
+          "modifier": 0
+        }
+      },
+      "savingThrows": {
+        "fortitude": {
+          "proficiencyRank": "trained",
+          "itemBonus": 0,
+          "bonus": 8
+        },
+        "reflex": {
+          "proficiencyRank": "expert",
+          "itemBonus": 0,
+          "bonus": 11
+        },
+        "will": {
+          "proficiencyRank": "expert",
+          "itemBonus": 0,
+          "bonus": 10
+        }
+      },
+      "perception": {
+        "proficiencyRank": "trained",
+        "itemBonus": 0,
+        "bonus": 8,
+        "senses": [
+          "Low-Light Vision"
+        ]
+      },
+      "skills": {
+        "acrobatics": {
+          "attribute": "dexterity",
+          "proficiencyRank": "untrained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 2
+        },
+        "arcana": {
+          "attribute": "intelligence",
+          "proficiencyRank": "expert",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 13
+        },
+        "athletics": {
+          "attribute": "strength",
+          "proficiencyRank": "untrained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 0
+        },
+        "crafting": {
+          "attribute": "intelligence",
+          "proficiencyRank": "trained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 11
+        },
+        "deception": {
+          "attribute": "charisma",
+          "proficiencyRank": "untrained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 0
+        },
+        "diplomacy": {
+          "attribute": "charisma",
+          "proficiencyRank": "untrained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 0
+        },
+        "intimidation": {
+          "attribute": "charisma",
+          "proficiencyRank": "untrained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 0
+        },
+        "medicine": {
+          "attribute": "wisdom",
+          "proficiencyRank": "untrained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 1
+        },
+        "nature": {
+          "attribute": "wisdom",
+          "proficiencyRank": "trained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 8
+        },
+        "occultism": {
+          "attribute": "intelligence",
+          "proficiencyRank": "trained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 11
+        },
+        "performance": {
+          "attribute": "charisma",
+          "proficiencyRank": "untrained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 0
+        },
+        "religion": {
+          "attribute": "wisdom",
+          "proficiencyRank": "trained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 8
+        },
+        "society": {
+          "attribute": "intelligence",
+          "proficiencyRank": "trained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 11
+        },
+        "stealth": {
+          "attribute": "dexterity",
+          "proficiencyRank": "trained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 9
+        },
+        "survival": {
+          "attribute": "wisdom",
+          "proficiencyRank": "untrained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 1
+        },
+        "thievery": {
+          "attribute": "dexterity",
+          "proficiencyRank": "untrained",
+          "armorPenalty": 0,
+          "itemBonus": 0,
+          "bonus": 2
+        }
+      },
+      "loreSkills": [
+        {
+          "name": "Academia Lore",
+          "attribute": "intelligence",
+          "proficiencyRank": "trained",
+          "itemBonus": 0,
+          "bonus": 11
+        },
+        {
+          "name": "Elf Lore",
+          "attribute": "intelligence",
+          "proficiencyRank": "trained",
+          "itemBonus": 0,
+          "bonus": 11
+        }
+      ],
+      "armorClass": {
+        "total": 19,
+        "proficiencyRank": "trained",
+        "capDex": null,
+        "itemBonus": 0,
+        "armorPenalty": 0
+      },
+      "classDC": {
+        "total": 21,
+        "keyAttribute": "intelligence",
+        "proficiencyRank": "trained"
+      },
+      "initiative": {
+        "usedStat": "perception",
+        "bonus": 8
+      },
+      "speed": {
+        "land": 30,
+        "other": []
+      },
+      "hp": {
+        "maximum": 46,
+        "ancestryHp": 6,
+        "classHpPerLevel": 6,
+        "current": 46,
+        "temporary": 0,
+        "resistances": [],
+        "immunities": [],
+        "weaknesses": []
+      },
+      "conditions": [],
+      "deathAndDying": {
+        "dying": 0,
+        "wounded": 0,
+        "doomed": 0
+      },
+      "proficiencies": {
+        "weapons": {
+          "simple": "trained",
+          "martial": "untrained",
+          "advanced": "untrained",
+          "unarmed": "trained"
+        },
+        "armor": {
+          "unarmored": "trained",
+          "light": "untrained",
+          "medium": "untrained",
+          "heavy": "untrained"
+        }
+      },
+      "strikes": [
+        {
+          "name": "Dagger",
+          "type": "melee",
+          "attackBonus": 7,
+          "damageRoll": "1d4",
+          "damageType": "piercing",
+          "attributeModifier": "strength",
+          "proficiencyRank": "trained",
+          "itemBonus": 0,
+          "traits": [
+            "agile",
+            "finesse",
+            "thrown 10 ft.",
+            "versatile S"
+          ],
+          "range": null,
+          "notes": ""
+        },
+        {
+          "name": "Dagger (Thrown)",
+          "type": "ranged",
+          "attackBonus": 9,
+          "damageRoll": "1d4",
+          "damageType": "piercing",
+          "attributeModifier": "dexterity",
+          "proficiencyRank": "trained",
+          "itemBonus": 0,
+          "traits": [
+            "agile",
+            "finesse",
+            "thrown 10 ft.",
+            "versatile S"
+          ],
+          "range": 10,
+          "notes": ""
+        },
+        {
+          "name": "Electric Arc",
+          "type": "ranged",
+          "attackBonus": null,
+          "damageRoll": "4d4",
+          "damageType": "electricity",
+          "attributeModifier": "intelligence",
+          "proficiencyRank": "trained",
+          "itemBonus": 0,
+          "traits": [
+            "cantrip",
+            "concentrate",
+            "electricity",
+            "manipulate"
+          ],
+          "range": 30,
+          "savingThrow": "reflex",
+          "notes": "One or two targets; basic Reflex save"
+        }
+      ],
+      "currency": {
+        "cp": 0,
+        "sp": 0,
+        "gp": 30,
+        "pp": 0
+      },
+      "inventory": [
+        {
+          "name": "Spellbook",
+          "quantity": 1,
+          "bulk": 1,
+          "equippable": false,
+          "equipped": false,
+          "requiresAttunement": false,
+          "attuned": false,
+          "invested": false,
+          "value": 10,
+          "notes": "Holds every spell she can prepare"
+        },
+        {
+          "name": "Writing Set",
+          "quantity": 1,
+          "bulk": "L",
+          "equippable": false,
+          "equipped": false,
+          "requiresAttunement": false,
+          "attuned": false,
+          "invested": false,
+          "value": 1,
+          "notes": "Ink, quills and spare pages"
+        },
+        {
+          "name": "Explorer's Clothing",
+          "quantity": 1,
+          "bulk": "L",
+          "equippable": true,
+          "equipped": true,
+          "requiresAttunement": false,
+          "attuned": false,
+          "invested": false,
+          "value": 1,
+          "notes": "AC +0, no armor penalty"
+        },
+        {
+          "name": "Dagger",
+          "quantity": 1,
+          "bulk": "L",
+          "equippable": true,
+          "equipped": true,
+          "requiresAttunement": false,
+          "attuned": false,
+          "invested": false,
+          "value": 2,
+          "notes": ""
+        },
+        {
+          "name": "Backpack",
+          "quantity": 1,
+          "bulk": "L",
+          "equippable": true,
+          "equipped": true,
+          "requiresAttunement": false,
+          "attuned": false,
+          "invested": false,
+          "value": 1,
+          "notes": "Reduces bulk of stored items"
+        },
+        {
+          "name": "Rope (50 ft.)",
+          "quantity": 1,
+          "bulk": 1,
+          "equippable": false,
+          "equipped": false,
+          "requiresAttunement": false,
+          "attuned": false,
+          "invested": false,
+          "value": 0.5,
+          "notes": ""
+        }
+      ],
+      "bulk": {
+        "current": 2,
+        "encumbered": 5,
+        "maximum": 10
+      },
+      "languages": [
+        "Common",
+        "Elven",
+        "Draconic",
+        "Fey"
+      ],
+      "feats": {
+        "ancestryAndHeritage": [
+          {
+            "level": 1,
+            "name": "Elven Lore",
+            "notes": "Trained in Arcana, Nature and Elf Lore."
+          },
+          {
+            "level": 5,
+            "name": "Ageless Patience",
+            "notes": "Taking twice as long over a Perception or skill check gives +2, and a natural 1 does not make the result worse."
+          }
+        ],
+        "class": [
+          {
+            "level": 1,
+            "name": "Reach Spell",
+            "notes": "The next spell reaches 30 feet further, or 30 feet away if it needs a touch."
+          },
+          {
+            "level": 2,
+            "name": "Cantrip Expansion",
+            "notes": "Two more cantrips prepared each day."
+          },
+          {
+            "level": 4,
+            "name": "Bespell Strikes",
+            "notes": "Right after a spell that is not a cantrip, a held weapon deals 1d6 extra damage until the turn ends."
+          }
+        ],
+        "skill": [
+          {
+            "level": 1,
+            "name": "Assurance",
+            "notes": "In Arcana: take 10 + her proficiency bonus in place of a roll."
+          },
+          {
+            "level": 2,
+            "name": "Arcane Sense",
+            "notes": "Detect magic as an arcane innate spell, as often as she likes."
+          },
+          {
+            "level": 4,
+            "name": "Recognize Spell",
+            "notes": "Her reaction to name a spell she sees being cast."
+          }
+        ],
+        "general": [
+          {
+            "level": 3,
+            "name": "Toughness",
+            "notes": "Her level added to her maximum Hit Points, and recovery checks 1 easier."
+          }
+        ],
+        "bonus": []
+      },
+      "classFeatures": [
+        {
+          "name": "Wizard Spellcasting",
+          "description": ""
+        },
+        {
+          "name": "Arcane School (School of Battle Magic)",
+          "description": ""
+        },
+        {
+          "name": "Arcane Bond",
+          "description": ""
+        },
+        {
+          "name": "Arcane Thesis (Spell Substitution)",
+          "description": ""
+        },
+        {
+          "name": "Reflex Expertise",
+          "description": ""
+        }
+      ],
+      "spellcasting": {
+        "tradition": "arcane",
+        "type": "prepared",
+        "keyAttribute": "intelligence",
+        "spellAttackBonus": {
+          "proficiencyRank": "trained",
+          "itemBonus": 0,
+          "bonus": 11
+        },
+        "spellDC": {
+          "proficiencyRank": "trained",
+          "itemBonus": 0,
+          "dc": 21
+        },
+        "cantrips": [
+          {
+            "rank": 3,
+            "name": "Electric Arc",
+            "prepared": true
+          },
+          {
+            "rank": 3,
+            "name": "Telekinetic Hand",
+            "prepared": true
+          },
+          {
+            "rank": 3,
+            "name": "Prestidigitation",
+            "prepared": true
+          },
+          {
+            "rank": 3,
+            "name": "Shield",
+            "prepared": true
+          },
+          {
+            "rank": 3,
+            "name": "Detect Magic",
+            "prepared": true
+          }
+        ],
+        "slots": {
+          "1": {
+            "total": 3,
+            "expended": 1
+          },
+          "2": {
+            "total": 3,
+            "expended": 0
+          },
+          "3": {
+            "total": 2,
+            "expended": 1
+          },
+          "4": {
+            "total": 0,
+            "expended": 0
+          },
+          "5": {
+            "total": 0,
+            "expended": 0
+          },
+          "6": {
+            "total": 0,
+            "expended": 0
+          },
+          "7": {
+            "total": 0,
+            "expended": 0
+          },
+          "8": {
+            "total": 0,
+            "expended": 0
+          },
+          "9": {
+            "total": 0,
+            "expended": 0
+          },
+          "10": {
+            "total": 0,
+            "expended": 0
+          }
+        },
+        "spells": [
+          {
+            "rank": 1,
+            "name": "Force Barrage",
+            "prepared": true,
+            "ritual": false,
+            "heightened": false
+          },
+          {
+            "rank": 1,
+            "name": "Mystic Armor",
+            "prepared": true,
+            "ritual": false,
+            "heightened": true
+          },
+          {
+            "rank": 1,
+            "name": "Grease",
+            "prepared": false,
+            "ritual": false,
+            "heightened": false
+          },
+          {
+            "rank": 2,
+            "name": "Invisibility",
+            "prepared": true,
+            "ritual": false,
+            "heightened": false
+          },
+          {
+            "rank": 2,
+            "name": "Resist Energy",
+            "prepared": true,
+            "ritual": false,
+            "heightened": false
+          },
+          {
+            "rank": 2,
+            "name": "Blur",
+            "prepared": false,
+            "ritual": false,
+            "heightened": false
+          },
+          {
+            "rank": 3,
+            "name": "Fireball",
+            "prepared": true,
+            "ritual": false,
+            "heightened": false
+          },
+          {
+            "rank": 3,
+            "name": "Haste",
+            "prepared": false,
+            "ritual": false,
+            "heightened": false
+          }
+        ],
+        "focusSpells": {
+          "focusPoints": {
+            "total": 1,
+            "current": 1
+          },
+          "spells": [
+            {
+              "rank": 3,
+              "name": "Force Bolt",
+              "prepared": true,
+              "ritual": false,
+              "heightened": true
+            }
+          ]
+        },
+        "innateSpells": [
+          {
+            "rank": 1,
+            "name": "Detect Magic",
+            "tradition": "arcane",
+            "frequency": "at-will",
+            "notes": "From the Arcane Sense skill feat"
+          }
+        ],
+        "rituals": [
+          {
+            "name": "Consecrate",
+            "rank": 2
+          }
+        ]
+      },
+      "appearance": {
+        "age": 110,
+        "height": "5'9\"",
+        "weight": "120 lbs",
+        "eyes": "Gold",
+        "skin": "Pale",
+        "hair": "Silver"
+      },
+      "personality": {
+        "traits": "Methodical and precise; always takes notes.",
+        "ideals": "Knowledge is for sharing.",
+        "bonds": "My spellbook was a gift from my teacher, and I would go back into a fire for it.",
+        "flaws": "Trusts a neat argument over a bad feeling, even when the feeling is right."
+      },
+      "backstory": "Seraphina studied at a college of mages on a cold northern lake until rumours of a library buried under a southern desert drew her away.",
+      "alliesAndOrganizations": {
+        "name": "The Lakeside College",
+        "description": "The college of mages where she learned her craft. Its tutors still trade letters with her."
+      },
+      "notes": "Seraphina wears a silver pendant shaped like an open book. She rarely speaks first in company.",
+      "treasure": "An encrypted research journal, a strange glowing shard of unknown origin."
+    }
+  }
+}

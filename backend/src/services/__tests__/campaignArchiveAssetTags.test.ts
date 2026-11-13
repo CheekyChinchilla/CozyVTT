@@ -19,13 +19,12 @@ const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { randomUUID } from 'crypto';
-import unzipper from 'unzipper';
 import { importCampaign } from '../campaignImporter';
 import { prepareCampaignExport } from '../campaignExporter';
 import { ASSET_LIMITS, DRAWN_MAP_TAG } from '../../validators/assetLimits';
 import { IMPORT_LIMITS } from '../../validators/campaignImport';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers } from '../../__tests__/helpers/db';
-import { writeZip } from '../../__tests__/helpers/zipFixtures';
+import { writeZip, readZip } from '../../__tests__/helpers/zipFixtures';
 
 const PNG = Buffer.from(
   '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082',
@@ -66,7 +65,7 @@ async function importedTags(campaignId: string): Promise<Record<string, string[]
 describe('a campaign exported and imported again', () => {
   it('keeps the tags of its map and token pictures', async () => {
     const source = await createTestCampaign(userId, { name: 'Tagged' });
-    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'GM', characterIds: [] } });
     const crypt = await picture(source.id, 'MAP', 'crypt', ['drawn-map', 'Undercroft']);
     const goblin = await picture(source.id, 'TOKEN', 'goblin', ['goblin', 'monster']);
     await prisma.map.create({
@@ -81,9 +80,8 @@ describe('a campaign exported and imported again', () => {
     const prepared = await prepareCampaignExport(source.id, { userId, isAdmin: false });
     await prepared.writeTo(fs.createWriteStream(file));
 
-    const directory = await unzipper.Open.file(file);
-    const manifestEntry = directory.files.find((f) => f.path === 'assets/asset-manifest.json');
-    const manifest = JSON.parse((await manifestEntry!.buffer()).toString()) as Record<string, { tags?: unknown }>;
+    const manifestEntry = (await readZip(file)).find((f) => f.path === 'assets/asset-manifest.json');
+    const manifest = JSON.parse(manifestEntry!.data.toString()) as Record<string, { tags?: unknown }>;
     expect(manifest[crypt.id].tags).toEqual(['drawn-map', 'Undercroft']);
     expect(manifest[goblin.id].tags).toEqual(['goblin', 'monster']);
 
@@ -103,11 +101,11 @@ async function archiveOf(entries: Array<[name: string, fields: Record<string, un
       name: 'manifest.json',
       data: JSON.stringify({
         formatVersion: 1, exportedAt: '2026-11-01T12:00:00.000Z', exportedFrom: 'CozyVTT v1.5.4', campaignName: 'Hand-made',
-        gameSystem: 'DND_5E', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0,
+        gameSystem: 'FIFTH_EDITION', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0,
         assetCount: entries.length, includesAudio: false, totalSizeBytes: PNG.length * entries.length,
       }),
     },
-    { name: 'campaign.json', data: JSON.stringify({ name: 'Hand-made', gameSystem: 'DND_5E' }) },
+    { name: 'campaign.json', data: JSON.stringify({ name: 'Hand-made', gameSystem: 'FIFTH_EDITION' }) },
     {
       name: 'assets/asset-manifest.json',
       data: JSON.stringify(Object.fromEntries(entries.map(([name, fields], i) => [

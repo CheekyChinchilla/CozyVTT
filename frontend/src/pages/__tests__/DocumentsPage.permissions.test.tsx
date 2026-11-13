@@ -5,7 +5,7 @@
  * whether its uploader still manages global assets, or who runs the campaign
  * it belongs to. The page offered both to an admin and to the document's
  * uploader, so the uploader of a global document who no longer manages
- * global assets was offered them and refused, and the DM of a campaign was
+ * global assets was offered them and refused, and the GM of a campaign was
  * not offered them on that campaign's own documents, which they may change.
  * The asset list now says, for each asset, whether the server will take a
  * change from this user, and both are offered on that alone.
@@ -95,7 +95,7 @@ describe('Documents page: who is offered Edit and Delete', () => {
     expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
   });
 
-  it("offers both on a campaign's own document to its DM, whoever uploaded it", async () => {
+  it("offers both on a campaign's own document to its GM, whoever uploaded it", async () => {
     listed.assets = [doc({ scope: AssetScope.CAMPAIGN, campaignId: 'c1', uploadedById: 'cohost', canChange: true })];
     renderPage();
     expect(screen.getByRole('button', { name: 'Delete House Rules' })).toBeInTheDocument();

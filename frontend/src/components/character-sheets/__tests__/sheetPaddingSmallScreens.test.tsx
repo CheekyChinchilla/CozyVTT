@@ -10,20 +10,20 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import type { Character } from '@/types';
-import { DnD5eCharacterView } from '../dnd5e/DnD5eCharacterView';
-import { DnD5eCharacterEditor } from '../dnd5e/DnD5eCharacterEditor';
-import { Pathfinder2eCharacterView } from '../pathfinder2e/Pathfinder2eCharacterView';
-import { Pathfinder2eCharacterEditor } from '../pathfinder2e/Pathfinder2eCharacterEditor';
-import { CallOfCthulhu7eCharacterView } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterView';
-import { CallOfCthulhu7eCharacterEditor } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
+import { FifthEditionCharacterView } from '../fifth-edition/FifthEditionCharacterView';
+import { FifthEditionCharacterEditor } from '../fifth-edition/FifthEditionCharacterEditor';
+import { FantasyD20CharacterView } from '../fantasy-d20/FantasyD20CharacterView';
+import { FantasyD20CharacterEditor } from '../fantasy-d20/FantasyD20CharacterEditor';
+import { HorrorD100CharacterView } from '../horror-d100/HorrorD100CharacterView';
+import { HorrorD100CharacterEditor } from '../horror-d100/HorrorD100CharacterEditor';
 import { FlexibleCharacterSheetView } from '../flexible/FlexibleCharacterSheetView';
 import { FlexibleCharacterSheetEdit } from '../flexible/FlexibleCharacterSheetEdit';
-import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
-import { cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
-import dnd5eEditorSource from '../dnd5e/DnD5eCharacterEditor.tsx?raw';
-import pf2eEditorSource from '../pathfinder2e/Pathfinder2eCharacterEditor.tsx?raw';
-import cocEditorSource from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor.tsx?raw';
+import { fifthEditionCharacter } from '../fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
+import { horrorD100Character } from '../horror-d100/__tests__/sheetFixture';
+import fifthEditionEditorSource from '../fifth-edition/FifthEditionCharacterEditor.tsx?raw';
+import fantasyD20EditorSource from '../fantasy-d20/FantasyD20CharacterEditor.tsx?raw';
+import horrorD100EditorSource from '../horror-d100/HorrorD100CharacterEditor.tsx?raw';
 
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
@@ -32,12 +32,12 @@ const classes = (element: Element | null) => (element?.getAttribute('class') ?? 
 const PHONE_PADDING = ['p-3', 'sm:p-6'];
 
 describe.each([
-  ['D&D 5e sheet', () => render(<DnD5eCharacterView character={dnd5eCharacter()} />)],
-  ['D&D 5e editor', () => render(<DnD5eCharacterEditor character={dnd5eCharacter()} onSave={noop} onCancel={vi.fn()} />)],
-  ['Pathfinder 2e sheet', () => render(<Pathfinder2eCharacterView character={pf2eCharacter()} />)],
-  ['Pathfinder 2e editor', () => render(<Pathfinder2eCharacterEditor character={pf2eCharacter()} onSave={noop} onCancel={vi.fn()} />)],
-  ['Call of Cthulhu sheet', () => render(<CallOfCthulhu7eCharacterView character={cocCharacter()} />)],
-  ['Call of Cthulhu editor', () => render(<CallOfCthulhu7eCharacterEditor character={cocCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+  ['5E sheet', () => render(<FifthEditionCharacterView character={fifthEditionCharacter()} />)],
+  ['5E editor', () => render(<FifthEditionCharacterEditor character={fifthEditionCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+  ['Fantasy d20 sheet', () => render(<FantasyD20CharacterView character={fantasyD20Character()} />)],
+  ['Fantasy d20 editor', () => render(<FantasyD20CharacterEditor character={fantasyD20Character()} onSave={noop} onCancel={vi.fn()} />)],
+  ['Horror d100 sheet', () => render(<HorrorD100CharacterView character={horrorD100Character()} />)],
+  ['Horror d100 editor', () => render(<HorrorD100CharacterEditor character={horrorD100Character()} onSave={noop} onCancel={vi.fn()} />)],
 ])('the %s', (_name, show) => {
   it('pads its header 12 px on a phone and 24 px from sm up', () => {
     const { container } = show();
@@ -73,9 +73,9 @@ describe('the flexible sheets', () => {
 // The notes and the save error show only after a refused save or numbers
 // brought into range, so their classes are read from the source.
 describe.each([
-  ['D&D 5e', dnd5eEditorSource],
-  ['Pathfinder 2e', pf2eEditorSource],
-  ['Call of Cthulhu', cocEditorSource],
+  ['5E', fifthEditionEditorSource],
+  ['Fantasy d20', fantasyD20EditorSource],
+  ['Horror d100', horrorD100EditorSource],
 ])('the %s editor', (_name, source) => {
   it('lines its notes and save error up with the body', () => {
     expect(source.match(/className="(?:mx|px)-6 [^"]*"/g) ?? []).toEqual([]);

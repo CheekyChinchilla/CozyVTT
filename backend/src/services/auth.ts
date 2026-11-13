@@ -324,7 +324,10 @@ export async function makeDummyPasswordHash(): Promise<void> {
 }
 
 /**
- * Authenticate user with email and password
+ * Check an email and password. Only the password: the account's last sign-in
+ * is stamped by the route once the sign-in completes (recordSignIn in
+ * routes/auth.ts), which for an account with two-factor sign-in is after the
+ * code step, and never for an account still waiting for approval.
  */
 export async function authenticateUser(input: LoginInput): Promise<User | null> {
   const email = input.email.toLowerCase();
@@ -346,12 +349,6 @@ export async function authenticateUser(input: LoginInput): Promise<User | null> 
   if (!isValidPassword) {
     return null;
   }
-
-  // Update last login timestamp
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() },
-  });
 
   return user;
 }

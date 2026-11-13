@@ -9,20 +9,18 @@ import { GameSystem } from '../types';
  * Display labels for each game system
  */
 export const GAME_SYSTEM_LABELS: Record<GameSystem, string> = {
-  [GameSystem.DND_5E]: 'Dungeons & Dragons 5th Edition',
-  [GameSystem.PATHFINDER_2E]: 'Pathfinder 2nd Edition',
-  [GameSystem.SHADOWRUN_6E]: 'Shadowrun 6th Edition',
-  [GameSystem.CALL_OF_CTHULHU_7E]: 'Call of Cthulhu 7th Edition',
+  [GameSystem.FIFTH_EDITION]: '5E (SRD 5.1)',
+  [GameSystem.FANTASY_D20]: 'Fantasy d20 (ORC)',
+  [GameSystem.HORROR_D100]: 'Horror d100',
 };
 
 /**
  * Short display labels for each game system
  */
 export const GAME_SYSTEM_SHORT_LABELS: Record<GameSystem, string> = {
-  [GameSystem.DND_5E]: 'D&D 5e',
-  [GameSystem.PATHFINDER_2E]: 'PF2e',
-  [GameSystem.SHADOWRUN_6E]: 'SR6',
-  [GameSystem.CALL_OF_CTHULHU_7E]: 'CoC 7e',
+  [GameSystem.FIFTH_EDITION]: '5E',
+  [GameSystem.FANTASY_D20]: 'ORC d20',
+  [GameSystem.HORROR_D100]: 'd100',
 };
 
 /**
@@ -32,25 +30,22 @@ export const GAME_SYSTEM_SHORT_LABELS: Record<GameSystem, string> = {
  * The tint each system's badge is drawn in, wherever a system is labelled.
  *
  * These use the semantic tokens purely as a set of distinguishable, themed
- * hues: a D&D badge is not "danger", it just needs to look different from a
- * Pathfinder one and stay readable on every theme.
+ * hues: a 5E badge is not "danger", it just needs to look different from a
+ * Fantasy d20 one and stay readable on every theme.
  */
 export const GAME_SYSTEM_TINTS: Record<GameSystem, { bg: string; text: string; border: string }> = {
-  [GameSystem.DND_5E]: { bg: 'bg-danger/10', text: 'text-danger-ink', border: 'border-danger/30' },
-  [GameSystem.PATHFINDER_2E]: { bg: 'bg-info/10', text: 'text-info-ink', border: 'border-info/30' },
-  [GameSystem.SHADOWRUN_6E]: { bg: 'bg-spirit/10', text: 'text-spirit-ink', border: 'border-spirit/30' },
-  [GameSystem.CALL_OF_CTHULHU_7E]: { bg: 'bg-success/10', text: 'text-success-ink', border: 'border-success/30' },
+  [GameSystem.FIFTH_EDITION]: { bg: 'bg-danger/10', text: 'text-danger-ink', border: 'border-danger/30' },
+  [GameSystem.FANTASY_D20]: { bg: 'bg-info/10', text: 'text-info-ink', border: 'border-info/30' },
+  [GameSystem.HORROR_D100]: { bg: 'bg-success/10', text: 'text-success-ink', border: 'border-success/30' },
 };
 
 export const GAME_SYSTEM_DESCRIPTIONS: Record<GameSystem, string> = {
-  [GameSystem.DND_5E]:
-    'The world\'s most popular tabletop RPG. High fantasy adventures with heroic characters.',
-  [GameSystem.PATHFINDER_2E]:
-    'A deep and customizable fantasy RPG with tactical combat and character building.',
-  [GameSystem.SHADOWRUN_6E]:
-    'Cyberpunk meets fantasy in a dystopian future with magic, technology, and corporate intrigue.',
-  [GameSystem.CALL_OF_CTHULHU_7E]:
-    'Investigate cosmic horror in the style of H.P. Lovecraft. Sanity-testing mystery and dread.',
+  [GameSystem.FIFTH_EDITION]:
+    'Heroic fantasy with classes, levels and a d20. Compatible with fifth edition.',
+  [GameSystem.FANTASY_D20]:
+    'Tactical fantasy with three actions a turn, proficiency ranks and four degrees of success.',
+  [GameSystem.HORROR_D100]:
+    'Investigative horror on percentile dice, with Sanity and Luck.',
 };
 
 /**
@@ -65,29 +60,22 @@ export interface GameSystemOption {
 
 export const GAME_SYSTEM_OPTIONS: GameSystemOption[] = [
   {
-    value: GameSystem.DND_5E,
-    label: GAME_SYSTEM_LABELS[GameSystem.DND_5E],
-    shortLabel: GAME_SYSTEM_SHORT_LABELS[GameSystem.DND_5E],
-    description: GAME_SYSTEM_DESCRIPTIONS[GameSystem.DND_5E],
+    value: GameSystem.FIFTH_EDITION,
+    label: GAME_SYSTEM_LABELS[GameSystem.FIFTH_EDITION],
+    shortLabel: GAME_SYSTEM_SHORT_LABELS[GameSystem.FIFTH_EDITION],
+    description: GAME_SYSTEM_DESCRIPTIONS[GameSystem.FIFTH_EDITION],
   },
   {
-    value: GameSystem.PATHFINDER_2E,
-    label: GAME_SYSTEM_LABELS[GameSystem.PATHFINDER_2E],
-    shortLabel: GAME_SYSTEM_SHORT_LABELS[GameSystem.PATHFINDER_2E],
-    description: GAME_SYSTEM_DESCRIPTIONS[GameSystem.PATHFINDER_2E],
+    value: GameSystem.FANTASY_D20,
+    label: GAME_SYSTEM_LABELS[GameSystem.FANTASY_D20],
+    shortLabel: GAME_SYSTEM_SHORT_LABELS[GameSystem.FANTASY_D20],
+    description: GAME_SYSTEM_DESCRIPTIONS[GameSystem.FANTASY_D20],
   },
-  // Shadowrun 6e - Temporarily disabled until further notice
-  // {
-  //   value: GameSystem.SHADOWRUN_6E,
-  //   label: GAME_SYSTEM_LABELS[GameSystem.SHADOWRUN_6E],
-  //   shortLabel: GAME_SYSTEM_SHORT_LABELS[GameSystem.SHADOWRUN_6E],
-  //   description: GAME_SYSTEM_DESCRIPTIONS[GameSystem.SHADOWRUN_6E],
-  // },
   {
-    value: GameSystem.CALL_OF_CTHULHU_7E,
-    label: GAME_SYSTEM_LABELS[GameSystem.CALL_OF_CTHULHU_7E],
-    shortLabel: GAME_SYSTEM_SHORT_LABELS[GameSystem.CALL_OF_CTHULHU_7E],
-    description: GAME_SYSTEM_DESCRIPTIONS[GameSystem.CALL_OF_CTHULHU_7E],
+    value: GameSystem.HORROR_D100,
+    label: GAME_SYSTEM_LABELS[GameSystem.HORROR_D100],
+    shortLabel: GAME_SYSTEM_SHORT_LABELS[GameSystem.HORROR_D100],
+    description: GAME_SYSTEM_DESCRIPTIONS[GameSystem.HORROR_D100],
   },
 ];
 
@@ -110,21 +98,52 @@ export function getGameSystemLabel(
 }
 
 /**
- * Whether `code` names a game system this build knows. A file made on an
- * instance with another system can name one it does not.
+ * Whether `code` names a game system this build knows. A character or
+ * campaign stored with the value of a system CozyVTT no longer supports
+ * names one it does not, as can a file made on another instance.
  */
 export function isGameSystem(code: unknown): code is GameSystem {
   return typeof code === 'string' && Object.prototype.hasOwnProperty.call(GAME_SYSTEM_LABELS, code);
 }
 
+/**
+ * Whether a character, template or campaign has a game system this build
+ * knows, or none: what can be edited, used or published as a template. The
+ * value of a system CozyVTT no longer supports is neither, and its sheet is
+ * shown read-only.
+ */
+export function isSupportedOrNoSystem(code: unknown): boolean {
+  return !code || isGameSystem(code);
+}
+
 /** What a character, template or campaign with no game system is called. */
 export const FLEXIBLE_SYSTEM_LABEL = 'Flexible';
 
+/** What a game system code this build does not know is called, wherever a system is named. */
+export const UNSUPPORTED_SYSTEM_LABEL = 'Unsupported system';
+
+/** The line over the sheet of a character whose game system this build does not know. */
+export const UNSUPPORTED_SYSTEM_NOTICE =
+  'This character was made for a game system CozyVTT no longer supports. Its data is kept; you can export or delete it.';
+
+/** The same line over a template's sheet: a template has no Export. */
+export const UNSUPPORTED_SYSTEM_TEMPLATE_NOTICE =
+  'This template was made for a game system CozyVTT no longer supports. Its data is kept; you can delete it.';
+
 /**
  * The name to show for a character's or campaign's game system: its label,
- * or Flexible for none. A code this build does not know is shown as it is.
+ * Flexible for none, and Unsupported system for a code this build does not know.
  */
 export function gameSystemName(gameSystem: GameSystem | string | null | undefined): string {
   if (!gameSystem) return FLEXIBLE_SYSTEM_LABEL;
-  return GAME_SYSTEM_LABELS[gameSystem as GameSystem] ?? gameSystem;
+  return isGameSystem(gameSystem) ? GAME_SYSTEM_LABELS[gameSystem] : UNSUPPORTED_SYSTEM_LABEL;
+}
+
+/**
+ * A campaign's game system as the app plays it: none for a code this build
+ * does not know, so such a campaign's creature library, rolls and initiative
+ * are those of a campaign with no system.
+ */
+export function playedGameSystem(gameSystem: GameSystem | string | null | undefined): GameSystem | null {
+  return isGameSystem(gameSystem) ? gameSystem : null;
 }

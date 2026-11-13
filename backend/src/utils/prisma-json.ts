@@ -47,6 +47,20 @@ export function toJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
 }
 
+/**
+ * Whether a value is one a JSON column holds: null, true or false, a finite
+ * number, text, or a list or plain object of those. A checked way to treat a
+ * value built from a column's own value as one, where a cast would only
+ * assert it.
+ */
+export function isJsonValue(value: unknown): value is Prisma.JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype) return false;
+  return Object.values(value).every(isJsonValue);
+}
+
 // ---------------------------------------------------------------------------
 // Reading
 // ---------------------------------------------------------------------------

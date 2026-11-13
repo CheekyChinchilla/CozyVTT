@@ -5,12 +5,12 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { DnD5eCharacterEditor } from '../dnd5e/DnD5eCharacterEditor';
-import { Pathfinder2eCharacterEditor } from '../pathfinder2e/Pathfinder2eCharacterEditor';
-import { CallOfCthulhu7eCharacterEditor } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
-import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
-import { cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
+import { FifthEditionCharacterEditor } from '../fifth-edition/FifthEditionCharacterEditor';
+import { FantasyD20CharacterEditor } from '../fantasy-d20/FantasyD20CharacterEditor';
+import { HorrorD100CharacterEditor } from '../horror-d100/HorrorD100CharacterEditor';
+import { fifthEditionCharacter } from '../fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
+import { horrorD100Character } from '../horror-d100/__tests__/sheetFixture';
 import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
 
 vi.mock('@/hooks/queries', () => ({
@@ -20,18 +20,18 @@ vi.mock('@/hooks/queries', () => ({
 const props = { onSave: vi.fn(), onCancel: vi.fn() };
 
 describe('the character name box', () => {
-  it('stops at the limit in the D&D 5e editor', () => {
-    render(<DnD5eCharacterEditor character={dnd5eCharacter()} {...props} />);
+  it('stops at the limit in the 5E editor', () => {
+    render(<FifthEditionCharacterEditor character={fifthEditionCharacter()} {...props} />);
     expect(screen.getByPlaceholderText('Character Name')).toHaveAttribute('maxLength', String(SHEET_NAME_MAX));
   });
 
-  it('stops at the limit in the Pathfinder 2e editor', () => {
-    render(<Pathfinder2eCharacterEditor character={pf2eCharacter()} {...props} />);
+  it('stops at the limit in the Fantasy d20 editor', () => {
+    render(<FantasyD20CharacterEditor character={fantasyD20Character()} {...props} />);
     expect(screen.getByPlaceholderText('Character Name')).toHaveAttribute('maxLength', String(SHEET_NAME_MAX));
   });
 
-  it('stops at the limit in the Call of Cthulhu editor', () => {
-    render(<CallOfCthulhu7eCharacterEditor character={cocCharacter()} {...props} />);
-    expect(screen.getByPlaceholderText('Investigator Name')).toHaveAttribute('maxLength', String(SHEET_NAME_MAX));
+  it('stops at the limit in the Horror d100 editor', () => {
+    render(<HorrorD100CharacterEditor character={horrorD100Character()} {...props} />);
+    expect(screen.getByPlaceholderText('Character Name')).toHaveAttribute('maxLength', String(SHEET_NAME_MAX));
   });
 });

@@ -1,6 +1,6 @@
 // ============================================
 // Manual fog-of-war layer (the non-dynamic-lighting fog).
-// DM sees semi-transparent fog from the full fogState; players see opaque
+// GM sees semi-transparent fog from the full fogState; players see opaque
 // fog everywhere outside their revealed cell set: nothing under an
 // unrevealed cell shows through, not the artwork and not what stands on it.
 // Pure: no React, no component closures.
@@ -10,8 +10,8 @@ import type { FogState } from '@/types/walls';
 import type { Viewport } from './types';
 
 export interface FogDrawState {
-  isDM: boolean;
-  /** Full fog grid — DM only. */
+  isGM: boolean;
+  /** Full fog grid — GM only. */
   fogState: FogState | null;
   /** Revealed cell indices — players only; null = no fog to draw. */
   revealedCells: Set<number> | null;
@@ -50,8 +50,8 @@ export function drawFog(
   state: FogDrawState,
   viewport: Viewport
 ): void {
-  // DM fog (semi-transparent, from full fogState)
-  if (state.isDM && state.fogState) {
+  // GM fog (semi-transparent, from full fogState)
+  if (state.isGM && state.fogState) {
     const { fogCols, fogRows, cellPx, revealed } = state.fogState;
     ctx.save();
     const hidden: number[] = [];
@@ -65,13 +65,13 @@ export function drawFog(
         ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
       }
     }
-    // Deep dark purple, semi-transparent for the DM
+    // Deep dark purple, semi-transparent for the GM
     fillCells(ctx, hidden, fogCols, cellPx, 'rgba(15, 12, 25, 0.55)');
     ctx.restore();
   }
 
   // Player fog (opaque, from revealedCells; cells are one per grid square)
-  if (!state.isDM && state.revealedCells) {
+  if (!state.isGM && state.revealedCells) {
     const cellPx = viewport.gridSize;
     const fogCols = viewport.mapWidth;
     const fogRows = viewport.mapHeight;

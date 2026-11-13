@@ -5,7 +5,7 @@
 // its conditions in full, its initiative while it is in the turn order, and
 // whether the viewer may move it.
 //
-// Conditions are listed here in full, for everyone rather than the DM alone.
+// Conditions are listed here in full, for everyone rather than the GM alone.
 // The badges drawn on the token are only two letters each, which is enough to
 // tell them apart at a glance but not to learn them, and a player who cannot
 // read what is afflicting a creature cannot play around it.
@@ -25,7 +25,7 @@ interface TokenDetailsCardProps {
   square: Position;
   /**
    * The hit points this viewer may see, as `visibleTokenHp` decides: a
-   * character's from its sheet, a creature's own only for the DM or once its
+   * character's from its sheet, a creature's own only for the GM or once its
    * HP bar is on. Null shows no row.
    */
   hp: CharacterHpInfo | null;

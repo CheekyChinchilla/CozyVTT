@@ -24,28 +24,28 @@ jest.setTimeout(20000);
 const runId = randomUUID().slice(0, 8);
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 const rolls = () => prisma.diceRoll.count({ where: { campaignId } });
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: `dicepayload-${name}-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: `Dice ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Dice payload ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  const campaign = await prisma.campaign.create({ data: { name: `Dice payload ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -59,7 +59,7 @@ beforeAll(async () => {
   mapId = map.id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 beforeEach(async () => {
@@ -72,7 +72,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
@@ -119,14 +119,14 @@ describe('dice.roll', () => {
 
 describe('initiative.roll', () => {
   it('refuses an expression that is not text, before reading anything', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const reads = jest.spyOn(prisma.map, 'findUnique');
-    const refused = waitForEvent<{ message: string }>(dm, 'error');
-    dm.emit('initiative.roll', { tokenId: 'goblin', mapId, expression: { dice: 20 } });
+    const refused = waitForEvent<{ message: string }>(gm, 'error');
+    gm.emit('initiative.roll', { tokenId: 'goblin', mapId, expression: { dice: 20 } });
 
     expect((await refused).message).toMatch(/expression/i);
     expect(reads).not.toHaveBeenCalled();
     reads.mockRestore();
-    dm.disconnect();
+    gm.disconnect();
   });
 });

@@ -1,7 +1,7 @@
 /**
  * The dashboard names a character's game system in words.
  *
- * Its character list showed the stored code, "DND_5E", under each name.
+ * Its character list showed the stored code, "FIFTH_EDITION", under each name.
  */
 
 import { it, expect, vi } from 'vitest';
@@ -11,7 +11,7 @@ import { GAME_SYSTEM_LABELS } from '@/constants/game-systems';
 import { GameSystem } from '@/types';
 
 const characters = [
-  { id: 'char-1', userId: 'me', name: 'Aldra', gameSystem: 'DND_5E', campaignId: null, tokenImageUrl: null, createdAt: '', updatedAt: '' },
+  { id: 'char-1', userId: 'me', name: 'Aldra', gameSystem: 'FIFTH_EDITION', campaignId: null, tokenImageUrl: null, createdAt: '', updatedAt: '' },
   { id: 'char-2', userId: 'me', name: 'Bramble', gameSystem: null, campaignId: null, tokenImageUrl: null, createdAt: '', updatedAt: '' },
 ] as unknown as CharacterSummary[];
 
@@ -34,7 +34,7 @@ import DashboardPage from '../DashboardPage';
 
 it("names each character's game system, and Flexible for none", () => {
   render(<DashboardPage />);
-  expect(screen.getByText(GAME_SYSTEM_LABELS[GameSystem.DND_5E])).toBeTruthy();
+  expect(screen.getByText(GAME_SYSTEM_LABELS[GameSystem.FIFTH_EDITION])).toBeTruthy();
   expect(screen.getByText('Flexible')).toBeTruthy();
-  expect(screen.queryByText('DND_5E')).toBeNull();
+  expect(screen.queryByText('FIFTH_EDITION')).toBeNull();
 });

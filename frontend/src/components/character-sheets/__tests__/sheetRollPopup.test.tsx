@@ -1,8 +1,8 @@
 /**
  * A sheet's roll menu: Normal, Advantage and Disadvantage for one d20 test,
- * Fortune and Misfortune on a Pathfinder 2e sheet, opened over the stat.
+ * Fortune and Misfortune on a Fantasy d20 sheet, opened over the stat.
  *
- * The D&D 5e and Pathfinder 2e sheets each drew a copy of it. It ran off the
+ * The 5E and Fantasy d20 sheets each drew a copy of it. It ran off the
  * right or the bottom of the screen when opened near either edge, Escape
  * closed the whole sheet under it, and it closed on a mousedown anywhere
  * else, which iOS sends as the finger of a long-press lifts.
@@ -10,10 +10,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { Character, CampaignMembership } from '@/types';
-import { DnD5eCharacterView } from '../dnd5e/DnD5eCharacterView';
-import { Pathfinder2eCharacterView } from '../pathfinder2e/Pathfinder2eCharacterView';
-import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
+import { FifthEditionCharacterView } from '../fifth-edition/FifthEditionCharacterView';
+import { FantasyD20CharacterView } from '../fantasy-d20/FantasyD20CharacterView';
+import { fifthEditionCharacter } from '../fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
 import { placeRollPopup, SheetRollPopup } from '../SheetRollPopup';
 import CharacterSheetViewerModal from '../../character/CharacterSheetViewerModal';
 
@@ -33,10 +33,10 @@ const items = () => screen.getAllByRole('menuitem').map((item) => item.textConte
 
 afterEach(() => { vi.restoreAllMocks(); });
 
-describe('on a D&D 5e sheet', () => {
+describe('on a 5E sheet', () => {
   it('offers Normal, Advantage and Disadvantage for a save, named after it, and rolls the one chosen', () => {
     const onRoll = vi.fn();
-    render(<DnD5eCharacterView character={dnd5eCharacter()} onRoll={onRoll} />);
+    render(<FifthEditionCharacterView character={fifthEditionCharacter()} onRoll={onRoll} />);
 
     fireEvent.contextMenu(screen.getByText('dexterity'), at(40, 40));
 
@@ -49,7 +49,7 @@ describe('on a D&D 5e sheet', () => {
 
   it('rolls Normal as the stat is, with nothing added to its purpose', () => {
     const onRoll = vi.fn();
-    render(<DnD5eCharacterView character={dnd5eCharacter()} onRoll={onRoll} />);
+    render(<FifthEditionCharacterView character={fifthEditionCharacter()} onRoll={onRoll} />);
 
     fireEvent.contextMenu(screen.getByText('Stealth'), at(40, 40));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Normal' }));
@@ -60,7 +60,7 @@ describe('on a D&D 5e sheet', () => {
   it('opens over an ability and an attack too', () => {
     const attack = { name: 'Spear', attackBonus: 4, damageRoll: '1d6+2', damageType: 'piercing', range: 20, properties: [], notes: '' };
     const onRoll = vi.fn();
-    render(<DnD5eCharacterView character={dnd5eCharacter({ attacks: [attack] })} onRoll={onRoll} />);
+    render(<FifthEditionCharacterView character={fifthEditionCharacter({ attacks: [attack] })} onRoll={onRoll} />);
 
     fireEvent.contextMenu(screen.getByText('STR'), at(40, 40));
     expect(screen.getByRole('menu', { name: 'Strength Check' })).toBeInTheDocument();
@@ -73,10 +73,10 @@ describe('on a D&D 5e sheet', () => {
   });
 });
 
-describe('on a Pathfinder 2e sheet', () => {
+describe('on a Fantasy d20 sheet', () => {
   it('offers Normal, Fortune and Misfortune, and rolls Misfortune twice keeping the lower', () => {
     const onRoll = vi.fn();
-    render(<Pathfinder2eCharacterView character={pf2eCharacter()} onRoll={onRoll} />);
+    render(<FantasyD20CharacterView character={fantasyD20Character()} onRoll={onRoll} />);
 
     fireEvent.contextMenu(screen.getByText('Perception', { selector: 'div' }), at(40, 40));
 
@@ -91,7 +91,7 @@ describe('on a Pathfinder 2e sheet', () => {
 
 describe('closing it', () => {
   it('closes on a press anywhere else, by finger, pen or mouse', () => {
-    render(<DnD5eCharacterView character={dnd5eCharacter()} onRoll={vi.fn()} />);
+    render(<FifthEditionCharacterView character={fifthEditionCharacter()} onRoll={vi.fn()} />);
 
     fireEvent.contextMenu(screen.getByText('dexterity'), at(40, 40));
     expect(menu()).toBeInTheDocument();
@@ -101,7 +101,7 @@ describe('closing it', () => {
   });
 
   it('stays open on a mousedown with no press, as iOS sends when a long-press lifts', () => {
-    render(<DnD5eCharacterView character={dnd5eCharacter()} onRoll={vi.fn()} />);
+    render(<FifthEditionCharacterView character={fifthEditionCharacter()} onRoll={vi.fn()} />);
 
     fireEvent.contextMenu(screen.getByText('dexterity'), at(40, 40));
     fireEvent.mouseDown(screen.getByText('Saving Throws'));
@@ -110,7 +110,7 @@ describe('closing it', () => {
   });
 
   it('stays open on a press inside it', () => {
-    render(<DnD5eCharacterView character={dnd5eCharacter()} onRoll={vi.fn()} />);
+    render(<FifthEditionCharacterView character={fifthEditionCharacter()} onRoll={vi.fn()} />);
 
     fireEvent.contextMenu(screen.getByText('dexterity'), at(40, 40));
     fireEvent.pointerDown(screen.getByRole('menuitem', { name: 'Normal' }));
@@ -119,7 +119,7 @@ describe('closing it', () => {
   });
 
   it('closes on Escape, and the sheet under it stays open', async () => {
-    const character = { ...dnd5eCharacter(), userId: 'owner' } as Character;
+    const character = { ...fifthEditionCharacter(), userId: 'owner' } as Character;
     const membership = { userId: 'owner', campaignId: 'camp-1', role: 'PLAYER', characterIds: [] } as unknown as CampaignMembership;
     const onClose = vi.fn();
     render(<CharacterSheetViewerModal character={character} campaignId="camp-1" membership={membership} onClose={onClose} />);
@@ -136,7 +136,7 @@ describe('closing it', () => {
 
 describe('from the keyboard', () => {
   it('takes the focus on its first item, and the arrows, Home and End move through the items', async () => {
-    render(<DnD5eCharacterView character={dnd5eCharacter()} onRoll={vi.fn()} />);
+    render(<FifthEditionCharacterView character={fifthEditionCharacter()} onRoll={vi.fn()} />);
 
     fireEvent.contextMenu(screen.getByText('dexterity'), at(40, 40));
     const [normal, advantage, disadvantage] = screen.getAllByRole('menuitem');
@@ -178,7 +178,7 @@ describe('where it opens', () => {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
       { x: 0, y: 0, left: 0, top: 0, right: 180, bottom: 150, width: 180, height: 150, toJSON: () => ({}) } as DOMRect
     );
-    render(<DnD5eCharacterView character={dnd5eCharacter()} onRoll={vi.fn()} />);
+    render(<FifthEditionCharacterView character={fifthEditionCharacter()} onRoll={vi.fn()} />);
 
     fireEvent.contextMenu(screen.getByText('dexterity'), at(300, 600));
 
@@ -186,7 +186,7 @@ describe('where it opens', () => {
   });
 
   it('has items a finger can hit on a touch screen', () => {
-    render(<DnD5eCharacterView character={dnd5eCharacter()} onRoll={vi.fn()} />);
+    render(<FifthEditionCharacterView character={fifthEditionCharacter()} onRoll={vi.fn()} />);
 
     fireEvent.contextMenu(screen.getByText('dexterity'), at(40, 40));
 
@@ -201,7 +201,7 @@ describe('where it is drawn', () => {
   it('is on the body, outside the panel group it is opened from', () => {
     render(
       <div data-group>
-        <SheetRollPopup at={at(40, 40)} expression="1d20+2" purpose="Stealth Check" gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} />
+        <SheetRollPopup at={at(40, 40)} expression="1d20+2" purpose="Stealth Check" gameSystem="FIFTH_EDITION" onRoll={vi.fn()} onClose={vi.fn()} />
       </div>,
     );
 

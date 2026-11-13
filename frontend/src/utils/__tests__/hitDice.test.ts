@@ -1,9 +1,9 @@
 /**
- * Spending a D&D 5e hit die.
+ * Spending a 5E hit die.
  *
- * Checked against the Basic Rules: "For each Hit Die spent in this way, the
- * player rolls the die and adds the character's Constitution modifier to it.
- * The character regains hit points equal to the total (minimum of 0)." So a
+ * Checked against SRD 5.1, "Short Rest": "For each Hit Die spent in this way,
+ * the player rolls the die and adds the character's Constitution modifier to
+ * it. The character regains hit points equal to the total." So a
  * spend is *one* die, not the whole pool — `total` holds "5d8", five d8 hit
  * dice, and rolling that string would roll all five at once.
  *

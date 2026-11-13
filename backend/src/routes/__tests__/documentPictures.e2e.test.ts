@@ -2,7 +2,7 @@
  * The pictures a handout shows, kept as the handout is written.
  *
  * A map picture a campaign's players may not see yet shows to them in a
- * handout the DM shares, and each player's Asset Library, and each read of
+ * handout the GM shares, and each player's Asset Library, and each read of
  * such a picture, asked which pictures the shared handouts name. That was
  * found by reading every shared handout's file on every request, so the work
  * a request did grew with the campaign's handouts: past a few hundred, a cache
@@ -36,9 +36,9 @@ const PNG = Buffer.from(
   'hex'
 );
 
-const user = { dm: '', player: '' };
+const user = { gm: '', player: '' };
 let campaignId = '';
-let dm: Agent;
+let gm: Agent;
 let player: Agent;
 
 async function login(email: string): Promise<Agent> {
@@ -54,7 +54,7 @@ async function picture(label: string): Promise<string> {
   fs.writeFileSync(filePath, PNG);
   const asset = await prisma.asset.create({
     data: {
-      type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: user.dm, filename, originalName: filename,
+      type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: user.gm, filename, originalName: filename,
       mimeType: 'image/png', fileSize: PNG.length, filePath, name: label,
     },
   });
@@ -63,22 +63,22 @@ async function picture(label: string): Promise<string> {
 
 const embed = (id: string) => `![Picture](/api/assets/maps/${id})`;
 
-/** A handout the DM wrote in the campaign, through the app. */
+/** A handout the GM wrote in the campaign, through the app. */
 async function written(content: string): Promise<{ id: string; filePath: string }> {
-  const res = await dm.post('/api/assets/documents').send({ name: 'Handout', format: 'md', content, scope: 'CAMPAIGN', campaignId });
+  const res = await gm.post('/api/assets/documents').send({ name: 'Handout', format: 'md', content, scope: 'CAMPAIGN', campaignId });
   expect(res.status).toBe(201);
   const { filePath } = await prisma.asset.findUniqueOrThrow({ where: { id: res.body.asset.id }, select: { filePath: true } });
   return { id: res.body.asset.id, filePath };
 }
 
-/** A handout of the DM's in the campaign stored before what documents name was kept: a row and a file, and nothing else. */
+/** A handout of the GM's in the campaign stored before what documents name was kept: a row and a file, and nothing else. */
 async function storedBefore(content: string): Promise<string> {
   const filename = `before-${Date.now()}-${Math.random()}.md`;
   const filePath = path.join(UPLOAD_DIR, filename);
   fs.writeFileSync(filePath, content);
   const doc = await prisma.asset.create({
     data: {
-      type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId, uploadedById: user.dm, filename, originalName: filename,
+      type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId, uploadedById: user.gm, filename, originalName: filename,
       mimeType: 'text/markdown', fileSize: Buffer.byteLength(content), filePath, name: filename,
     },
   });
@@ -111,17 +111,17 @@ async function documentFilesOpenedBy(run: () => Promise<unknown>): Promise<numbe
 
 beforeAll(async () => {
   const stamp = Date.now();
-  const [d, p] = await Promise.all((['dm', 'player'] as const).map((who) =>
+  const [d, p] = await Promise.all((['gm', 'player'] as const).map((who) =>
     createTestUser({ email: `doc-pictures-${who}-${stamp}@test.cozyvtt.local`, displayName: `Doc pictures ${who}` })));
-  [user.dm, user.player] = [d.id, p.id];
-  campaignId = (await createTestCampaign(user.dm, { name: `Doc pictures ${stamp}` })).id;
+  [user.gm, user.player] = [d.id, p.id];
+  campaignId = (await createTestCampaign(user.gm, { name: `Doc pictures ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: user.dm, campaignId, role: 'DM', characterIds: [] },
+      { userId: user.gm, campaignId, role: 'GM', characterIds: [] },
       { userId: user.player, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
-  dm = await login(d.email);
+  gm = await login(d.email);
   player = await login(p.email);
 });
 
@@ -157,7 +157,7 @@ describe('a handout written in the campaign', () => {
     const { id } = await written(embed(first));
     expect((await player.get(`/api/assets/maps/${first}`)).status).toBe(200);
 
-    expect((await dm.put(`/api/assets/documents/${id}/content`).send({ content: `Now ${embed(second)}` })).status).toBe(200);
+    expect((await gm.put(`/api/assets/documents/${id}/content`).send({ content: `Now ${embed(second)}` })).status).toBe(200);
     expect((await player.get(`/api/assets/maps/${first}`)).status).toBe(404);
     expect((await player.get(`/api/assets/maps/${second}`)).status).toBe(200);
     const listed = await listedToPlayer();
@@ -169,7 +169,7 @@ describe('a handout written in the campaign', () => {
 describe('a handout uploaded into the campaign', () => {
   it('shows the pictures its file names', async () => {
     const poster = await picture('poster');
-    const res = await dm
+    const res = await gm
       .post('/api/assets/upload')
       .field('type', 'DOCUMENT')
       .field('scope', 'CAMPAIGN')

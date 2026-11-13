@@ -1,12 +1,12 @@
 /**
  * Atmosphere audio reaching the players.
  *
- * When the DM picks a track, the server does not stream it to anyone. It
+ * When the GM picks a track, the server does not stream it to anyone. It
  * broadcasts the track's URL and every player's browser fetches the file from
  * GET /api/assets/audio/:id with that player's own session. So whether the
  * table hears anything is decided by that route's read rule, and its rule was
- * a hand copy that knew only scope: a track from the DM's personal library was
- * readable by the DM alone, and every player got 403 and silence.
+ * a hand copy that knew only scope: a track from the GM's personal library was
+ * readable by the GM alone, and every player got 403 and silence.
  *
  * The map route had the same bug and the same fix: access follows use. A
  * member may read an asset the campaign is using, here the track recorded in
@@ -32,12 +32,12 @@ import {
 const app = createTestApp();
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-atmo-audio-'));
 
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let strangerId: string;
 let campaignId: string;
 let trackId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let player: ReturnType<typeof request.agent>;
 let stranger: ReturnType<typeof request.agent>;
 
@@ -48,14 +48,14 @@ async function login(email: string) {
   return agent;
 }
 
-/** A personal track in the DM's own library, with a real file behind it. */
+/** A personal track in the GM's own library, with a real file behind it. */
 async function personalTrack(name: string): Promise<string> {
   const filePath = path.join(dir, `${name}.mp3`);
   // ID3v2 header and nothing else: enough for a stat and a byte range.
   fs.writeFileSync(filePath, Buffer.concat([Buffer.from('ID3\x04\x00\x00\x00\x00\x00\x00'), Buffer.alloc(64)]));
   const asset = await prisma.asset.create({
     data: {
-      type: 'AUDIO', scope: 'USER', uploadedById: dmId,
+      type: 'AUDIO', scope: 'USER', uploadedById: gmId,
       filename: `${name}.mp3`, originalName: `${name}.mp3`, mimeType: 'audio/mpeg',
       fileSize: 74, filePath, name,
     },
@@ -74,38 +74,38 @@ const fetchTrack = (agent: ReturnType<typeof request.agent>, id: string) => agen
 beforeAll(async () => {
   const stamp = Date.now();
   const [d, p, s] = await Promise.all([
-    createTestUser({ email: `atmo-dm-${stamp}@test.cozyvtt.local`, displayName: 'Atmo DM' }),
+    createTestUser({ email: `atmo-dm-${stamp}@test.cozyvtt.local`, displayName: 'Atmo GM' }),
     createTestUser({ email: `atmo-player-${stamp}@test.cozyvtt.local`, displayName: 'Atmo Player' }),
     createTestUser({ email: `atmo-stranger-${stamp}@test.cozyvtt.local`, displayName: 'Atmo Stranger' }),
   ]);
-  dmId = d.id; playerId = p.id; strangerId = s.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Atmo ${stamp}` })).id;
+  gmId = d.id; playerId = p.id; strangerId = s.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Atmo ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   // One at a time: one address may have only two sign-ins checked at once.
-  dm = await login(d.email);
+  gm = await login(d.email);
   player = await login(p.email);
   stranger = await login(s.email);
   trackId = await personalTrack('rain');
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId, strangerId]);
+  await cleanupUsers([gmId, playerId, strangerId]);
   await prisma.$disconnect();
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 beforeEach(() => playing(null));
 
-describe('a track from the DM\'s personal library', () => {
-  it('is the DM\'s alone while nothing is playing', async () => {
-    expect((await fetchTrack(dm, trackId)).status).toBe(200);
+describe('a track from the GM\'s personal library', () => {
+  it('is the GM\'s alone while nothing is playing', async () => {
+    expect((await fetchTrack(gm, trackId)).status).toBe(200);
     expect((await fetchTrack(player, trackId)).status).toBe(404);
   });
 
@@ -114,7 +114,7 @@ describe('a track from the DM\'s personal library', () => {
     expect((await fetchTrack(stranger, trackId)).status).toBe(404);
   });
 
-  describe('once the DM sets it as the campaign\'s atmosphere', () => {
+  describe('once the GM sets it as the campaign\'s atmosphere', () => {
     beforeEach(() => playing(trackId));
 
     it('every member can fetch it', async () => {
@@ -131,7 +131,7 @@ describe('a track from the DM\'s personal library', () => {
       expect(res.headers['content-range']).toBe('bytes 0-9/74');
     });
 
-    it('a different personal track of the DM\'s stays private', async () => {
+    it('a different personal track of the GM\'s stays private', async () => {
       const other = await personalTrack('wind');
       expect((await fetchTrack(player, other)).status).toBe(404);
     });
@@ -156,12 +156,12 @@ describe('a track from the DM\'s personal library', () => {
       );
       const polyglot = await prisma.asset.create({
         data: {
-          type: 'AUDIO', scope: 'USER', uploadedById: dmId,
+          type: 'AUDIO', scope: 'USER', uploadedById: gmId,
           filename: 'polyglot.mp3', originalName: 'polyglot.mp3', mimeType: 'text/html',
           fileSize: 62, filePath, name: 'Polyglot',
         },
       });
-      const res = await fetchTrack(dm, polyglot.id);
+      const res = await fetchTrack(gm, polyglot.id);
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toMatch(/^audio\/mpeg/);
       expect(res.headers['content-type']).not.toMatch(/html/);
@@ -174,17 +174,17 @@ describe('a track from the DM\'s personal library', () => {
         fs.writeFileSync(filePath, Buffer.alloc(16));
         const asset = await prisma.asset.create({
           data: {
-            type: 'AUDIO', scope: 'USER', uploadedById: dmId,
+            type: 'AUDIO', scope: 'USER', uploadedById: gmId,
             filename: `track.${ext}`, originalName: `track.${ext}`, mimeType: 'application/octet-stream',
             fileSize: 16, filePath, name: `Track ${ext}`,
           },
         });
-        expect((await fetchTrack(dm, asset.id)).headers['content-type']).toMatch(new RegExp(`^${mime}`));
+        expect((await fetchTrack(gm, asset.id)).headers['content-type']).toMatch(new RegExp(`^${mime}`));
       }
     });
   });
 
-  it('is private again once the DM stops it', async () => {
+  it('is private again once the GM stops it', async () => {
     await playing(trackId);
     expect((await fetchTrack(player, trackId)).status).toBe(200);
     await playing(null);

@@ -1,10 +1,10 @@
 /**
- * Past sessions, and the DM's ability to edit them.
+ * Past sessions, and the GM's ability to edit them.
  *
  * The editing control is the remedy for a specific exposure: session notes were
  * saved for as long as the end-session box has existed, but nothing displayed
  * them, so switching the panel on publishes every recap ever written — including
- * any a DM wrote as a private reminder. The pencil has to be there for the DM
+ * any a GM wrote as a private reminder. The pencil has to be there for the GM
  * and absent for everyone else, which is what these pin.
  *
  * The server is the actual boundary; hiding the button is not a permission
@@ -19,7 +19,7 @@ import type { SessionSummary } from '@/types';
 const campaignState = {
   campaign: { id: 'camp-1' } as { id: string } | null,
   activeSession: null as { id: string } | null,
-  userRole: 'DM' as string | null,
+  userRole: 'GM' as string | null,
 };
 
 vi.mock('@/contexts/CampaignContext', () => ({
@@ -47,7 +47,7 @@ const session = (over: Partial<SessionSummary> = {}): SessionSummary => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  campaignState.userRole = 'DM';
+  campaignState.userRole = 'GM';
   listSessions.mockResolvedValue({ sessions: [session()] });
   updateSessionNotes.mockImplementation((_c: string, _id: string, notes: string) =>
     Promise.resolve({ session: session({ notes: notes.trim() ? notes.trim() : null }) })
@@ -62,7 +62,7 @@ describe('SessionHistory', () => {
     expect(await screen.findByText('The party met the twisted tree.')).toBeInTheDocument();
   });
 
-  it('offers the DM an edit button', async () => {
+  it('offers the GM an edit button', async () => {
     render(<SessionHistory />);
     await waitFor(() => expect(editButton()).toBeInTheDocument());
   });

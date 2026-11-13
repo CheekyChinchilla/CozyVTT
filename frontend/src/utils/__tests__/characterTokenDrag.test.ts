@@ -22,14 +22,14 @@ import { TokenLayer, TokenType } from '@/types';
 
 const withImage = {
   id: 'char-1',
-  name: 'Aeryn',
+  name: 'Sefa',
   tokenImageUrl: '/api/assets/tokens/abc',
   userId: 'user-1',
 };
 
 const withoutImage = {
   id: 'char-2',
-  name: 'Test DnD',
+  name: 'Test Hero',
   tokenImageUrl: null,
   userId: 'user-2',
 };
@@ -39,7 +39,7 @@ describe('building the drag payload', () => {
     expect(characterTokenDrag(withImage)).toEqual({
       type: CHARACTER_TOKEN_DRAG,
       characterId: 'char-1',
-      name: 'Aeryn',
+      name: 'Sefa',
       imageUrl: '/api/assets/tokens/abc',
       userId: 'user-1',
     });
@@ -62,7 +62,7 @@ describe('reading a drag payload back', () => {
   it('accepts a character with no token picture', () => {
     const drag = roundTrip(withoutImage);
     expect(drag).not.toBeNull();
-    expect(drag!.name).toBe('Test DnD');
+    expect(drag!.name).toBe('Test Hero');
     expect(drag!.imageUrl).toBe('');
   });
 
@@ -95,8 +95,8 @@ describe('the token it creates', () => {
 
   it('is bound to the character and names no controller, which the server decides', () => {
     // The server gives a character's token to its owner while they are a
-    // player, and to nobody when the owner is the DM or a spectator. Naming
-    // the owner here made placing a DM's or a spectator's character a 400,
+    // player, and to nobody when the owner is the GM or a spectator. Naming
+    // the owner here made placing a GM's or a spectator's character a 400,
     // since only a player may be named.
     const request = characterTokenRequest(drag, position, TokenLayer.TOKEN);
     expect(request.characterId).toBe('char-2');

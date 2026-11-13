@@ -1,5 +1,5 @@
 /**
- * Reading the four proficiency boxes off a D&D 5e sheet.
+ * Reading the four proficiency boxes off a 5E sheet.
  *
  * Reported from a live game: languages typed comma-separated came back with
  * most of them missing. Reproduced in the browser — typing
@@ -44,7 +44,7 @@ describe('readProficiencyGroups', () => {
         armor: 'All armor, shields',
         weapons: 'Simple, martial',
         tools: "Thieves' tools",
-        languages: 'Common, Aarakocra',
+        languages: 'Common, Primordial',
       },
     };
     expect(readProficiencyGroups(sheet)).toEqual(sheet.proficiencies);

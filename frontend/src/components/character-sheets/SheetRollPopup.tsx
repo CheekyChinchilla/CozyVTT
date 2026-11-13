@@ -1,7 +1,7 @@
 /**
  * A character sheet's roll menu: one d20 test (a check, a save, a skill, an
  * attack) as Normal, Advantage or Disadvantage, as the sheet's system names
- * them (Fortune and Misfortune in Pathfinder 2e). Every sheet that rolls
+ * them (Fortune and Misfortune in Fantasy d20). Every sheet that rolls
  * with advantage opens this one, over the stat.
  *
  * - It opens at the pointer or the finger, on the other side of it where it

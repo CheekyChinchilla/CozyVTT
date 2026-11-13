@@ -21,7 +21,7 @@ const summary = {
   id: 'tpl-1',
   name: 'Level 1 Fighter',
   description: null,
-  gameSystem: 'DND_5E',
+  gameSystem: 'FIFTH_EDITION',
   tokenImageUrl: null,
   createdById: 'someone',
   createdBy: { id: 'someone', displayName: 'Someone' },
@@ -94,5 +94,32 @@ describe('using a template', () => {
     expect(createCharacter).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Level 1 Fighter', data: { characterName: 'Level 1 Fighter' } })
     );
+  });
+
+  // A template an older version stored carries the record of its own
+  // conversion; those are the template's old values, not the new character's.
+  it('leaves a Horror d100 template\'s conversion record out of the character', async () => {
+    const record = { from: 1, at: '2026-11-12T08:00:00.000Z', characteristics: { STR: 60 }, skills: [], kept: [] };
+    getCharacterTemplate.mockResolvedValue({
+      ...summary,
+      gameSystem: 'HORROR_D100',
+      data: { characterName: 'Old template', converted: record },
+    });
+    renderPage(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Use$/ }));
+    await screen.findByText('Editor');
+
+    expect(createCharacter).toHaveBeenCalledWith(expect.objectContaining({ data: { characterName: 'Old template' } }));
+  });
+
+  it('copies a key named converted from a template of another system', async () => {
+    getCharacterTemplate.mockResolvedValue({ ...summary, gameSystem: null, data: { converted: 'kept' } });
+    renderPage(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Use$/ }));
+    await screen.findByText('Editor');
+
+    expect(createCharacter).toHaveBeenCalledWith(expect.objectContaining({ data: { converted: 'kept' } }));
   });
 });

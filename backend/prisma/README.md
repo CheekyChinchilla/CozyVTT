@@ -16,7 +16,7 @@ The schema is in [`schema.prisma`](./schema.prisma) — 24 models grouped by dom
 
 **Campaigns & membership**
 - `Campaign` — game-system, vibe settings, spirit-layer config, status, and whether players may draw on the map (`playersMayDraw`, default on)
-- `CampaignMembership` — join table with role (DM/PLAYER/SPECTATOR)
+- `CampaignMembership` — join table with role (`GM`, `PLAYER` or `SPECTATOR`)
 - `CampaignInvitation` — pending/accepted/declined invites
 - `Session` — live game sessions with full state snapshots
 
@@ -24,13 +24,13 @@ The schema is in [`schema.prisma`](./schema.prisma) — 24 models grouped by dom
 - `Character` — flexible JSON-backed character sheets, optionally bound to a campaign + game system
 - `Map` — base + spirit layer, tokens, walls, lights, fog, annotations; per-map switches for fog of war, Global Illumination and explored memory (`fogEnabled`, `globalIllumination`, `explorationEnabled`, all default on so existing maps keep their behaviour); `drawnBackground`, the colour a map drawn in CozyVTT is made in (null for one made from a picture)
 - `MapExploration` — one player's explored cells on one map; never read when deciding which tokens to send
-- `MapDrawing` — one drawing on one map (a stroke, a shape or a text label): its kind, colours, width and points in whole map pixels from the top-left, who drew it (`authorId`, null once their account is deleted) and who is sent it (`audience`, `ALL` or `DM`). It goes with its map. `layer` is `MARKUP` for everything drawn so far; `GROUND`, `pattern` and `stamp` are kept for DM-drawn map art and not accepted yet
+- `MapDrawing` — one drawing on one map (a stroke, a shape or a text label): its kind, colours, width and points in whole map pixels from the top-left, who drew it (`authorId`, null once their account is deleted) and who is sent it (`audience`, `ALL` or `GM`). It goes with its map. `layer` is `MARKUP` for everything drawn so far; `GROUND`, `pattern` and `stamp` are kept for GM-drawn map art and not accepted yet
 - `CreatureTemplate` — SRD bestiary + custom creatures (campaign-scoped or global). `source` says which; `createdById` is the author, null for SRD creatures and once the author's account is deleted
-- `CreatureFavorite` — DM's per-campaign starred creatures
+- `CreatureFavorite` — GM's per-campaign starred creatures
 - `TokenTemplate` — reusable token configurations copyable across campaigns
 - `CharacterTemplate` — shareable starter sheets any signed-in user can copy
 - `PersonalNote` — a player's own Markdown notes for one campaign. **Private to
-  the author, the DM included** — every route scopes its query by the session's
+  the author, the GM included** — every route scopes its query by the session's
   own user id, and a note that is not yours answers 404 rather than 403 so the
   response cannot confirm the id exists. Not to be confused with
   `Session.notes`, which the whole campaign reads.
@@ -57,7 +57,7 @@ The schema is in [`schema.prisma`](./schema.prisma) — 24 models grouped by dom
 
 **Assets & messages**
 - `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN. When the uploader's account is deleted, `uploadedById` becomes null on the uploads that stay (those in a campaign or the global library, and personal ones still in use or shared into a campaign); the avatar and every other personal upload are deleted, row and file (`services/accountDeletion.ts`). `picturesReadAt` is when a document's text was last read for `DocumentPicture`; it is null on every other asset, and on a document stored before those rows were kept until a request has read it
-- `Message` — chat history (player, DM, system, dice rolls, character actions, whispers). A `WHISPER` is for one member, named in `recipientId`; when that account is deleted the column becomes null and the whisper stays
+- `Message` — chat history (player, GM, system, dice rolls, character actions, whispers). A `WHISPER` is for one member, named in `recipientId`; when that account is deleted the column becomes null and the whisper stays
 - `DiceRoll` — historical dice rolls with breakdowns; `userId` becomes null when the roller's account is deleted, and the roll stays
 
 **Platform**
@@ -70,26 +70,33 @@ The schema is in [`schema.prisma`](./schema.prisma) — 24 models grouped by dom
 |---|---|
 | `PlatformRole` | `ADMIN`, `USER` |
 | `CampaignStatus` | `PREPARATION`, `ACTIVE`, `PAUSED`, `INACTIVE`, `COMPLETED`, `ARCHIVED` |
-| `CampaignRole` | `DM`, `PLAYER`, `SPECTATOR` |
-| `GameSystem` | `DND_5E`, `PATHFINDER_2E`, `SHADOWRUN_6E`, `CALL_OF_CTHULHU_7E` |
+| `CampaignRole` | `GM`, `PLAYER`, `SPECTATOR` |
+| `GameSystem` | `FIFTH_EDITION`, `FANTASY_D20`, `HORROR_D100` |
 | `AssetType` | `MAP`, `TOKEN`, `AUDIO`, `AVATAR`, `DOCUMENT`, `OTHER` |
 | `AssetScope` | `GLOBAL`, `USER`, `CAMPAIGN` |
-| `MessageType` | `PLAYER`, `DM`, `SYSTEM`, `DICE_ROLL`, `CHARACTER_ACTION`, `WHISPER` |
+| `MessageType` | `PLAYER`, `GM`, `SYSTEM`, `DICE_ROLL`, `CHARACTER_ACTION`, `WHISPER` |
 | `LogLevel` | `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `InvitationStatus` | `PENDING`, `ACCEPTED`, `DECLINED` |
-| `DrawingAudience` | `ALL`, `DM` |
+| `DrawingAudience` | `ALL`, `GM` |
 | `DrawingLayer` | `MARKUP`, `GROUND` |
+
+Until 1.7.0 the game systems and the GM's value had other names; the
+`20261112013825_name_systems_and_gm_role` migration renamed every stored
+one, and gave no system to the rows of an
+unreleased system that never shipped. Requests, archives, character files and
+scripts that still send an old value are read through
+`src/legacy/gameSystemAliases.ts`.
 
 Note: `AssetType` includes `OTHER`, but the upload route rejects it — only MAP / TOKEN / AUDIO / AVATAR / DOCUMENT are accepted from clients. `OTHER` is reserved for future use.
 
 ## Important constraints
 
 - **Email uniqueness** — `User.email` unique index, case-folded to lowercase before insert
-- **One DM per campaign** — enforced in `routes/campaigns.ts` (the hand-over and the role route) and `services/campaignMembers.ts` (a removal or a leave never takes the DM out), not by a constraint, because the DM role is a value in the membership row. The database enforces one membership per user per campaign (`@@unique([userId, campaignId])`)
+- **One GM per campaign** — enforced in `routes/campaigns.ts` (the hand-over and the role route) and `services/campaignMembers.ts` (a removal or a leave never takes the GM out), not by a constraint, because the GM role is a value in the membership row. The database enforces one membership per user per campaign (`@@unique([userId, campaignId])`)
 - **Cascade deletions** — deleting a campaign removes its memberships, invitations, maps (and their explored memory and drawings), sessions, messages, dice rolls, creature templates and favourites, token templates, personal notes, dice macros and document links. Its campaign-scoped assets are kept: the delete route turns each into its uploader's USER asset first, and `Asset.campaignId` is `SetNull`
 - **Unbounded text is bounded by the validator, not the column** — `PersonalNote.content` is `TEXT`, which Postgres would let grow to a gigabyte. The 100,000-character limit lives in `validators/personalNotes.ts` so the column never has to change if it is revisited, and the list endpoint does not select the column at all
 - **Soft references** — `Character.campaignId` uses `SetNull` so deleting a campaign doesn't kill the player's character
-- **Deleting a user** keeps their chat messages, dice rolls, the uploads that stay (see `Asset` above), their published character templates and the creatures they made, with the user column set to null. Whispers sent to them stay too, with `Message.recipientId` set to null, and so does what they drew on maps, with `MapDrawing.authorId` set to null. `Campaign.ownerId` still refuses the deletion: `services/accountDeletion.ts` passes a campaign they own to its sitting DM first, and refuses while they hold the DM seat of any campaign, owned or not, or own one with nobody in the seat. It also refuses the instance's only admin
+- **Deleting a user** keeps their chat messages, dice rolls, the uploads that stay (see `Asset` above), their published character templates and the creatures they made, with the user column set to null. Whispers sent to them stay too, with `Message.recipientId` set to null, and so does what they drew on maps, with `MapDrawing.authorId` set to null. `Campaign.ownerId` still refuses the deletion: `services/accountDeletion.ts` passes a campaign they own to its sitting GM first, and refuses while they hold the GM seat of any campaign, owned or not, or own one with nobody in the seat. It also refuses the instance's only admin
 
 ## JSON columns
 
@@ -99,7 +106,7 @@ Several models use Prisma's `Json` type for flexibility:
 |---|---|
 | `Campaign.vibeSettings` | Vibe periods with color/audio config |
 | `Map.tokens` | Array of token objects (position, image, HP, conditions, stat block, etc.) |
-| `Map.annotations` | Shown nowhere: members are sent it as `[]`, and new maps and imports write `[]`. The session snapshot (`captureGameState` in `services/sessionState.ts`) still copies the current map's into `Session.savedState`, which nothing reads back. A map imported from an archive by 1.5.4 or earlier can still hold up to 500 records that archive carried, which the DM's replies that return the stored row whole include. Drawings are rows of `MapDrawing`, which a campaign archive carries under each map file's `drawings` (fog is `Map.fogData`) |
+| `Map.annotations` | Shown nowhere: members are sent it as `[]`, and new maps and imports write `[]`. The session snapshot (`captureGameState` in `services/sessionState.ts`) still copies the current map's into `Session.savedState`, which nothing reads back. A map imported from an archive by 1.5.4 or earlier can still hold up to 500 records that archive carried, which the GM's replies that return the stored row whole include. Drawings are rows of `MapDrawing`, which a campaign archive carries under each map file's `drawings` (fog is `Map.fogData`) |
 | `Map.wallSegments` | Wall geometry (`WallSegment[]`) |
 | `Map.lights` | Light sources (`LightSource[]`) |
 | `Map.fogData` | Fog-of-war reveal state |
@@ -142,7 +149,7 @@ npx prisma migrate reset
 
 ## Migration strategy
 
-- Create schema migrations with Prisma's own tooling (`prisma migrate dev`, or `prisma migrate diff` where `migrate dev` refuses to run; `docs/DEVELOPMENT.md` shows both). A migration that changes rows is written by hand in SQL, and has to be safe to run twice and safe to fail half-way: `20260417000000_migrate_light_bright_dim`, which rewrites every map's lights, and `20261015033738_creature_template_author_set_null`, which clears the author of each creature whose author's account was already deleted, are the two so far. Never edit a migration that has shipped: a database that already ran it would no longer match the file.
+- Create schema migrations with Prisma's own tooling (`prisma migrate dev`, or `prisma migrate diff` where `migrate dev` refuses to run; `docs/DEVELOPMENT.md` shows both). A migration that changes rows is written by hand in SQL, and has to be safe to run twice and safe to fail half-way: `20260417000000_migrate_light_bright_dim`, which rewrites every map's lights, and `20261015033738_creature_template_author_set_null`, which clears the author of each creature whose author's account was already deleted, and `20261112013825_name_systems_and_gm_role`, which renames the game systems and the GM's value in the enums and in stat blocks' JSON, are the three so far. Never edit a migration that has shipped: a database that already ran it would no longer match the file.
 - **Production deployments** run `npx prisma migrate deploy` on backend startup — this only applies migrations that haven't run on the target DB. It never modifies existing migration history.
 - The `migrations/` directory is **tracked in git**. Every PR that touches `schema.prisma` should also commit the generated migration file alongside it.
 - Migrations are forward-only. There's no `prisma migrate down`. To "revert," write a new migration that undoes the previous change.

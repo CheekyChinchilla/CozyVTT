@@ -3,7 +3,7 @@
  * one broadcast every client listens to.
  *
  * Before `fogEnabled` existed every map was fogged for players from creation
- * with no way off. Now a new map starts with fog off, the DM can set it on the
+ * with no way off. Now a new map starts with fog off, the GM can set it on the
  * update route, and any flag change reaches connected clients as a single
  * `map:settings:updated` event carrying every flag.
  *
@@ -31,7 +31,7 @@ jest.setTimeout(20000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let assetId: string;
@@ -39,22 +39,22 @@ let agent: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
   const stamp = Date.now();
-  const dm = await createTestUser({ email: `ms-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gm = await createTestUser({ email: `ms-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const player = await createTestUser({ email: `ms-player-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  const campaign = await createTestCampaign(dmId, { name: `Map settings ${stamp}` });
+  const campaign = await createTestCampaign(gmId, { name: `Map settings ${stamp}` });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
-  // The create route refuses a map image the caller cannot read, so the DM owns one.
+  // The create route refuses a map image the caller cannot read, so the GM owns one.
   const asset = await prisma.asset.create({
     data: {
-      type: 'MAP', scope: 'USER', uploadedById: dmId,
+      type: 'MAP', scope: 'USER', uploadedById: gmId,
       filename: `ms-${stamp}.png`, originalName: 'map.png', mimeType: 'image/png',
       fileSize: 1, filePath: `maps/ms-${stamp}.png`, name: 'map',
     },
@@ -62,7 +62,7 @@ beforeAll(async () => {
   assetId = asset.id;
 
   agent = request.agent(app);
-  expect((await agent.post('/api/auth/login').send({ email: dm.email, password: TEST_PASSWORD })).status).toBe(200);
+  expect((await agent.post('/api/auth/login').send({ email: gm.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
@@ -70,7 +70,7 @@ afterAll(async () => {
   await server.close();
   await prisma.asset.deleteMany({ where: { id: assetId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
@@ -133,26 +133,26 @@ describe('updating the flags', () => {
     // first is its own optimistic one, sent before this row is written, and
     // the server has nothing to say to it. The route pushes the state itself.
     const map = await createMap();
-    const dmClient = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const gmClient = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
     const playerClient = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
 
-    const grid = waitForEvent<{ mapId: string; fogState: { revealed: boolean[] } }>(dmClient, 'fog:updated');
+    const grid = waitForEvent<{ mapId: string; fogState: { revealed: boolean[] } }>(gmClient, 'fog:updated');
     const cells = waitForEvent<{ mapId: string; revealedCells: number[] }>(playerClient, 'fog:cells');
     expect((await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ fogEnabled: true })).status).toBe(200);
-    const dmSaw = await grid;
-    expect(dmSaw.mapId).toBe(map.id);
-    expect(dmSaw.fogState.revealed).toHaveLength(100);
-    expect(dmSaw.fogState.revealed.every((r) => r === false)).toBe(true);
+    const gmSaw = await grid;
+    expect(gmSaw.mapId).toBe(map.id);
+    expect(gmSaw.fogState.revealed).toHaveLength(100);
+    expect(gmSaw.fogState.revealed.every((r) => r === false)).toBe(true);
     expect(await cells).toEqual(expect.objectContaining({ mapId: map.id, revealedCells: [] }));
 
     // Switching it off, or changing another flag, pushes nothing.
-    const quietOff = expectNoEvent(dmClient, 'fog:updated', 400);
+    const quietOff = expectNoEvent(gmClient, 'fog:updated', 400);
     expect((await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ fogEnabled: false })).status).toBe(200);
     await quietOff;
-    const quietOther = expectNoEvent(dmClient, 'fog:updated', 400);
+    const quietOther = expectNoEvent(gmClient, 'fog:updated', 400);
     expect((await agent.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ globalIllumination: true })).status).toBe(200);
     await quietOther;
-    dmClient.disconnect();
+    gmClient.disconnect();
     playerClient.disconnect();
   });
 
@@ -219,14 +219,14 @@ describe('a change that alters what players can see', () => {
     client.disconnect();
   });
 
-  // A map the table is not on is the DM's until they switch to it, its
+  // A map the table is not on is the GM's until they switch to it, its
   // settings included; a player is sent them with the map when it is shown.
-  it('a change to a map the table is not on tells the DM and no player', async () => {
+  it('a change to a map the table is not on tells the GM and no player', async () => {
     const current = await createLitMap();
     const other = await createLitMap(false);
     const client = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
-    const dm = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
-    const flags = waitForEvent<{ mapId: string }>(dm, 'map:settings:updated');
+    const gm = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
+    const flags = waitForEvent<{ mapId: string }>(gm, 'map:settings:updated');
     const quiet = Promise.all([
       expectNoEvent(client, 'map:settings:updated', 500),
       expectNoEvent(client, 'map.changed', 500),
@@ -236,7 +236,7 @@ describe('a change that alters what players can see', () => {
     await quiet;
     expect(current).not.toBe(other);
     client.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('a change that leaves sight alone sends the flags and nothing more', async () => {

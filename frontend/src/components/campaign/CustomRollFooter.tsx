@@ -18,7 +18,7 @@ interface CustomRollFooterProps {
  * A free-form roll, pinned below whatever list a picker is showing.
  *
  * Not everything a table rolls comes off a sheet or a stat block: a falling
- * rock, a DM's improvised save, a homebrew effect. The creature picker had
+ * rock, a GM's improvised save, a homebrew effect. The creature picker had
  * this and the character picker did not, so a player's only route was the
  * dice panel on another tab — which files the roll under their own name
  * rather than their character's.

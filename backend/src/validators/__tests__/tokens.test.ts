@@ -5,7 +5,7 @@ import { validateTokenShapes } from '../tokens';
  *
  * The map routes hand-checked a few fields and stored the rest as sent: a
  * player's `position` kept whatever keys arrived beside x and y, `rotation`
- * took any JSON value, and the DM's `visible`, `showHpBar`, `initiative`,
+ * took any JSON value, and the GM's `visible`, `showHpBar`, `initiative`,
  * `controlledBy` and `characterId` were never typed at all. Whatever was
  * stored then went to every member on each map fetch.
  */
@@ -58,7 +58,7 @@ describe('validateTokenShapes', () => {
     });
 
     // 'false' is the case that matters: a truthy string stored as `visible`
-    // showed players a token the DM believed hidden.
+    // showed players a token the GM believed hidden.
     it.each([['visible', 'false'], ['visible', 1], ['showHpBar', 'no'], ['showHpBar', null]])(
       'refuses %s = %j', (field, value) => {
         expect(refused({ [field]: value })).toMatch(new RegExp(field));

@@ -1,5 +1,5 @@
 /**
- * A map made with Draw a map opens on the DM's screen at once, as Open to
+ * A map made with Draw a map opens on the GM's screen at once, as Open to
  * prepare opens one, with Mapmaker on, and the Map Library gets out of its
  * way: the players stay where they are. Its picture is known to be drawn
  * without asking. A map made from a picture stays in the library, as
@@ -32,7 +32,7 @@ vi.mock('framer-motion', () => {
 });
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
-    campaign: { id: 'campaign-1', name: 'Lost Mine', currentMapId: 'village' },
+    campaign: { id: 'campaign-1', name: 'The Hollow Crown', currentMapId: 'village' },
     currentMap: { id: 'village', name: 'Village', tokens: [] },
     viewedMap: { id: 'village', name: 'Village', tokens: [] },
     isPreparing: false,

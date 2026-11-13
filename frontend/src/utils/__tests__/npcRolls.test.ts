@@ -18,8 +18,8 @@ const goblin: NpcStatBlock = {
   challengeRating: '1/4',
   actions: [
     {
-      name: 'Scimitar',
-      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft. Hit: 5 (1d6 + 2) slashing damage.',
+      name: 'Handaxe',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft. Hit: 4 (1d6 + 1) slashing damage.',
     },
   ],
 };
@@ -58,8 +58,8 @@ describe('extractDiceExpressions', () => {
   });
 });
 
-describe('buildNpcRolls — D&D 5e', () => {
-  const rolls = buildNpcRolls(goblin, 'DND_5E');
+describe('buildNpcRolls — 5E', () => {
+  const rolls = buildNpcRolls(goblin, 'FIFTH_EDITION');
 
   it('offers all six ability checks', () => {
     expect(rolls.abilities).toHaveLength(6);
@@ -81,8 +81,8 @@ describe('buildNpcRolls — D&D 5e', () => {
   });
 
   it('parses attack and damage from the action text', () => {
-    expect(find(rolls.combat, 'Attack')?.expression).toBe('1d20+4');
-    expect(find(rolls.combat, 'Damage')?.expression).toBe('1d6+2');
+    expect(find(rolls.combat, 'Attack')?.expression).toBe('1d20+3');
+    expect(find(rolls.combat, 'Damage')?.expression).toBe('1d6+1');
   });
 
   it('marks damage as not supporting advantage', () => {
@@ -95,7 +95,7 @@ describe('buildNpcRolls — D&D 5e', () => {
   it('resolves Open5e snake_case skill keys', () => {
     const withSnakeCase = buildNpcRolls(
       { ...goblin, skills: { animal_handling: 4 } },
-      'DND_5E'
+      'FIFTH_EDITION'
     );
     const row = find(withSnakeCase.skills, 'Animal Handling');
     expect(row).toBeDefined();
@@ -105,7 +105,7 @@ describe('buildNpcRolls — D&D 5e', () => {
   it('marks an expert skill distinctly from a proficient one', () => {
     const expert = buildNpcRolls(
       { ...goblin, proficiencies: { skills: { stealth: 'expertise' } } },
-      'DND_5E'
+      'FIFTH_EDITION'
     );
     expect(find(expert.skills, 'Stealth')?.label).toContain('◆');
   });
@@ -113,7 +113,7 @@ describe('buildNpcRolls — D&D 5e', () => {
   it('renders a negative bonus correctly', () => {
     const weak = buildNpcRolls(
       { ...goblin, abilities: { ...goblin.abilities, str: 6 } },
-      'DND_5E'
+      'FIFTH_EDITION'
     );
     expect(find(weak.abilities, 'STR')?.expression).toBe('1d20-2');
   });
@@ -127,14 +127,14 @@ describe('buildNpcRolls — dice the parser refuses', () => {
       ...goblin,
       actions: [{ name: 'Crush', description: 'Melee Weapon Attack: +12 to hit. Hit: 700 (200d6) bludgeoning damage, or 3 (1d6) on a miss.' }],
     };
-    const damage = buildNpcRolls(titan, 'DND_5E').combat.filter((o) => o.purpose.startsWith('Crush Damage'));
+    const damage = buildNpcRolls(titan, 'FIFTH_EDITION').combat.filter((o) => o.purpose.startsWith('Crush Damage'));
     expect(damage.map((o) => o.expression)).toEqual(['1d6']);
   });
 });
 
-describe('buildNpcRolls — Pathfinder 2e', () => {
-  // PF2e prints final modifiers; nothing is derived from ranks or level.
-  const pf2eCreature: NpcStatBlock = {
+describe('buildNpcRolls — Fantasy d20', () => {
+  // Fantasy d20 prints final modifiers; nothing is derived from ranks or level.
+  const fantasyD20Creature: NpcStatBlock = {
     ac: 18,
     speed: '25 feet',
     abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
@@ -144,13 +144,13 @@ describe('buildNpcRolls — Pathfinder 2e', () => {
     skills: { athletics: 12 },
   };
 
-  const rolls = buildNpcRolls(pf2eCreature, 'PATHFINDER_2E');
+  const rolls = buildNpcRolls(fantasyD20Creature, 'FANTASY_D20');
 
   it('uses the printed attribute modifier rather than deriving one', () => {
     expect(find(rolls.abilities, 'STR')?.expression).toBe('1d20+4');
   });
 
-  it('offers the three PF2e saves with their proper names', () => {
+  it('offers the three Fantasy d20 saves with their proper names', () => {
     expect(rolls.savingThrows).toHaveLength(3);
     expect(find(rolls.savingThrows, 'Fortitude')?.expression).toBe('1d20+11');
     expect(find(rolls.savingThrows, 'Will')?.expression).toBe('1d20+9');
@@ -163,7 +163,7 @@ describe('buildNpcRolls — Pathfinder 2e', () => {
   // The stat block takes any save key; the label table was read as a plain
   // object, so "constructor" found Object and labelled the roll with its text.
   it('names a save of its own by its key, whatever the key is', () => {
-    const odd = buildNpcRolls({ ...pf2eCreature, savingThrows: { constructor: 3, Reflex: 7 } }, 'PATHFINDER_2E');
+    const odd = buildNpcRolls({ ...fantasyD20Creature, savingThrows: { constructor: 3, Reflex: 7 } }, 'FANTASY_D20');
     expect(odd.savingThrows.map((r) => [r.label, r.purpose])).toEqual([
       ['constructor +3', 'constructor Save'],
       ['Reflex +7', 'Reflex Save'],
@@ -172,18 +172,18 @@ describe('buildNpcRolls — Pathfinder 2e', () => {
 
   it('falls back to deriving from scores for a creature entered 5e-style', () => {
     const legacy = buildNpcRolls(
-      { ...pf2eCreature, attributeModifiers: undefined, abilities: { ...pf2eCreature.abilities, str: 18 } },
-      'PATHFINDER_2E'
+      { ...fantasyD20Creature, attributeModifiers: undefined, abilities: { ...fantasyD20Creature.abilities, str: 18 } },
+      'FANTASY_D20'
     );
     expect(find(legacy.abilities, 'STR')?.expression).toBe('1d20+4');
   });
 });
 
 describe('buildNpcRolls — systems without a d20 model', () => {
-  // The defect this fixes: a Call of Cthulhu NPC was offered 1d20 + ability
+  // The defect this fixes: a Horror d100 NPC was offered 1d20 + ability
   // modifier rolls for a percentile system with no ability modifiers.
-  it.each(['CALL_OF_CTHULHU_7E', 'SHADOWRUN_6E'])('offers nothing for %s', (system) => {
-    const rolls = buildNpcRolls(goblin, system);
+  it('offers nothing for HORROR_D100', () => {
+    const rolls = buildNpcRolls(goblin, 'HORROR_D100');
 
     expect(rolls.abilities).toHaveLength(0);
     expect(rolls.skills).toHaveLength(0);
@@ -191,11 +191,18 @@ describe('buildNpcRolls — systems without a d20 model', () => {
     expect(rolls.combat).toHaveLength(0);
   });
 
+  // A campaign stored with a system CozyVTT no longer supports plays as one
+  // with no system.
+  it('offers for a system it does not know what it offers with none', () => {
+    expect(buildNpcRolls(goblin, 'SOMETHING_ELSE')).toEqual(buildNpcRolls(goblin, null));
+    expect(buildNpcRolls(goblin, 'SOMETHING_ELSE').abilities.length).toBeGreaterThan(0);
+  });
+
   it('reports which systems have a modelled structure', () => {
-    expect(systemSupportsNpcRolls('DND_5E')).toBe(true);
-    expect(systemSupportsNpcRolls('PATHFINDER_2E')).toBe(true);
-    expect(systemSupportsNpcRolls('CALL_OF_CTHULHU_7E')).toBe(false);
-    expect(systemSupportsNpcRolls('SHADOWRUN_6E')).toBe(false);
+    expect(systemSupportsNpcRolls('FIFTH_EDITION')).toBe(true);
+    expect(systemSupportsNpcRolls('FANTASY_D20')).toBe(true);
+    expect(systemSupportsNpcRolls('HORROR_D100')).toBe(false);
+    expect(systemSupportsNpcRolls('SOMETHING_ELSE')).toBe(false);
     expect(systemSupportsNpcRolls(null)).toBe(false);
   });
 });
@@ -218,7 +225,7 @@ describe('buildNpcRolls — edge cases', () => {
 
   it('survives a stat block with no abilities recorded', () => {
     const bare = { ac: 10, speed: '30 ft.' } as NpcStatBlock;
-    const rolls = buildNpcRolls(bare, 'DND_5E');
+    const rolls = buildNpcRolls(bare, 'FIFTH_EDITION');
     expect(find(rolls.abilities, 'STR')?.expression).toBe('1d20+0');
   });
 });

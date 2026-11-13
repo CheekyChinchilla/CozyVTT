@@ -18,14 +18,14 @@ import indexCss from '../../index.css?raw';
 /**
  * Exempt:
  *  - the map's tool panels, deliberately dark panels floating over the map:
- *    the DM's Fog, Walls and Lights, their stack, the drawing tools and Paint's
+ *    the GM's Fog, Walls and Lights, their stack, the drawing tools and Paint's
  *  - each sheet's header colour presets (`colorPresets.ts`)
  */
 const EXEMPT = [
-  '/src/components/campaign/DmWallControls.tsx',
-  '/src/components/campaign/DmLightControls.tsx',
-  '/src/components/campaign/DmFogControls.tsx',
-  '/src/components/campaign/DmToolPanelContainer.tsx',
+  '/src/components/campaign/GmWallControls.tsx',
+  '/src/components/campaign/GmLightControls.tsx',
+  '/src/components/campaign/GmFogControls.tsx',
+  '/src/components/campaign/GmToolPanelContainer.tsx',
   '/src/components/campaign/DrawControls.tsx',
   '/src/components/campaign/PaintControls.tsx',
 ];

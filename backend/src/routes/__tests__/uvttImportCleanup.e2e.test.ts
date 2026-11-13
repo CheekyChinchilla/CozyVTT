@@ -42,24 +42,24 @@ const UVTT = Buffer.from(
   })
 );
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: request.Agent;
+let gm: request.Agent;
 
 beforeAll(async () => {
-  const user = await createTestUser({ displayName: 'UVTT cleanup DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId)).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  const user = await createTestUser({ displayName: 'UVTT cleanup GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId)).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterEach(() => jest.restoreAllMocks());
 
 afterAll(async () => {
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 });
@@ -80,7 +80,7 @@ function storedFiles(): string[] {
 }
 
 const importUvtt = () =>
-  dm.post(`/api/campaigns/${campaignId}/maps/import-uvtt`).field('name', 'Cleanup Map').attach('file', UVTT, 'cleanup.uvtt');
+  gm.post(`/api/campaigns/${campaignId}/maps/import-uvtt`).field('name', 'Cleanup Map').attach('file', UVTT, 'cleanup.uvtt');
 
 describe('POST /api/campaigns/:campaignId/maps/import-uvtt when saving fails', () => {
   it('removes the picture and thumbnail when the asset row cannot be written', async () => {

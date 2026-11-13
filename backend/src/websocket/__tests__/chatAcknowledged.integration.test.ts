@@ -28,10 +28,10 @@ jest.setTimeout(20000);
 const runId = randomUUID().slice(0, 8);
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 type Answer = { ok: true; id: string } | { ok: false; error: string };
@@ -40,22 +40,22 @@ type Broadcast = { id: string; content: string; clientId?: string };
 const messages = () => prisma.message.findMany({ where: { campaignId, type: { not: 'SYSTEM' } }, orderBy: { createdAt: 'asc' } });
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: `chatack-${name}-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: `Chat ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Chat ack ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Chat ack ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 beforeEach(async () => {
@@ -67,25 +67,25 @@ afterAll(async () => {
   await server?.close();
   await prisma.message.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
 describe('chat.message with an acknowledgement', () => {
   it('answers with the stored id, and gives the clientId back on the sender\'s copy only', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const toPlayer = waitForEvent<Broadcast>(player, 'chat.message');
-    const toDm = waitForEvent<Broadcast>(dm, 'chat.message');
+    const toGm = waitForEvent<Broadcast>(gm, 'chat.message');
 
     const answer: Answer = await player.timeout(3000).emitWithAck('chat.message', { content: ' Hello ', clientId: 'c-1' });
 
     const [stored] = await messages();
     expect(answer).toEqual({ ok: true, id: stored.id });
     expect(await toPlayer).toMatchObject({ id: stored.id, content: 'Hello', clientId: 'c-1' });
-    const dmCopy = await toDm;
-    expect(dmCopy).toMatchObject({ id: stored.id, content: 'Hello' });
-    expect(dmCopy).not.toHaveProperty('clientId');
+    const gmCopy = await toGm;
+    expect(gmCopy).toMatchObject({ id: stored.id, content: 'Hello' });
+    expect(gmCopy).not.toHaveProperty('clientId');
   });
 
   it.each([
@@ -118,10 +118,10 @@ describe('chat.message with an acknowledgement', () => {
 
   it('stores and sends a resent clientId once, answering with the first id', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const first: Answer = await player.timeout(3000).emitWithAck('chat.message', { content: 'Only once', clientId: 'c-2' });
-    await waitForEvent(dm, 'chat.message');
-    const noSecondCopy = expectNoEvent(dm, 'chat.message');
+    await waitForEvent(gm, 'chat.message');
+    const noSecondCopy = expectNoEvent(gm, 'chat.message');
 
     const again: Answer = await player.timeout(3000).emitWithAck('chat.message', { content: 'Only once', clientId: 'c-2' });
 
@@ -132,12 +132,12 @@ describe('chat.message with an acknowledgement', () => {
 
   it('keeps one member\'s clientId apart from another\'s', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
     const fromPlayer: Answer = await player.timeout(3000).emitWithAck('chat.message', { content: 'Mine', clientId: 'same' });
-    const fromDm: Answer = await dm.timeout(3000).emitWithAck('chat.message', { content: 'Yours', clientId: 'same' });
+    const fromGm: Answer = await gm.timeout(3000).emitWithAck('chat.message', { content: 'Yours', clientId: 'same' });
 
-    expect(fromPlayer.ok && fromDm.ok && fromPlayer.id !== fromDm.id).toBe(true);
+    expect(fromPlayer.ok && fromGm.ok && fromPlayer.id !== fromGm.id).toBe(true);
     expect((await messages()).map((m) => m.content)).toEqual(['Mine', 'Yours']);
   });
 });
@@ -154,11 +154,11 @@ describe('chat.message without an acknowledgement', () => {
 
   it('still delivers to everyone', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const toDm = waitForEvent<Broadcast>(dm, 'chat.message');
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const toGm = waitForEvent<Broadcast>(gm, 'chat.message');
 
     player.emit('chat.message', { content: 'Plain' });
 
-    expect(await toDm).toMatchObject({ content: 'Plain' });
+    expect(await toGm).toMatchObject({ content: 'Plain' });
   });
 });

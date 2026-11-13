@@ -33,7 +33,7 @@ import {
   DRAWING_OUTSIDE_MAP_MESSAGE, MARKUP_SHARE_FULL,
 } from '../../validators/drawings';
 import {
-  campaignDmId, drawingSent, drawingsFor, markupHeld,
+  campaignGmId, drawingSent, drawingsFor, markupHeld,
   type DrawingAddedBroadcast, type DrawingRemovedBroadcast, type DrawingsClearedBroadcast, type DrawingPreviewedBroadcast,
   type DrawingsStateBroadcast,
 } from '../../services/mapDrawings';
@@ -64,7 +64,7 @@ export function currentMapChanged(campaignId: string): void {
 
 const MAP_NOT_FOUND = 'Map not found';
 const DRAWING_NOT_FOUND = 'Drawing not found';
-const CLEAR_DM_ONLY = 'Only the DM can clear the drawings';
+const CLEAR_GM_ONLY = 'Only the GM can clear the drawings';
 
 /**
  * How long a preview's decision, whether its sender may draw there and the
@@ -82,7 +82,7 @@ async function readableMap(tx: Prisma.TransactionClient, mapId: string, campaign
   return map;
 }
 
-/** What was cleared, for the DM and for everyone else. */
+/** What was cleared, for the GM and for everyone else. */
 async function clearWhere(tx: Prisma.TransactionClient, where: Prisma.MapDrawingWhereInput): Promise<{ all: number; forEveryone: number }> {
   const forEveryone = await tx.mapDrawing.count({ where: { ...where, audience: 'ALL' } });
   const { count } = await tx.mapDrawing.deleteMany({ where });
@@ -91,9 +91,9 @@ async function clearWhere(tx: Prisma.TransactionClient, where: Prisma.MapDrawing
 
 export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * drawing:add — Draw on a map: the DM, or a player while Players may draw is on and the session is live.
+   * drawing:add — Draw on a map: the GM, or a player while Players may draw is on and the session is live.
    * The drawing is stored as the sender's, a player's for everyone; each
-   * share of a map's markup layer, the DM's and the players', holds what
+   * share of a map's markup layer, the GM's and the players', holds what
    * DRAWING_LIMITS.markupShares gives it, counted under the lock
    * (markupHeld, markupLimitReached). Answered
    * `{ ok: true, id, opId }`; `drawing:added` goes to each reader the
@@ -126,12 +126,12 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
         if (!canDrawOnLayer(role, drawing.layer)) return { refused: DRAW_LAYER_REFUSAL };
         if (drawingOutsideMap(drawing.points, map)) return { refused: DRAWING_OUTSIDE_MAP_MESSAGE };
         // A player's drawing is for everyone. The share it counts to: the
-        // DM's for one for the DM alone, or by its author, the campaign's DM
+        // GM's for one for the GM alone, or by its author, the campaign's GM
         // as the membership says now.
-        const audience = role === 'DM' ? drawing.audience : 'ALL';
-        const dmId = await campaignDmId(tx, campaignId);
-        const share = drawingShare({ authorId: userId, audience }, dmId);
-        const limit = markupLimitReached(await markupHeld(tx, mapId, drawing.points.length, share, dmId), drawing.points.length);
+        const audience = role === 'GM' ? drawing.audience : 'ALL';
+        const gmId = await campaignGmId(tx, campaignId);
+        const share = drawingShare({ authorId: userId, audience }, gmId);
+        const limit = markupLimitReached(await markupHeld(tx, mapId, drawing.points.length, share, gmId), drawing.points.length);
         if (limit) return { refused: MARKUP_SHARE_FULL[share] };
         // The id is the server's, so no client's id ever meets a row of
         // another campaign's.
@@ -172,7 +172,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
   });
 
   /**
-   * drawing:remove — Erase one drawing: the DM any, a player their own, at any time.
+   * drawing:remove — Erase one drawing: the GM any, a player their own, at any time.
    * A drawing the sender is not sent, or one on another map, is answered as
    * one that does not exist. `drawing:removed` goes to those who had it.
    */
@@ -220,8 +220,8 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
 
   /**
    * drawing:clear_mine — Erase every drawing of the sender's on a map's markup layer, at any time; never a spectator.
-   * A player's clear leaves the drawings for the DM alone they wrote while in
-   * the DM's seat, as drawing:remove does (canEraseDrawing).
+   * A player's clear leaves the drawings for the GM alone they wrote while in
+   * the GM's seat, as drawing:remove does (canEraseDrawing).
    * `drawings:cleared`, naming the sender as `authorId`, goes to the readers
    * who had any of them.
    */
@@ -250,7 +250,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
 
       const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<{ all: number; forEveryone: number }>> => {
         if (!(await readableMap(tx, mapId, campaignId, role))) return { refused: MAP_NOT_FOUND };
-        return { done: await clearWhere(tx, { mapId, layer: 'MARKUP', authorId: userId, ...(role === 'DM' ? {} : { audience: 'ALL' as const }) }) };
+        return { done: await clearWhere(tx, { mapId, layer: 'MARKUP', authorId: userId, ...(role === 'GM' ? {} : { audience: 'ALL' as const }) }) };
       });
       if ('refused' in outcome) {
         refuse(outcome.refused);
@@ -260,7 +260,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
       const { all, forEveryone } = outcome.done;
       const cleared = { mapId, layer: 'MARKUP', authorId: userId, ...echoedOpId(data) } satisfies DrawingsClearedBroadcast;
       await emitToMapReadersAs(io, campaignId, mapId, 'drawings:cleared', (reader) =>
-        (reader === 'DM' ? all : forEveryone) > 0 ? { event: 'drawings:cleared', data: cleared } : null
+        (reader === 'GM' ? all : forEveryone) > 0 ? { event: 'drawings:cleared', data: cleared } : null
       );
       ack?.({ ok: true, ...echoedOpId(data) });
     } catch (error) {
@@ -270,11 +270,11 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
   });
 
   /**
-   * drawing:clear — DM erases every drawing on one layer of a map, the markup layer so far, or one member's.
+   * drawing:clear — GM erases every drawing on one layer of a map, the markup layer so far, or one member's.
    * With `authorId`, that member's drawings for everyone, as their own
-   * Clear mine erases them: one for the DM alone they wrote in the DM's
-   * seat goes with the seat and stays; naming the DM, every one of the
-   * DM's own. `drawings:cleared` goes to the readers who had any of them,
+   * Clear mine erases them: one for the GM alone they wrote in the GM's
+   * seat goes with the seat and stays; naming the GM, every one of the
+   * GM's own. `drawings:cleared` goes to the readers who had any of them,
    * with the `authorId`.
    */
   socket.on('drawing:clear', async (data: unknown, ackArg?: unknown) => {
@@ -286,8 +286,8 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
         return;
       }
       if (!withinCeiling(socket, 'drawing:clear', ack)) return;
-      if (socket.role !== 'DM') {
-        refuse(CLEAR_DM_ONLY);
+      if (socket.role !== 'GM') {
+        refuse(CLEAR_GM_ONLY);
         return;
       }
       const parsed = DrawingClearEventSchema.safeParse(data);
@@ -302,7 +302,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
         : { authorId, ...(authorId === socket.userId ? {} : { audience: 'ALL' as const }) };
 
       const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<{ all: number; forEveryone: number }>> => {
-        if (!(await readableMap(tx, mapId, campaignId, 'DM'))) return { refused: MAP_NOT_FOUND };
+        if (!(await readableMap(tx, mapId, campaignId, 'GM'))) return { refused: MAP_NOT_FOUND };
         return { done: await clearWhere(tx, { mapId, layer, ...whose }) };
       });
       if ('refused' in outcome) {
@@ -313,7 +313,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
       const { all, forEveryone } = outcome.done;
       const cleared = { mapId, layer, ...(authorId === undefined ? {} : { authorId }), ...echoedOpId(data) } satisfies DrawingsClearedBroadcast;
       await emitToMapReadersAs(io, campaignId, mapId, 'drawings:cleared', (reader) =>
-        (reader === 'DM' ? all : forEveryone) > 0 ? { event: 'drawings:cleared', data: cleared } : null
+        (reader === 'GM' ? all : forEveryone) > 0 ? { event: 'drawings:cleared', data: cleared } : null
       );
       ack?.({ ok: true, ...echoedOpId(data) });
     } catch (error) {
@@ -373,7 +373,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
       if (preview.end) previewDecisions.delete(preview.previewId);
       if (!allowed) return;
 
-      const shown = { ...preview, audience: socket.role === 'DM' && !preview.laser ? preview.audience : 'ALL' as const };
+      const shown = { ...preview, audience: socket.role === 'GM' && !preview.laser ? preview.audience : 'ALL' as const };
       const frame = { mapId, userId: socket.userId, preview: shown } satisfies DrawingPreviewedBroadcast;
       for (const s of await campaignSockets(io, campaignId)) {
         if (s.id === socket.id) continue;
@@ -404,7 +404,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
       const { mapId } = parsed.data;
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true, campaign: { select: { currentMapId: true } } } });
       if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
-      const drawings = await drawingsFor(mapId, 'DM');
+      const drawings = await drawingsFor(mapId, 'GM');
       emitNewestState(socket, 'drawings:state', { mapId, drawings: drawings.filter((d) => drawingSentTo(socket.role, d)) } satisfies DrawingsStateBroadcast, mapId);
     } catch (error) {
       logger.error('drawings:request failed', { err: error });

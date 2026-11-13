@@ -25,7 +25,7 @@ afterAll(async () => {
 
 describe("a map's drawn colour", () => {
   it('is null on a map made without one', async () => {
-    const owner = await createTestUser({ displayName: 'Drawn colour DM' });
+    const owner = await createTestUser({ displayName: 'Drawn colour GM' });
     userIds.push(owner.id);
     const campaign = await createTestCampaign(owner.id, { name: 'Drawn colour table' });
     const map = await prisma.map.create({

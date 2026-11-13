@@ -4,25 +4,21 @@
  */
 
 import { z } from 'zod';
-import { GameSystem } from '../../game-systems';
+import { GameSystem, isSupportedGameSystem, type SupportedGameSystem } from '../../game-systems';
 import { withUnionChecks } from './unionIssues';
 import { getBlankTemplate } from '../../utils/character-templates';
 import {
-  dnd5eCharacterDataSchema,
-  type DnD5eCharacterData,
-} from './dnd5e.schema';
+  fifthEditionCharacterDataSchema,
+  type FifthEditionCharacterData,
+} from './fifthEdition.schema';
 import {
-  pathfinder2eCharacterDataSchema,
-  type PF2eCharacterData,
-} from './pathfinder2e.schema';
+  fantasyD20CharacterDataSchema,
+  type FantasyD20CharacterData,
+} from './fantasyD20.schema';
 import {
-  shadowrun6eCharacterDataSchema,
-  type SR6CharacterData,
-} from './shadowrun6e.schema';
-import {
-  callOfCthulhu7eCharacterDataSchema,
-  type CoC7eCharacterData,
-} from './callOfCthulhu7e.schema';
+  HorrorD100SheetSchema,
+  type HorrorD100Sheet,
+} from './horrorD100Sheet.schema';
 import {
   flexibleCharacterDataSchema,
   type FlexibleCharacterData,
@@ -30,19 +26,17 @@ import {
 
 // Re-export schemas
 export {
-  dnd5eCharacterDataSchema,
-  pathfinder2eCharacterDataSchema,
-  shadowrun6eCharacterDataSchema,
-  callOfCthulhu7eCharacterDataSchema,
+  fifthEditionCharacterDataSchema,
+  fantasyD20CharacterDataSchema,
+  HorrorD100SheetSchema,
   flexibleCharacterDataSchema,
 };
 
 // Re-export types
 export type {
-  DnD5eCharacterData,
-  PF2eCharacterData,
-  SR6CharacterData,
-  CoC7eCharacterData,
+  FifthEditionCharacterData,
+  FantasyD20CharacterData,
+  HorrorD100Sheet,
   FlexibleCharacterData,
 };
 
@@ -60,30 +54,25 @@ export type ValidationResult<T> =
  * @returns Validation result with typed data or errors
  */
 export function validateCharacterData(
-  gameSystem: GameSystem,
+  gameSystem: SupportedGameSystem,
   data: unknown
 ): ValidationResult<
-  | DnD5eCharacterData
-  | PF2eCharacterData
-  | SR6CharacterData
-  | CoC7eCharacterData
+  | FifthEditionCharacterData
+  | FantasyD20CharacterData
+  | HorrorD100Sheet
 > {
   try {
     switch (gameSystem) {
-      case GameSystem.DND_5E: {
-        const validated = dnd5eCharacterDataSchema.parse(data);
+      case GameSystem.FIFTH_EDITION: {
+        const validated = fifthEditionCharacterDataSchema.parse(data);
         return { success: true, data: validated };
       }
-      case GameSystem.PATHFINDER_2E: {
-        const validated = pathfinder2eCharacterDataSchema.parse(data);
+      case GameSystem.FANTASY_D20: {
+        const validated = fantasyD20CharacterDataSchema.parse(data);
         return { success: true, data: validated };
       }
-      case GameSystem.SHADOWRUN_6E: {
-        const validated = shadowrun6eCharacterDataSchema.parse(data);
-        return { success: true, data: validated };
-      }
-      case GameSystem.CALL_OF_CTHULHU_7E: {
-        const validated = callOfCthulhu7eCharacterDataSchema.parse(data);
+      case GameSystem.HORROR_D100: {
+        const validated = HorrorD100SheetSchema.parse(data);
         return { success: true, data: validated };
       }
       default: {
@@ -138,12 +127,11 @@ export function sheetIssues(errors: z.ZodError): SheetIssue[] {
  * sheet players actually get.
  */
 export function getBlankCharacterTemplate(
-  gameSystem: GameSystem
+  gameSystem: SupportedGameSystem
 ):
-  | DnD5eCharacterData
-  | PF2eCharacterData
-  | SR6CharacterData
-  | CoC7eCharacterData {
+  | FifthEditionCharacterData
+  | FantasyD20CharacterData
+  | HorrorD100Sheet {
   const result = validateCharacterData(gameSystem, structuredClone(getBlankTemplate(gameSystem).data));
   if (!result.success) throw new Error(`The ${gameSystem} blank template does not pass its own schema`);
   return result.data;
@@ -156,16 +144,19 @@ export function getBlankCharacterTemplate(
  * and nothing used to reconcile them: a character created as "Aldra" opened its
  * sheet showing the factory placeholder, because only the column was set.
  *
- * Call of Cthulhu calls its people investigators, so the field differs; keeping
- * that difference in one table rather than scattering conditionals means a new
- * system only has to be added here.
+ * Every system keeps it in `characterName` today. The table stays, so a new
+ * system whose sheet names the field otherwise only has to be added here.
  */
-const SHEET_NAME_FIELD: Record<GameSystem, string> = {
-  [GameSystem.DND_5E]: 'characterName',
-  [GameSystem.PATHFINDER_2E]: 'characterName',
-  [GameSystem.SHADOWRUN_6E]: 'characterName',
-  [GameSystem.CALL_OF_CTHULHU_7E]: 'investigatorName',
+const SHEET_NAME_FIELD: Record<SupportedGameSystem, string> = {
+  [GameSystem.FIFTH_EDITION]: 'characterName',
+  [GameSystem.FANTASY_D20]: 'characterName',
+  [GameSystem.HORROR_D100]: 'characterName',
 };
+
+/** The name field of a stored row's system; none for one CozyVTT no longer supports. */
+function sheetNameField(gameSystem: GameSystem | null | undefined): string | undefined {
+  return isSupportedGameSystem(gameSystem) ? SHEET_NAME_FIELD[gameSystem] : undefined;
+}
 
 /** The sheet field holding the owner's display name, the same in every system. */
 const PLAYER_NAME_FIELD = 'playerName';
@@ -180,8 +171,8 @@ export function sheetNameFor(
   gameSystem: GameSystem | null | undefined,
   data: Record<string, unknown> | null | undefined
 ): string | undefined {
-  if (!gameSystem || !data) return undefined;
-  const field = SHEET_NAME_FIELD[gameSystem];
+  if (!data) return undefined;
+  const field = sheetNameField(gameSystem);
   if (!field) return undefined;
   const value = data[field];
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
@@ -195,7 +186,7 @@ export function sheetNameFor(
  *
  * It used to overwrite only a blank field or one of four known factory
  * placeholders, which meant a character started from an *example* template kept
- * the template's name: type "Grimtooth Ashfang", pick the Level 1 Fighter, and
+ * the template's name: type "Gorrun Ashfield", pick the Level 1 Fighter, and
  * get a sheet headed "Brave Fighter". Worse, `PUT /characters/:id` takes the
  * sheet as authoritative for the name, so the first save copied that back over
  * the character record and renamed the character permanently.
@@ -211,7 +202,7 @@ export function applyIdentityToSheet(
   const sheet = { ...(data ?? {}) };
   if (!gameSystem) return sheet;
 
-  const nameField = SHEET_NAME_FIELD[gameSystem];
+  const nameField = sheetNameField(gameSystem);
   if (nameField) {
     // Only when one was actually supplied: an empty name would blank the sheet
     // rather than leave it as it is.

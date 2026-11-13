@@ -17,15 +17,15 @@ import { withMapsLocked } from '../../utils/mapTokens';
 
 export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * fog:operation — DM applies a fog operation (reveal/hide cells).
+   * fog:operation — GM applies a fog operation (reveal/hide cells).
    * Throttled to 10 operations/second per user, across all their sockets.
-   * DM receives full fogState; players receive only revealed cell indices.
+   * GM receives full fogState; players receive only revealed cell indices.
    */
   socket.on('fog:operation', async (data: { mapId: string; operation: unknown }) => {
     try {
       if (!socket.campaignId) return;
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can modify fog of war' });
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only GMs can modify fog of war' });
         return;
       }
 
@@ -82,7 +82,7 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
 
   /**
    * fog:request_state — Any campaign member requests current fog state on (re)join.
-   * DM receives full fogState; players receive revealed-cell list.
+   * GM receives full fogState; players receive revealed-cell list.
    */
   socket.on('fog:request_state', async (data: { mapId: string }) => {
     try {
@@ -96,7 +96,7 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
         select: { campaignId: true, fogData: true, fogEnabled: true, width: true, height: true, gridSize: true, campaign: { select: { currentMapId: true } } },
       });
       if (!map || map.campaignId !== socket.campaignId) return;
-      // A prepared map is the DM's alone; a player is answered only about
+      // A prepared map is the GM's alone; a player is answered only about
       // the map the campaign is showing.
       if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
       // Fog off: nothing to send. A client that receives no reply draws no fog.
@@ -104,7 +104,7 @@ export function registerFogHandlers(io: Server, socket: AuthenticatedSocket): vo
 
       const fog: FogState = loadFogState(map, map.fogData as FogState | null);
 
-      if (socket.role === 'DM') {
+      if (socket.role === 'GM') {
         emitNewestState(socket, 'fog:updated', { mapId, fogState: fog }, mapId);
       } else {
         emitNewestState(socket, 'fog:cells', {

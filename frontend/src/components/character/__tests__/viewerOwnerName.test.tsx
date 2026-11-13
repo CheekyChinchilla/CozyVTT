@@ -1,5 +1,5 @@
 /**
- * A DM opening a player's sheet saw "Player: Unknown Player". The viewer asked
+ * A GM opening a player's sheet saw "Player: Unknown Player". The viewer asked
  * GET /api/users/:id for the owner's name, which answers only the user and an
  * admin. The character as GET /api/characters/:id serves it already names its
  * owner.
@@ -28,21 +28,21 @@ vi.mock('@/contexts/WebSocketContext', () => ({
   }),
 }));
 vi.mock('@/services/api', () => ({ api: { getUser: (id: string) => getUser(id) } }));
-vi.mock('../../character-sheets/dnd5e/DnD5eCharacterView', () => ({
-  DnD5eCharacterView: ({ character }: { character: Character }) => <p>Sheet of {character.name}</p>,
+vi.mock('../../character-sheets/fifth-edition/FifthEditionCharacterView', () => ({
+  FifthEditionCharacterView: ({ character }: { character: Character }) => <p>Sheet of {character.name}</p>,
 }));
 
 const character = {
-  id: 'char-1', userId: 'bree-id', name: 'Aldra', gameSystem: 'DND_5E', data: {}, campaignId: 'camp-1',
+  id: 'char-1', userId: 'wenna-id', name: 'Aldra', gameSystem: 'FIFTH_EDITION', data: {}, campaignId: 'camp-1',
   updatedAt: '2026-01-01T00:00:00.000Z',
-  user: { id: 'bree-id', displayName: 'Bree', avatarUrl: null },
+  user: { id: 'wenna-id', displayName: 'Wenna', avatarUrl: null },
 } as unknown as Character;
-const membership = { userId: 'dm', campaignId: 'camp-1', role: 'DM', characterIds: [] } as unknown as CampaignMembership;
+const membership = { userId: 'dm', campaignId: 'camp-1', role: 'GM', characterIds: [] } as unknown as CampaignMembership;
 
 describe("CharacterSheetViewerModal and the owner's name", () => {
-  it("names the player to the DM from the character's owner", async () => {
+  it("names the player to the GM from the character's owner", async () => {
     render(<CharacterSheetViewerModal character={character} campaignId="camp-1" membership={membership} onClose={() => {}} />);
-    expect(await screen.findByText('Player: Bree')).toBeTruthy();
+    expect(await screen.findByText('Player: Wenna')).toBeTruthy();
     expect(screen.queryByText(/Unknown Player/)).toBeNull();
   });
 
@@ -54,6 +54,6 @@ describe("CharacterSheetViewerModal and the owner's name", () => {
       character: { ...withoutOwner, name: 'Aldra the Bold', updatedAt: '2026-01-01T00:00:05.000Z' },
     }));
     expect(await screen.findByText('Sheet of Aldra the Bold')).toBeTruthy();
-    expect(screen.getByText('Player: Bree')).toBeTruthy();
+    expect(screen.getByText('Player: Wenna')).toBeTruthy();
   });
 });

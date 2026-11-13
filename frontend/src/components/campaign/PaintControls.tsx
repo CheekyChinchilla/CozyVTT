@@ -1,9 +1,9 @@
 /**
  * PaintControls
- * Paint's panel, while the DM paints a drawn map: the tool, the colour and
+ * Paint's panel, while the GM paints a drawn map: the tool, the colour and
  * the second colour, the width, Undo and Redo, Save,
  * Download picture, and Done.
- * It sets no place of its own: it heads the DM's tool stack while Paint is
+ * It sets no place of its own: it heads the GM's tool stack while Paint is
  * on. On the compact layout PaintStrip offers the same, from the tools,
  * hints and colours written here.
  */

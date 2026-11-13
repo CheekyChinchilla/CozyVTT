@@ -28,7 +28,7 @@ jest.setTimeout(30000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let mapId: string;
 let agent: ReturnType<typeof request.agent>;
@@ -56,10 +56,10 @@ function firstOf(client: ClientSocket, events: string[], timeoutMs = 5000): Prom
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dm = await createTestUser({ email: `fogcells-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
-  dmId = dm.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Fog cells ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  const gm = await createTestUser({ email: `fogcells-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
+  gmId = gm.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Fog cells ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
   mapId = (await prisma.map.create({
     data: {
       campaignId, name: 'Fogged', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x',
@@ -68,9 +68,9 @@ beforeAll(async () => {
   })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   agent = request.agent(app);
-  expect((await agent.post('/api/auth/login').send({ email: dm.email, password: TEST_PASSWORD })).status).toBe(200);
+  expect((await agent.post('/api/auth/login').send({ email: gm.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
-  page = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  page = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
 });
 
 beforeEach(async () => {
@@ -83,7 +83,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 

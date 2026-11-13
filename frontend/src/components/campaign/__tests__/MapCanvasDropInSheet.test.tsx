@@ -49,7 +49,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
     id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, status: 'ACTIVE', maps: [],
     characters: [{ id: 'char-alice', userId: 'alice', name: 'Brannoc' }],
     memberships: [
-      { userId: 'me', role: 'DM', user: { displayName: 'Me' } },
+      { userId: 'me', role: 'GM', user: { displayName: 'Me' } },
       { userId: 'alice', role: 'PLAYER', user: { displayName: 'Alice' } },
     ],
   };
@@ -57,9 +57,9 @@ vi.mock('@/contexts/CampaignContext', async () => {
     useCampaign: () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
       return {
-        currentMap: h.state.currentMap, setCurrentMap: noop, ...mapActions, userRole: 'DM', campaign,
+        currentMap: h.state.currentMap, setCurrentMap: noop, ...mapActions, userRole: 'GM', campaign,
         viewedMap: h.state.currentMap,
-        updateCampaignSpiritLayer: noop, dmViewBothPlanes: false, playerSpiritVisible: false, setPlayerSpiritVisible: noop,
+        updateCampaignSpiritLayer: noop, gmViewBothPlanes: false, playerSpiritVisible: false, setPlayerSpiritVisible: noop,
         activeVibeEffect: null, updateVibe: noop, activeAtmosphereEffect: null, characterHpCache: {},
       };
     },
@@ -125,7 +125,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  h.api.getCharacter.mockReset().mockResolvedValue({ character: { id: 'char-alice', userId: 'alice', name: 'Brannoc', gameSystem: 'DND_5E', data: {} } });
+  h.api.getCharacter.mockReset().mockResolvedValue({ character: { id: 'char-alice', userId: 'alice', name: 'Brannoc', gameSystem: 'FIFTH_EDITION', data: {} } });
   h.api.addToken.mockReset().mockResolvedValue({ token: hero });
   act(() => { useGameStore.getState().clearGameState(); });
   h.set({ currentMap: map });

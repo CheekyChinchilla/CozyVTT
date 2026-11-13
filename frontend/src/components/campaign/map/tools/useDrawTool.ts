@@ -1,10 +1,10 @@
 // ============================================
 // The draw tool: a pen, lines, arrows, rectangles, ellipses, polygons, text
-// labels, the eraser and the laser pointer, for the DM and for a player who
+// labels, the eraser and the laser pointer, for the GM and for a player who
 // may draw (utils/drawingRules.ts).
 //
 // It takes every left press while it is up, so no token is picked up and no
-// door opened under it; the right button pans, as under a DM tool, and two
+// door opened under it; the right button pans, as under a GM tool, and two
 // fingers pan and pinch. One finger draws. The eraser, the text label and
 // the polygon act on a tap or a click, so a finger's drag pans under them.
 //
@@ -51,8 +51,8 @@ export interface DrawSettings {
   fill: boolean;
   /** Shapes' corners and polygons' corners go to the nearest corner or middle of a square. */
   snap: boolean;
-  /** The DM's: the drawing is for the DM alone. */
-  dmOnly: boolean;
+  /** The GM's: the drawing is for the GM alone. */
+  gmOnly: boolean;
 }
 
 export const DEFAULT_DRAW_SETTINGS: DrawSettings = {
@@ -60,7 +60,7 @@ export const DEFAULT_DRAW_SETTINGS: DrawSettings = {
   width: 4,
   fill: false,
   snap: false,
-  dmOnly: false,
+  gmOnly: false,
 };
 
 /** How far from the first corner, on screen, a tap closes a polygon. */
@@ -87,7 +87,7 @@ interface Stroke {
   mapId: string;
   kind: 'pen' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'laser';
   previewId: string;
-  audience: 'ALL' | 'DM';
+  audience: 'ALL' | 'GM';
   color: string;
   width: number;
   fill: boolean;
@@ -134,7 +134,7 @@ const round = (p: { x: number; y: number }): Pt => [Math.round(p.x), Math.round(
 
 export function useDrawTool(options: DrawToolOptions) {
   const { kind, setKind, settings, mapId, gridSize, role, userId, drawnDrawings, mapControls, markDirty, drawings, hoverAt, hint } = options;
-  const isDM = role === 'DM';
+  const isGM = role === 'GM';
   const strokeRef = useRef<Stroke | null>(null);
   const timersRef = useRef<{ trailing: ReturnType<typeof setTimeout> | null; keepAlive: ReturnType<typeof setTimeout> | null }>({ trailing: null, keepAlive: null });
   /** A finger's drag the tool pans with (eraser, text, polygon). */
@@ -145,13 +145,13 @@ export function useDrawTool(options: DrawToolOptions) {
   const polygonTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [textBox, setTextBox] = useState<DrawTextBox | null>(null);
   const textRef = useRef<(DrawTextBox & { mapId: string }) | null>(null);
-  const latest = useRef({ settings, mapId, isDM, gridSize });
+  const latest = useRef({ settings, mapId, isGM, gridSize });
   useEffect(() => {
-    latest.current = { settings, mapId, isDM, gridSize };
+    latest.current = { settings, mapId, isGM, gridSize };
   });
 
-  /** Who the next drawing is for: the DM alone only when the DM asks. */
-  const audience = useCallback((): 'ALL' | 'DM' => (latest.current.isDM && latest.current.settings.dmOnly ? 'DM' : 'ALL'), []);
+  /** Who the next drawing is for: the GM alone only when the GM asks. */
+  const audience = useCallback((): 'ALL' | 'GM' => (latest.current.isGM && latest.current.settings.gmOnly ? 'GM' : 'ALL'), []);
 
   /** With Snap to grid on, the nearer of the nearest corner of the grid and the middle of the square the point is in. */
   const snapped = useCallback((p: Pt): Pt => (latest.current.settings.snap ? snapToGrid(p, latest.current.gridSize) : p), []);

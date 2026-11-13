@@ -1,6 +1,6 @@
 /**
  * NpcRollPicker
- * DM-only floating modal that surfaces an NPC token's rollable options
+ * GM-only floating modal that surfaces an NPC token's rollable options
  * (ability checks, saves, skills, attacks, damage) plus a free-form custom
  * roll input. Mirrors CharacterRollPicker for player-controlled tokens.
  * Drawn on the body (components/ui/FloatingLayer.tsx), where the panel
@@ -29,7 +29,7 @@ import { applyRollMode, getModeLabels, ROLL_MODES, systemSupportsAdvantage, type
 
 interface NpcRollPickerProps {
   token: Token;
-  /** Optional game system override. Defaults to "DND_5E" for advantage UI. */
+  /** Optional game system override. Defaults to "FIFTH_EDITION" for advantage UI. */
   gameSystem?: string | null;
   /**
    * Called with the expression, purpose, and the token's name. The name used to
@@ -86,7 +86,7 @@ const Section: React.FC<SectionProps> = ({ title, rolls, onRoll, compact = false
 
 export default function NpcRollPicker({
   token,
-  gameSystem = 'DND_5E',
+  gameSystem = 'FIFTH_EDITION',
   onRoll,
   onClose,
   anchorX,
@@ -100,9 +100,9 @@ export default function NpcRollPicker({
   const [modeOpen, setModeOpen] = useState(false);
 
   // The campaign's system decides what can be rolled from a stat block, not
-  // just how the buttons are labelled. Call of Cthulhu and Shadowrun return
-  // nothing and fall through to the custom roll input below, rather than being
-  // offered D&D dice for games that have none.
+  // just how the buttons are labelled. Horror d100 returns nothing and falls
+  // through to the custom roll input below, rather than being offered 5E dice
+  // for a game that has none.
   const rolls: CharacterRolls = useMemo(
     () => buildNpcRolls(token.statBlock ?? null, gameSystem ?? null),
     [token.statBlock, gameSystem]

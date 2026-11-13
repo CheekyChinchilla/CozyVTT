@@ -25,7 +25,8 @@ import { extractAssetId } from '../utils/asset-urls';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { canReadAsset } from './permissions';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
-import { DRAWING_ORDER, campaignDmId, drawingForArchive } from './mapDrawings';
+import { MAX_EXTENSION_LENGTH, MAX_ORIGINAL_NAME_LENGTH, shortenFileName } from '../validators/assets';
+import { DRAWING_ORDER, campaignGmId, drawingForArchive } from './mapDrawings';
 
 // ── Exported types ──────────────────────────────────────────────────────────
 
@@ -148,9 +149,9 @@ export async function prepareCampaignExport(
   });
 
   if (!campaign) throw new Error('Campaign not found');
-  // The campaign's DM, by whom each drawing's share of its map's markup
+  // The campaign's GM, by whom each drawing's share of its map's markup
   // layer is written (drawingShare).
-  const dmId = await campaignDmId(prisma, campaignId);
+  const gmId = await campaignGmId(prisma, campaignId);
 
   // 2. Collect all asset IDs we need to include
   const assetIds = new Set<string>();
@@ -216,13 +217,13 @@ export async function prepareCampaignExport(
       drawnBackground: map.drawnBackground,
       tokens,
       // Empty: releases up to 1.5.4 store an archive's annotations and send
-      // them to every member of the campaign, so a drawing for the DM alone
+      // them to every member of the campaign, so a drawing for the GM alone
       // must not be here. They drop a key they do not know, such as
       // `drawings`. Map.annotations, which nothing reads, is not written.
       annotations: [],
       // The map's drawings, in drawing order and without their authors, each
       // with the share of the markup layer it counts to.
-      drawings: (await prisma.mapDrawing.findMany({ where: { mapId: map.id }, orderBy: [...DRAWING_ORDER] })).map((row) => drawingForArchive(row, dmId)),
+      drawings: (await prisma.mapDrawing.findMany({ where: { mapId: map.id }, orderBy: [...DRAWING_ORDER] })).map((row) => drawingForArchive(row, gmId)),
       wallSegments: map.wallSegments || [],
       fogData: map.fogData || null,
       lightingEnabled: map.lightingEnabled,
@@ -274,7 +275,10 @@ export async function prepareCampaignExport(
   const assetManifest: Record<string, Omit<ArchivedAsset, 'filePath' | 'details'> & Partial<AssetDetails>> = {};
   for (const [id, info] of assetMap.entries()) {
     assetManifest[id] = {
-      originalName: info.originalName,
+      // Cut to what an upload keeps: versions before 1.5.2 stored an upload's
+      // name at any length, and an import cannot read an entry whose name is
+      // over 500 characters.
+      originalName: shortenFileName(info.originalName, MAX_ORIGINAL_NAME_LENGTH),
       mimeType: info.mimeType,
       type: info.type,
       fileSize: info.fileSize,
@@ -292,7 +296,7 @@ export async function prepareCampaignExport(
   const manifest = {
     formatVersion: 1,
     exportedAt: new Date().toISOString(),
-    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.6.0'}`,
+    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.7.0'}`,
     campaignName: campaign.name,
     gameSystem: campaign.gameSystem || 'NONE',
     mapCount: mapDataArray.length,
@@ -388,7 +392,7 @@ export async function prepareCampaignExport(
         // space the size check above counted. One deleted since it was
         // listed is left out, and an import says its file is missing.
         ...[...assetMap.entries()].map(([id, info]) => ({
-          name: `assets/${id}${path.extname(info.originalName) || mimeToExt(info.mimeType)}`,
+          name: assetEntryName(id, info.originalName, info.mimeType),
           file: info.filePath,
           store: true,
           skipIfGone: true,
@@ -425,6 +429,18 @@ function atmosphereTrackIds(vibeSettings: Parameters<typeof readJsonObject>[0]):
   const ambientId = ambient && typeof ambient === 'object' ? vibePeriodAudioAssetId((ambient as Record<string, unknown>).assetId) : null;
   if (ambientId) ids.push(ambientId);
   return ids;
+}
+
+/**
+ * The name an asset's file has in the archive: its id, by which an import
+ * finds it, and the extension of its original name, or of its format when
+ * that name has none or one too long to be one. Older versions stored an
+ * upload's own name at any length, so its last dot could start an entry name
+ * longer than an import takes (MAX_ARCHIVE_NAME_BYTES).
+ */
+export function assetEntryName(id: string, originalName: string, mimeType: string): string {
+  const ext = path.extname(originalName);
+  return `assets/${id}${ext.length > 0 && ext.length <= MAX_EXTENSION_LENGTH ? ext : mimeToExt(mimeType)}`;
 }
 
 /** Map MIME type to file extension. */

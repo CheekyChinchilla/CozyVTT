@@ -14,9 +14,9 @@ jest.setTimeout(20000);
 
 const runId = randomUUID().slice(0, 8);
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dmCookie: string;
+let gmCookie: string;
 
 const wall = (id = randomUUID(), x = 100) => ({ id, x1: x, y1: 100, x2: x + 100, y2: 100, type: 'wall' });
 const light = (id = randomUUID(), x = 500) => ({ id, x, y: 500, brightRadius: 2, dimRadius: 4, color: '#ffcc66', enabled: true });
@@ -34,30 +34,30 @@ async function newMap(data: { wallSegments?: unknown[]; lights?: unknown[] } = {
 const stored = (mapId: string) => prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { wallSegments: true, lights: true } });
 
 beforeAll(async () => {
-  const dm = await prisma.user.create({ data: { email: `wli-dm-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Ids DM' } });
-  dmId = dm.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Socket ids ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  const gm = await prisma.user.create({ data: { email: `wli-dm-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Ids GM' } });
+  gmId = gm.id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Socket ids ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
   server = await createWsTestServer();
-  dmCookie = await server.loginAs(dmId);
+  gmCookie = await server.loginAs(gmId);
 });
 
 afterAll(async () => {
   await server?.close();
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: dmId } });
+  await prisma.user.deleteMany({ where: { id: gmId } });
   await prisma.$disconnect();
 });
 
 async function refused(event: string, payload: object, broadcast: string): Promise<void> {
-  const dm = await server.connectAndAuth(dmCookie, campaignId);
-  const error = waitForEvent<{ message: string }>(dm, 'error');
-  const none = expectNoEvent(dm, broadcast, 500);
-  dm.emit(event, payload);
+  const gm = await server.connectAndAuth(gmCookie, campaignId);
+  const error = waitForEvent<{ message: string }>(gm, 'error');
+  const none = expectNoEvent(gm, broadcast, 500);
+  gm.emit(event, payload);
   await error;
   await none;
-  dm.disconnect();
+  gm.disconnect();
 }
 
 it('wall:add refuses an id already on the map', async () => {

@@ -126,4 +126,21 @@ describe('the socket client after campaign.access.revoked', () => {
 
     expect(await nextSocket()).toBe(true);
   });
+
+  // A join the server refuses because the user is not a member, or the
+  // campaign is gone, is answered with the event and no `error`. The connect
+  // ends there with the server's sentence, and is not left to run out its
+  // ten seconds.
+  it('ends a connect whose join is refused with it, with the sentence', async () => {
+    const pending = client.connect('campaign-1');
+    const outcome = pending.then(() => 'joined', (err: unknown) => (err instanceof Error ? err.message : 'not an error'));
+    await Promise.resolve();
+    current().fire('connect');
+    current().fire('connected');
+    current().fire('campaign.access.revoked', { campaignId: 'campaign-1', reason: 'not-member', message: 'You are not a member of this campaign.' });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await Promise.race([outcome, Promise.resolve('still waiting')])).toBe('You are not a member of this campaign.');
+    expect(await nextSocket()).toBe(false);
+  });
 });

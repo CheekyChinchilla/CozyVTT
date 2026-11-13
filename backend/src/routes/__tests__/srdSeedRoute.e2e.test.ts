@@ -2,9 +2,9 @@
  * Only an administrator can import the SRD creatures.
  *
  * The import writes creatures every campaign shares and fetches from
- * api.open5e.com on every run, and any campaign's DM could start it, which
+ * api.open5e.com on every run, and any campaign's GM could start it, which
  * means any user: anyone can create a campaign. A loop of it kept the server
- * fetching from Open5e and held every other DM's import back. It is now an
+ * fetching from Open5e and held every other GM's import back. It is now an
  * administrator's action, and an Open5e that cannot be read answers 502 with
  * a message saying so, within a time limit, instead of a gateway error after
  * minutes.
@@ -27,7 +27,7 @@ async function signedIn(role: 'ADMIN' | 'USER'): Promise<{ id: string; agent: re
   users.push(user.id);
   const campaign = await createTestCampaign(user.id);
   campaigns.push(campaign.id);
-  await prisma.campaignMembership.create({ data: { userId: user.id, campaignId: campaign.id, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId: user.id, campaignId: campaign.id, role: 'GM', characterIds: [] } });
   const agent = request.agent(app);
   expect((await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
   return { id: user.id, agent, campaignId: campaign.id };
@@ -62,11 +62,11 @@ afterAll(async () => {
 });
 
 describe('POST /api/campaigns/:campaignId/creatures/seed', () => {
-  it('refuses a DM who is not an administrator, and fetches nothing', async () => {
-    const dm = await signedIn('USER');
+  it('refuses a GM who is not an administrator, and fetches nothing', async () => {
+    const gm = await signedIn('USER');
     const fetch = jest.spyOn(globalThis, 'fetch');
 
-    const res = await dm.agent.post(`/api/campaigns/${dm.campaignId}/creatures/seed`);
+    const res = await gm.agent.post(`/api/campaigns/${gm.campaignId}/creatures/seed`);
 
     expect(res.status).toBe(403);
     expect(res.body.message).toBe(
@@ -99,9 +99,9 @@ describe('POST /api/campaigns/:campaignId/creatures/seed', () => {
 
 describe('GET /api/campaigns/:campaignId/creatures/seed/status', () => {
   it('says whether the caller may run the import', async () => {
-    const dm = await signedIn('USER');
+    const gm = await signedIn('USER');
     const admin = await signedIn('ADMIN');
-    expect((await dm.agent.get(`/api/campaigns/${dm.campaignId}/creatures/seed/status`)).body.canSeed).toBe(false);
+    expect((await gm.agent.get(`/api/campaigns/${gm.campaignId}/creatures/seed/status`)).body.canSeed).toBe(false);
     expect((await admin.agent.get(`/api/campaigns/${admin.campaignId}/creatures/seed/status`)).body.canSeed).toBe(true);
   });
 });

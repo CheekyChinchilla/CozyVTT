@@ -13,7 +13,7 @@ import { TokenType, TokenDisposition } from '@/types';
 import TokenTemplateLibrary from '../TokenTemplateLibrary';
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: 'DND_5E' }, currentMap: null, viewedMap: null }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: 'FIFTH_EDITION' }, currentMap: null, viewedMap: null }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: null }) }));
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));

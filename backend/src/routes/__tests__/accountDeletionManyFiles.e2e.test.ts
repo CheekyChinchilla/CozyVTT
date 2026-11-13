@@ -38,14 +38,14 @@ afterAll(async () => {
 const tokens = (urls: string[]) => urls.map((imageUrl, i) => ({ id: randomUUID(), name: `Token ${i}`, x: i, y: 0, imageUrl }));
 
 it(`deletes an account with ${FILES} personal files in use, giving each to the campaign that uses it`, async () => {
-  const dm = await createTestUser({ displayName: 'Many Files DM' });
+  const gm = await createTestUser({ displayName: 'Many Files GM' });
   const leaver = await createTestUser({ displayName: 'Many Files Leaver' });
-  userIds.push(dm.id, leaver.id);
-  const campaign = await createTestCampaign(dm.id, { name: `Many files ${randomUUID().slice(0, 6)}` });
+  userIds.push(gm.id, leaver.id);
+  const campaign = await createTestCampaign(gm.id, { name: `Many files ${randomUUID().slice(0, 6)}` });
   campaignIds.push(campaign.id);
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dm.id, campaignId: campaign.id, role: 'DM', characterIds: [] },
+      { userId: gm.id, campaignId: campaign.id, role: 'GM', characterIds: [] },
       { userId: leaver.id, campaignId: campaign.id, role: 'PLAYER', characterIds: [] },
     ],
   });

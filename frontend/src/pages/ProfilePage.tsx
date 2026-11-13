@@ -10,6 +10,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { profileService } from '@/services/profile.service';
 import { api } from '@/services/api';
 import MFASection from '@/components/profile/MFASection';
+import ChangeEmailForm from '@/components/profile/ChangeEmailForm';
 import ThemePicker, { DEFAULT_CUSTOM_COLORS, type ThemePickerColors } from '@/components/appearance/ThemePicker';
 import { AssetType } from '@/types';
 import type { UserPreferences } from '@/types';
@@ -30,20 +31,13 @@ import {
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
+import { AboutButton } from '@/components/common/AboutDialog';
 import { cn } from '@/utils/cn';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { SIDEWAYS_QUERY } from '@/constants/layout';
 import { apiErrorMessage } from '@/utils/errors';
 import { isStrongPassword } from '@/utils/validation';
 import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
-
-// Legacy localStorage key — superseded by backend-persisted preferences.
-// We delete it on first authenticated load so it doesn't linger on devices.
-const LEGACY_PREFS_KEY = 'cozyvtt_prefs';
-
-function clearLegacyPrefs() {
-  try { localStorage.removeItem(LEGACY_PREFS_KEY); } catch { /* noop */ }
-}
 
 /** How long a dragged custom colour has to stay put before it is saved. */
 const PREFS_SAVE_DELAY_MS = 400;
@@ -573,7 +567,6 @@ export default function ProfilePage() {
       try {
         const fetched = await api.getUserPreferences(user.id);
         if (cancelled) return;
-        clearLegacyPrefs();
         prefsRef.current = fetched ?? {};
         setPrefs(prefsRef.current);
       } catch (err) {
@@ -813,11 +806,18 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              {/* Email (read-only) */}
+              {/* Email */}
               <div>
                 <label className="block text-xs font-medium text-stone-gray mb-1">Email</label>
-                <p className="text-brand-ink">{user?.email}</p>
-                <p className="text-xs text-warm-gray/70">Email cannot be changed.</p>
+                <p className="text-brand-ink break-all">{user?.email}</p>
+                {user && (
+                  <ChangeEmailForm
+                    userId={user.id}
+                    currentEmail={user.email}
+                    sendsEmail={serverConfig?.smtp?.configured}
+                    onChanged={refreshUser}
+                  />
+                )}
               </div>
 
               {/* Role (read-only) */}
@@ -1066,8 +1066,8 @@ export default function ProfilePage() {
                       administrator moves it there.
                       Character templates you published stay in the shared library, and token templates and creatures
                       you made stay in their campaigns, no longer linked to you; delete any you want gone first.
-                      A campaign you own passes to whoever is running it as DM; one you run yourself has to be handed
-                      to another DM, or deleted, first.
+                      A campaign you own passes to whoever is running it as GM; one you run yourself has to be handed
+                      to another GM, or deleted, first.
                     </p>
                   </div>
                 </div>
@@ -1125,6 +1125,10 @@ export default function ProfilePage() {
           </div>
         </section>
       </main>
+
+      <footer className="max-w-4xl mx-auto px-4 pb-8 flex justify-center">
+        <AboutButton />
+      </footer>
 
       {/* Avatar crop modal (portal-like rendering — outside section flow) */}
       {cropSrc && (

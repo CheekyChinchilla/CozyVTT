@@ -109,9 +109,9 @@ describe('validateEmail', () => {
     expect(validateEmail('first.last+campaign@mail.example.co.uk')).toBe(true);
     expect(validateEmail('o\'brien@example.ie')).toBe(true);
     expect(validateEmail('player@a.b.c.d.example.org')).toBe(true);
-    expect(validateEmail('dm@example.photography')).toBe(true);
-    expect(validateEmail('dm@xn--bcher-kva.example')).toBe(true);
-    expect(validateEmail('DM@EXAMPLE.COM')).toBe(true);
+    expect(validateEmail('gm@example.photography')).toBe(true);
+    expect(validateEmail('gm@xn--bcher-kva.example')).toBe(true);
+    expect(validateEmail('GM@EXAMPLE.COM')).toBe(true);
   });
 
   // The sign-in page checks an address with the same rule before sending it,

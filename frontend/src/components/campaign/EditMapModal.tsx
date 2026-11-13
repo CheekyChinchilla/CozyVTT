@@ -1,6 +1,6 @@
 // ============================================
 // EditMapModal Component
-// Modal for DMs to edit an existing campaign map
+// Modal for GMs to edit an existing campaign map
 // ============================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -8,7 +8,8 @@ import { MapPin, Loader2, ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
 import type { Asset, CampaignMap, UpdateMapRequest } from '@/types';
-import { AssetType } from '@/types';
+import { AssetType, GameSystem } from '@/types';
+import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { detectMapGrid, type GridDetectionResult } from '@/utils/detectMapGrid';
 import { MAP_LIMITS } from '@/constants/mapLimits';
@@ -98,17 +99,17 @@ export default function EditMapModal({
   // Preview zoom (1 = fit-to-preview, higher zooms in)
   const [previewZoom, setPreviewZoom] = useState(1);
 
-  // Auto-detected grid suggestion (only offered when the DM switches to a different image)
+  // Auto-detected grid suggestion (only offered when the GM switches to a different image)
   const [detectedGrid, setDetectedGrid] = useState<GridDetectionResult | null>(null);
   const [isDetecting, setIsDetecting] = useState(false);
 
   const feetPerSquare = feetPreset === 'custom' ? feetCustom : parseInt(feetPreset);
 
-  // What the form opened with, so a save sends only what the DM changed: a
+  // What the form opened with, so a save sends only what the GM changed: a
   // field sent unchanged from a list entry that lacks it, or from an older
   // copy of the map, would overwrite the stored value.
   const opened = useRef<OpenedValues | null>(null);
-  // The spirit layer picture is sent only once the DM has touched its picker.
+  // The spirit layer picture is sent only once the GM has touched its picker.
   const spiritTouched = useRef(false);
 
   // Pre-fill fields from map prop whenever the modal opens
@@ -396,7 +397,7 @@ export default function EditMapModal({
                             <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
                               Flat — every square costs the same
                             </span>
-                            <p className="text-xs text-stone-gray/50">D&D 5e default</p>
+                            <p className="text-xs text-stone-gray/50">{GAME_SYSTEM_SHORT_LABELS[GameSystem.FIFTH_EDITION]} default</p>
                           </div>
                         </label>
                         <label className="flex items-start gap-3 cursor-pointer group">
@@ -413,7 +414,7 @@ export default function EditMapModal({
                             <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
                               Alternating — {diagonalStepCosts(feetPerSquare, 'alternating').join('/')} ft diagonals
                             </span>
-                            <p className="text-xs text-stone-gray/50">Pathfinder 2e default</p>
+                            <p className="text-xs text-stone-gray/50">{GAME_SYSTEM_SHORT_LABELS[GameSystem.FANTASY_D20]} default</p>
                           </div>
                         </label>
                       </div>

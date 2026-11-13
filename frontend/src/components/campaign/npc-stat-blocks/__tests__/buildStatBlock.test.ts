@@ -40,7 +40,7 @@ const goblin: NpcStatBlock = {
   xp: 50,
   creatureType: 'Small humanoid (goblinoid)',
   alignment: 'neutral evil',
-  gameSystem: 'DND_5E',
+  gameSystem: 'FIFTH_EDITION',
   notes: 'Nimble Escape',
 };
 

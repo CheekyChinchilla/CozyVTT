@@ -26,9 +26,9 @@ describe('mayDisplayRoll', () => {
   describe('a public roll', () => {
     it.each([
       ['a player', false],
-      ['the DM', true],
-    ])('is shown to %s', (_label, isDM) => {
-      expect(mayDisplayRoll(roll(), ME, isDM)).toBe(true);
+      ['the GM', true],
+    ])('is shown to %s', (_label, isGM) => {
+      expect(mayDisplayRoll(roll(), ME, isGM)).toBe(true);
     });
   });
 
@@ -37,8 +37,8 @@ describe('mayDisplayRoll', () => {
       expect(mayDisplayRoll(roll({ userId: ME, secret: true }), ME, false)).toBe(true);
     });
 
-    // The DM receives these deliberately, for audit and dispute resolution.
-    it('is shown to the DM', () => {
+    // The GM receives these deliberately, for audit and dispute resolution.
+    it('is shown to the GM', () => {
       expect(mayDisplayRoll(roll({ userId: THEM, secret: true }), ME, true)).toBe(true);
     });
 
@@ -68,7 +68,7 @@ describe('visibleRolls', () => {
     expect(shown.some((r) => r.userId === THEM && r.secret)).toBe(false);
   });
 
-  it('gives the DM every roll', () => {
+  it('gives the GM every roll', () => {
     expect(visibleRolls(rolls, ME, true, true)).toHaveLength(4);
   });
 
@@ -79,7 +79,7 @@ describe('visibleRolls', () => {
     expect(shown.every((r) => !r.secret)).toBe(true);
   });
 
-  it('drops them for the DM too when the DM turns them off', () => {
+  it('drops them for the GM too when the GM turns them off', () => {
     expect(visibleRolls(rolls, ME, true, false)).toHaveLength(2);
   });
 

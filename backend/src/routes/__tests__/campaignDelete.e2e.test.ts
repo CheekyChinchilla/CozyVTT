@@ -43,7 +43,7 @@ beforeAll(async () => {
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: ownerId, campaignId, role: 'DM', characterIds: [] },
+      { userId: ownerId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -71,12 +71,12 @@ afterAll(async () => {
 
 describe('DELETE /api/campaigns/:campaignId with members connected', () => {
   it('tells every connection the campaign was deleted, cuts them off from each other, forgets its combat state, and takes what was drawn on its maps', async () => {
-    const dm = await server.connectAndAuth(ownerCookie, campaignId);
+    const gm = await server.connectAndAuth(ownerCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     // Live before: a ping crosses the room, and combat state exists.
     const crossed = waitForEvent(player, 'map.pinged');
-    dm.emit('map.ping', { mapId, x: 1, y: 1 });
+    gm.emit('map.ping', { mapId, x: 1, y: 1 });
     await expect(crossed).resolves.toMatchObject({ x: 1, y: 1 });
     setState(campaignId, { active: true, round: 3, currentTokenId: null, combatants: [] });
     const drawing = await prisma.mapDrawing.create({
@@ -84,23 +84,23 @@ describe('DELETE /api/campaigns/:campaignId with members connected', () => {
     });
 
     const told = { campaignId, reason: 'campaign-deleted', message: 'This campaign was deleted.' };
-    const dmTold = waitForEvent(dm, 'campaign.access.revoked');
+    const gmTold = waitForEvent(gm, 'campaign.access.revoked');
     const playerTold = waitForEvent(player, 'campaign.access.revoked');
     const res = await owner.delete(`/api/campaigns/${campaignId}`);
     expect(res.status).toBe(200);
-    await expect(dmTold).resolves.toEqual(told);
+    await expect(gmTold).resolves.toEqual(told);
     await expect(playerTold).resolves.toEqual(told);
 
     // Dead after: nothing crosses, and the state is gone.
     const silence = expectNoEvent(player, 'map.pinged', 500);
-    dm.emit('map.ping', { mapId, x: 2, y: 2 });
+    gm.emit('map.ping', { mapId, x: 2, y: 2 });
     await expect(silence).resolves.toBeUndefined();
     expect(getState(campaignId).active).toBe(false);
     expect(getState(campaignId).round).toBe(0);
     // The campaign's maps went with it, and what was drawn on them.
     expect(await prisma.mapDrawing.findUnique({ where: { id: drawing.id } })).toBeNull();
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });

@@ -3,7 +3,7 @@
  *
  * The map routes answered "Map not found" for an id that names nothing, and
  * "Map not found in this campaign" for another campaign's map, or for a map a
- * player may not see yet (one the DM is preparing), so a member could tell
+ * player may not see yet (one the GM is preparing), so a member could tell
  * that such a map exists. Both now get the same 404 and message.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -21,7 +21,7 @@ let theirs: string;
 let shownMap: string;
 let preparedMap: string;
 let theirMap: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let player: ReturnType<typeof request.agent>;
 
 const newMap = async (campaignId: string, name: string) => (await prisma.map.create({
@@ -32,23 +32,23 @@ const newMap = async (campaignId: string, name: string) => (await prisma.map.cre
 })).id;
 
 beforeAll(async () => {
-  const [d, p, other] = await Promise.all(['Maps DM', 'Maps Player', 'Other DM'].map((displayName) => createTestUser({ displayName })));
+  const [d, p, other] = await Promise.all(['Maps GM', 'Maps Player', 'Other GM'].map((displayName) => createTestUser({ displayName })));
   users.push(d.id, p.id, other.id);
   mine = (await createTestCampaign(d.id, { name: 'Mine' })).id;
   theirs = (await createTestCampaign(other.id, { name: 'Theirs' })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: d.id, campaignId: mine, role: 'DM', characterIds: [] },
+      { userId: d.id, campaignId: mine, role: 'GM', characterIds: [] },
       { userId: p.id, campaignId: mine, role: 'PLAYER', characterIds: [] },
-      { userId: other.id, campaignId: theirs, role: 'DM', characterIds: [] },
+      { userId: other.id, campaignId: theirs, role: 'GM', characterIds: [] },
     ],
   });
   shownMap = await newMap(mine, 'Shown');
   preparedMap = await newMap(mine, 'Prepared');
   theirMap = await newMap(theirs, 'Theirs');
   await prisma.campaign.update({ where: { id: mine }, data: { currentMapId: shownMap } });
-  dm = request.agent(app);
-  await dm.post('/api/auth/login').send({ email: d.email, password: TEST_PASSWORD }).expect(200);
+  gm = request.agent(app);
+  await gm.post('/api/auth/login').send({ email: d.email, password: TEST_PASSWORD }).expect(200);
   player = request.agent(app);
   await player.post('/api/auth/login').send({ email: p.email, password: TEST_PASSWORD }).expect(200);
 });
@@ -63,7 +63,7 @@ afterAll(async () => {
 const base = () => `/api/campaigns/${mine}/maps`;
 type Call = (agent: ReturnType<typeof request.agent>, id: string) => request.Test;
 
-const dmRoutes: Array<[string, Call]> = [
+const gmRoutes: Array<[string, Call]> = [
   ['GET a map', (a, id) => a.get(`${base()}/${id}`)],
   ['PUT a map', (a, id) => a.put(`${base()}/${id}`).send({ name: 'Renamed' })],
   ['DELETE a map', (a, id) => a.delete(`${base()}/${id}`)],
@@ -75,9 +75,9 @@ const dmRoutes: Array<[string, Call]> = [
   ['GET lights', (a, id) => a.get(`${base()}/${id}/lights`)],
 ];
 
-it.each(dmRoutes)('%s of another campaign answers as an unknown id', async (_label, call) => {
-  const missing = await call(dm, randomUUID());
-  const elsewhere = await call(dm, theirMap);
+it.each(gmRoutes)('%s of another campaign answers as an unknown id', async (_label, call) => {
+  const missing = await call(gm, randomUUID());
+  const elsewhere = await call(gm, theirMap);
   expect(missing.status).toBe(404);
   expect({ status: elsewhere.status, body: elsewhere.body }).toEqual({ status: missing.status, body: missing.body });
 });
@@ -89,7 +89,7 @@ const playerRoutes: Array<[string, Call]> = [
   ['GET lights', (a, id) => a.get(`${base()}/${id}/lights`)],
 ];
 
-it.each(playerRoutes)('%s the DM is preparing answers a player as an unknown id', async (_label, call) => {
+it.each(playerRoutes)('%s the GM is preparing answers a player as an unknown id', async (_label, call) => {
   const missing = await call(player, randomUUID());
   const prepared = await call(player, preparedMap);
   expect(missing.status).toBe(404);

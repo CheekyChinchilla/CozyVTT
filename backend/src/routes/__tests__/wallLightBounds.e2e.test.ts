@@ -7,7 +7,7 @@
  * bounds: no coordinate past 250,000 pixels either way (a 500-square map at a
  * 500-pixel grid), and nothing more than 500 squares outside the map it is on.
  * The second is generous on purpose: a Universal VTT export can carry walls
- * well outside its picture, and a DM can draw past the edge.
+ * well outside its picture, and a GM can draw past the edge.
  *
  * A wall or light already stored outside the map, before these bounds, is
  * left alone: a whole-list save that sends it back unchanged is accepted.
@@ -35,9 +35,9 @@ const app = createTestApp();
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 // The wall and light routes tell open pages of each change, so they need a
 // socket server to tell.
 let server: WsTestServer;
@@ -71,19 +71,19 @@ const base = (mapId: string) => `/api/campaigns/${campaignId}/maps/${mapId}`;
 beforeAll(async () => {
   const stamp = Date.now();
   const user = await createTestUser({ email: `wallbounds-${stamp}@test.cozyvtt.local` });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Wall bounds ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Wall bounds ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
 afterAll(async () => {
   await server.close();
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
@@ -93,7 +93,7 @@ describe('walls', () => {
     async (_label, x2) => {
       const mapId = await newMap();
 
-      const res = await dm.post(`${base(mapId)}/walls`).send(wall({ x2, y2: x2 }));
+      const res = await gm.post(`${base(mapId)}/walls`).send(wall({ x2, y2: x2 }));
 
       expect(res.status).toBe(400);
       expect((await stored(mapId)).wallSegments).toEqual([]);
@@ -103,13 +103,13 @@ describe('walls', () => {
   it('POST takes a wall drawn a little past the edge', async () => {
     const mapId = await newMap();
 
-    expect((await dm.post(`${base(mapId)}/walls`).send(wall({ x2: JUST_OFF }))).status).toBe(201);
+    expect((await gm.post(`${base(mapId)}/walls`).send(wall({ x2: JUST_OFF }))).status).toBe(201);
   });
 
   it('PUT refuses a list with one wall out of bounds, and stores nothing', async () => {
     const mapId = await newMap();
 
-    const res = await dm.put(`${base(mapId)}/walls`).send({ segments: [wall(), wall({ x1: -FAR_OFF })] });
+    const res = await gm.put(`${base(mapId)}/walls`).send({ segments: [wall(), wall({ x1: -FAR_OFF })] });
 
     expect(res.status).toBe(400);
     expect((await stored(mapId)).wallSegments).toEqual([]);
@@ -119,7 +119,7 @@ describe('walls', () => {
     const legacy = wall({ x2: PAST_MARGIN });
     const mapId = await newMap({ wallSegments: [legacy] });
 
-    const res = await dm.put(`${base(mapId)}/walls`).send({ segments: [legacy, wall()] });
+    const res = await gm.put(`${base(mapId)}/walls`).send({ segments: [legacy, wall()] });
 
     expect(res.status).toBe(200);
     expect((await stored(mapId)).wallSegments).toHaveLength(2);
@@ -129,7 +129,7 @@ describe('walls', () => {
     const legacy = wall({ x2: PAST_MARGIN });
     const mapId = await newMap({ wallSegments: [legacy] });
 
-    const res = await dm.put(`${base(mapId)}/walls`).send({ segments: [{ ...legacy, y2: PAST_MARGIN }] });
+    const res = await gm.put(`${base(mapId)}/walls`).send({ segments: [{ ...legacy, y2: PAST_MARGIN }] });
 
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/too far outside the map/);
@@ -142,7 +142,7 @@ describe('lights', () => {
     async (_label, x) => {
       const mapId = await newMap();
 
-      expect((await dm.post(`${base(mapId)}/lights`).send(light({ x }))).status).toBe(400);
+      expect((await gm.post(`${base(mapId)}/lights`).send(light({ x }))).status).toBe(400);
       expect((await stored(mapId)).lights).toEqual([]);
     }
   );
@@ -150,14 +150,14 @@ describe('lights', () => {
   it('PUT refuses a list with a light out of bounds', async () => {
     const mapId = await newMap();
 
-    expect((await dm.put(`${base(mapId)}/lights`).send({ lights: [light(), light({ y: PAST_MARGIN })] })).status).toBe(400);
+    expect((await gm.put(`${base(mapId)}/lights`).send({ lights: [light(), light({ y: PAST_MARGIN })] })).status).toBe(400);
   });
 
   it('PUT keeps a light stored outside the bounds, sent back unchanged', async () => {
     const legacy = light({ x: PAST_MARGIN });
     const mapId = await newMap({ lights: [legacy] });
 
-    expect((await dm.put(`${base(mapId)}/lights`).send({ lights: [legacy, light()] })).status).toBe(200);
+    expect((await gm.put(`${base(mapId)}/lights`).send({ lights: [legacy, light()] })).status).toBe(200);
   });
 
   it.each([['ten million pixels away', FAR_OFF], ['more than 500 squares off the map', PAST_MARGIN]])(
@@ -166,7 +166,7 @@ describe('lights', () => {
       const existing = light();
       const mapId = await newMap({ lights: [existing] });
 
-      const res = await dm.patch(`${base(mapId)}/lights/${existing.id}`).send({ x });
+      const res = await gm.patch(`${base(mapId)}/lights/${existing.id}`).send({ x });
 
       expect(res.status).toBe(400);
       expect((await stored(mapId)).lights).toEqual([existing]);
@@ -188,7 +188,7 @@ describe('Universal VTT import', () => {
   it('refuses a file with walls more than 500 squares outside its map, and saves nothing', async () => {
     const before = await prisma.asset.count({ where: { campaignId } });
 
-    const res = await dm
+    const res = await gm
       .post(`/api/campaigns/${campaignId}/maps/import-uvtt`)
       .attach('file', file([[{ x: 1, y: 1 }, { x: 2, y: 1 }], [{ x: 600, y: 1 }, { x: 601, y: 1 }]]), 'far.uvtt')
       .field('confirm', 'true');
@@ -199,7 +199,7 @@ describe('Universal VTT import', () => {
   });
 
   it('still imports walls a little outside the picture, as a cropped export has', async () => {
-    const res = await dm
+    const res = await gm
       .post(`/api/campaigns/${campaignId}/maps/import-uvtt`)
       .attach('file', file([[{ x: 1, y: 1 }, { x: 2, y: 1 }], [{ x: 30, y: 1 }, { x: 31, y: 1 }]]), 'cropped.uvtt')
       .field('confirm', 'true');

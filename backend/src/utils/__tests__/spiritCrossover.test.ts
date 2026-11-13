@@ -1,7 +1,7 @@
 /**
  * Who has crossed into the spirit realm.
  *
- * A player crosses over when the DM puts a token they control onto the spirit
+ * A player crosses over when the GM puts a token they control onto the spirit
  * layer on the map the table is on. A spectator who was a player once can
  * still be named on a token, since demotion does not clear controlledBy; the
  * rest of the server treats that name as nobody's, and so must this, or the
@@ -13,7 +13,7 @@
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns } from '../../__tests__/helpers/db';
 import { getSpiritVisibility, getSpiritVisibilityBatch } from '../spirit-layer';
 
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let spectatorId: string;
 let campaignId: string;
@@ -24,13 +24,13 @@ const spiritToken = (id: string, controlledBy: string) => ({
 });
 
 beforeAll(async () => {
-  dmId = (await createTestUser({ displayName: 'Crossover DM' })).id;
+  gmId = (await createTestUser({ displayName: 'Crossover GM' })).id;
   playerId = (await createTestUser({ displayName: 'Crossover Player' })).id;
   spectatorId = (await createTestUser({ displayName: 'Crossover Spectator' })).id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Crossover' })).id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Crossover' })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
     ],
@@ -49,7 +49,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId, spectatorId]);
+  await cleanupUsers([gmId, playerId, spectatorId]);
   await prisma.$disconnect();
 });
 

@@ -308,7 +308,7 @@ export default function DiceMacroManager({
               <Input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Name, e.g. Wild magic"
+                placeholder="Name, e.g. Random weather"
                 aria-label="Macro name"
                 className="min-w-0"
                 onKeyDown={addOnEnter}

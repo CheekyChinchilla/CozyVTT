@@ -31,7 +31,7 @@ function publishWithPicture() {
   const onCreated = vi.fn();
   render(
     <NewCharacterTemplateModal
-      initial={{ name: 'Aldra', gameSystem: 'DND_5E', data: { characterName: 'Aldra' }, tokenImageUrl: PICTURE }}
+      initial={{ name: 'Aldra', gameSystem: 'FIFTH_EDITION', data: { characterName: 'Aldra' }, tokenImageUrl: PICTURE }}
       onClose={vi.fn()}
       onCreated={onCreated}
     />

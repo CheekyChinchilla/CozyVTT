@@ -29,7 +29,7 @@ afterEach(async () => {
 
 function token(extra: Partial<Token> = {}): Token {
   return {
-    id: 'tok-goblin', name: 'Goblin Scout', imageUrl: '', characterId: null, position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
+    id: 'tok-goblin', name: 'Goblin', imageUrl: '', characterId: null, position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
     layer: TokenLayer.TOKEN, visible: true, type: TokenType.NPC, conditions: [], rotation: 0, controlledBy: null, hp: null, showHpBar: false,
     ...extra,
   } as unknown as Token;
@@ -43,8 +43,8 @@ function tokenActions(): TokenMenuActions {
   };
 }
 
-const DM_VIEW: TokenMenuView = {
-  role: CampaignRole.DM, mayViewSheet: true, mayRoll: true, mayGrantTemporaryHp: false, mayRotate: true, mapId: 'map-a',
+const GM_VIEW: TokenMenuView = {
+  role: CampaignRole.GM, mayViewSheet: true, mayRoll: true, mayGrantTemporaryHp: false, mayRotate: true, mapId: 'map-a',
   maps: [{ id: 'map-a', name: 'Map A' }, { id: 'map-b', name: 'Map B' }, { id: 'map-c', name: 'Map C' }],
   busy: { crossing: false, moving: false },
 };
@@ -93,13 +93,13 @@ function Popover({ items, onClose }: { items: MenuItem[]; onClose: () => void })
 }
 
 function Sheet({ items, onClose = () => undefined, open = true }: { items: MenuItem[]; onClose?: () => void; open?: boolean }) {
-  return <ActionSheet open={open} title="Goblin Scout" subtitle="7 / 7 HP" items={items} onClose={onClose} />;
+  return <ActionSheet open={open} title="Goblin" subtitle="7 / 7 HP" items={items} onClose={onClose} />;
 }
 
 describe('an action sheet', () => {
   it('is a modal dialog named by its title, with its line under it and Cancel', () => {
-    render(<ActionSheet open title="Goblin Scout" subtitle="Yours · 7 / 7 HP" leading={<span data-testid="picture" />} items={[]} onClose={() => undefined} />);
-    const sheet = screen.getByRole('dialog', { name: 'Goblin Scout' });
+    render(<ActionSheet open title="Goblin" subtitle="Yours · 7 / 7 HP" leading={<span data-testid="picture" />} items={[]} onClose={() => undefined} />);
+    const sheet = screen.getByRole('dialog', { name: 'Goblin' });
     expect(sheet).toHaveAttribute('aria-modal', 'true');
     expect(within(sheet).getByText('Yours · 7 / 7 HP')).toBeInTheDocument();
     expect(within(sheet).getByTestId('picture')).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe('an action sheet', () => {
 
   it('closes on Cancel, its backdrop and Escape, and is a menu on the screen until it does', async () => {
     const onClose = vi.fn();
-    const { rerender } = render(<Sheet items={tokenMenuItems(token(), { ...DM_VIEW, actions: tokenActions() })} onClose={onClose} />);
+    const { rerender } = render(<Sheet items={tokenMenuItems(token(), { ...GM_VIEW, actions: tokenActions() })} onClose={onClose} />);
     expect(anyMenuShown()).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(document.querySelector('[data-sheet-backdrop]') as HTMLElement);
@@ -125,53 +125,53 @@ describe('an action sheet', () => {
   // did nothing. jsdom does no hit testing, so the classes that decide it are
   // read here; sideways-sheet.js drove the tap in a browser.
   it('takes a tap only on its card and Cancel, so one beside them reaches the backdrop', () => {
-    render(<Sheet items={tokenMenuItems(token(), { ...DM_VIEW, actions: tokenActions() })} />);
-    const sheet = screen.getByRole('dialog', { name: 'Goblin Scout' });
+    render(<Sheet items={tokenMenuItems(token(), { ...GM_VIEW, actions: tokenActions() })} />);
+    const sheet = screen.getByRole('dialog', { name: 'Goblin' });
     expect(sheet.className).toContain('pointer-events-none');
-    const card = within(sheet).getByRole('heading', { name: 'Goblin Scout' }).closest('.rounded-cozy-lg') as HTMLElement;
+    const card = within(sheet).getByRole('heading', { name: 'Goblin' }).closest('.rounded-cozy-lg') as HTMLElement;
     expect(card.className).toContain('pointer-events-auto');
     expect(within(sheet).getByRole('button', { name: 'Cancel' }).className).toContain('pointer-events-auto');
   });
 
   it('closes on the browser’s Back', async () => {
     const onClose = vi.fn();
-    render(<Sheet items={tokenMenuItems(token(), { ...DM_VIEW, actions: tokenActions() })} onClose={onClose} />);
+    render(<Sheet items={tokenMenuItems(token(), { ...GM_VIEW, actions: tokenActions() })} onClose={onClose} />);
     act(() => { window.history.back(); });
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
   it('puts the focus on its first item as it opens', async () => {
-    render(<Sheet items={tokenMenuItems(token(), { ...DM_VIEW, actions: tokenActions() })} />);
+    render(<Sheet items={tokenMenuItems(token(), { ...GM_VIEW, actions: tokenActions() })} />);
     await nextFrame();
     expect(document.activeElement).toHaveTextContent('Rotate Left');
   });
 
   it('draws rows a finger can press: 52 px or more', () => {
-    render(<Sheet items={tokenMenuItems(token(), { ...DM_VIEW, actions: tokenActions() })} />);
+    render(<Sheet items={tokenMenuItems(token(), { ...GM_VIEW, actions: tokenActions() })} />);
     const page = document.querySelector('[data-action-sheet-page]') as HTMLElement;
     for (const row of within(page).getAllByRole('button')) expect(row.className).toContain('min-h-13');
     expect(screen.getByRole('button', { name: 'Cancel' }).className).toContain('min-h-13');
   });
 
   it('opens a submenu as a second page, under its name, and goes back by a row named for the sheet', () => {
-    render(<Sheet items={tokenMenuItems(token(), { ...DM_VIEW, actions: tokenActions() })} />);
+    render(<Sheet items={tokenMenuItems(token(), { ...GM_VIEW, actions: tokenActions() })} />);
     fireEvent.click(screen.getByRole('button', { name: 'Move to Map…' }));
-    expect(sheetRows()).toEqual(['Back to Goblin Scout', '# Move to Map…', 'Map B', 'Map C']);
+    expect(sheetRows()).toEqual(['Back to Goblin', '# Move to Map…', 'Map B', 'Map C']);
     expect(screen.queryByRole('button', { name: 'Move to Map…' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Back to Goblin Scout' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Goblin' }));
     expect(sheetRows()).toContain('Remove from Map');
   });
 
   it('shows a submenu’s wait in place of its choices', () => {
-    render(<Sheet items={tokenMenuItems(token(), { ...DM_VIEW, busy: { crossing: false, moving: true }, actions: tokenActions() })} />);
+    render(<Sheet items={tokenMenuItems(token(), { ...GM_VIEW, busy: { crossing: false, moving: true }, actions: tokenActions() })} />);
     fireEvent.click(screen.getByRole('button', { name: 'Move to Map…' }));
-    expect(sheetRows()).toEqual(['Back to Goblin Scout', '# Move to Map…', '(Moving…)']);
+    expect(sheetRows()).toEqual(['Back to Goblin', '# Move to Map…', '(Moving…)']);
   });
 
   // A held Enter that opened the menu (on a selected token, from the keyboard)
   // must not press the first item the sheet puts the focus on.
   it('does not press its first item on a held Enter, as the popover does not', async () => {
-    render(<Sheet items={tokenMenuItems(token(), { ...DM_VIEW, actions: tokenActions() })} />);
+    render(<Sheet items={tokenMenuItems(token(), { ...GM_VIEW, actions: tokenActions() })} />);
     await nextFrame();
     const first = document.activeElement as HTMLElement;
     expect(first).toHaveTextContent('Rotate Left');
@@ -186,12 +186,12 @@ describe('an action sheet', () => {
 
 describe('the same items as the desktop popover', () => {
   const cases: Array<[string, () => MenuItem[]]> = [
-    ["the DM's menu on a creature", () => tokenMenuItems(token(), { ...DM_VIEW, actions: tokenActions() })],
-    ["the DM's menu while a crossing waits", () => tokenMenuItems(token(), { ...DM_VIEW, busy: { crossing: true, moving: false }, actions: tokenActions() })],
+    ["the GM's menu on a creature", () => tokenMenuItems(token(), { ...GM_VIEW, actions: tokenActions() })],
+    ["the GM's menu while a crossing waits", () => tokenMenuItems(token(), { ...GM_VIEW, busy: { crossing: true, moving: false }, actions: tokenActions() })],
     ["a player's menu on their own character", () => tokenMenuItems(token({ characterId: 'char-1', type: TokenType.PLAYER, controlledBy: 'me' }), {
-      ...DM_VIEW, role: CampaignRole.PLAYER, actions: tokenActions(),
+      ...GM_VIEW, role: CampaignRole.PLAYER, actions: tokenActions(),
     })],
-    ["the DM's door menu", () => doorMenuItems({ id: 'd', x1: 0, y1: 0, x2: 1, y2: 0, type: 'door-closed' } as WallSegment, { role: CampaignRole.DM, actions: { setType: vi.fn() } })],
+    ["the GM's door menu", () => doorMenuItems({ id: 'd', x1: 0, y1: 0, x2: 1, y2: 0, type: 'door-closed' } as WallSegment, { role: CampaignRole.GM, actions: { setType: vi.fn() } })],
     ["a player's locked door", () => doorMenuItems({ id: 'd', x1: 0, y1: 0, x2: 1, y2: 0, type: 'door-locked' } as WallSegment, { role: CampaignRole.PLAYER, actions: { setType: vi.fn() } })],
   ];
 
@@ -205,7 +205,7 @@ describe('the same items as the desktop popover', () => {
   });
 
   it("a submenu's choices, in order", () => {
-    const items = tokenMenuItems(token(), { ...DM_VIEW, actions: tokenActions() });
+    const items = tokenMenuItems(token(), { ...GM_VIEW, actions: tokenActions() });
     render(<Popover items={items} onClose={() => undefined} />);
     fireEvent.click(within(screen.getByTestId('popover')).getByText('Move to Map…'));
     const desktop = popoverRows(screen.getByTestId('popover')).filter((row) => row.startsWith('› ')).map((row) => row.slice(2));
@@ -221,7 +221,7 @@ describe('the same items as the desktop popover', () => {
     const results = (container: 'popover' | 'sheet') => labels.map((label) => {
       const actions = tokenActions();
       const onClose = vi.fn();
-      const items = tokenMenuItems(token(), { ...DM_VIEW, actions });
+      const items = tokenMenuItems(token(), { ...GM_VIEW, actions });
       if (container === 'popover') render(<Popover items={items} onClose={onClose} />);
       else render(<Sheet items={items} onClose={onClose} />);
       const scope = container === 'popover' ? within(screen.getByTestId('popover')) : within(document.querySelector('[data-action-sheet-page]') as HTMLElement);
@@ -242,7 +242,7 @@ describe('the same items as the desktop popover', () => {
     const run = (container: 'popover' | 'sheet') => {
       const actions = tokenActions();
       const onClose = vi.fn();
-      const items = tokenMenuItems(token(), { ...DM_VIEW, actions });
+      const items = tokenMenuItems(token(), { ...GM_VIEW, actions });
       if (container === 'popover') render(<Popover items={items} onClose={onClose} />);
       else render(<Sheet items={items} onClose={onClose} />);
       fireEvent.click(screen.getByText('Move to Map…'));
@@ -257,7 +257,7 @@ describe('the same items as the desktop popover', () => {
 
   it('presses nothing that waits', () => {
     const actions = tokenActions();
-    render(<Sheet items={tokenMenuItems(token(), { ...DM_VIEW, busy: { crossing: true, moving: false }, actions })} />);
+    render(<Sheet items={tokenMenuItems(token(), { ...GM_VIEW, busy: { crossing: true, moving: false }, actions })} />);
     const waiting = screen.getByRole('button', { name: 'Moving…' });
     expect(waiting).toBeDisabled();
     fireEvent.click(waiting);
@@ -288,7 +288,7 @@ describe('the same items as the desktop popover', () => {
 describe('an action sheet\'s place', () => {
   it('is told to the caller as the top of a sheet from the bottom', () => {
     const onPlaced = vi.fn();
-    render(<ActionSheet open title="Goblin Scout" items={[]} onClose={() => undefined} onPlaced={onPlaced} />);
+    render(<ActionSheet open title="Goblin" items={[]} onClose={() => undefined} onPlaced={onPlaced} />);
     expect(onPlaced).toHaveBeenCalledWith({ side: 'bottom', at: 0 });
   });
 });
@@ -307,9 +307,9 @@ describe('an action sheet on a phone turned sideways', () => {
     }));
     try {
       const onPlaced = vi.fn();
-      render(<ActionSheet open title="Goblin Scout" items={[]} onClose={() => undefined} onPlaced={onPlaced} />);
+      render(<ActionSheet open title="Goblin" items={[]} onClose={() => undefined} onPlaced={onPlaced} />);
       expect(onPlaced).toHaveBeenCalledWith({ side: 'right', at: 0 });
-      const classes = screen.getByRole('dialog', { name: 'Goblin Scout' }).className.split(/\s+/);
+      const classes = screen.getByRole('dialog', { name: 'Goblin' }).className.split(/\s+/);
       expect(classes).toEqual(expect.arrayContaining(['right-0', 'inset-y-0', 'w-88', 'pr-[calc(0.5rem+env(safe-area-inset-right))]']));
       expect(classes).not.toContain('inset-x-0');
     } finally {

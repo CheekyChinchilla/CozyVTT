@@ -6,7 +6,7 @@
  * ellipse exactly two, a text label one, with its text. Points are whole map
  * pixels within the bound walls and lights have. Only the markup layer is
  * drawn on, and only D's kinds: a texture, a stamp and the ground layer are
- * kept for DM-drawn map art and refused until it comes. A label loses its
+ * kept for GM-drawn map art and refused until it comes. A label loses its
  * control and direction characters before its length is counted.
  */
 
@@ -171,8 +171,14 @@ describe('NewDrawingSchema', () => {
       }
     });
 
-    it('takes a drawing for the DM alone', () => {
-      expect(NewDrawingSchema.parse({ ...line, audience: 'DM' }).audience).toBe('DM');
+    it('takes a drawing for the GM alone', () => {
+      expect(NewDrawingSchema.parse({ ...line, audience: 'GM' }).audience).toBe('GM');
+    });
+
+    // The refusal names the two values a client may send, as the chat's
+    // and the role route's do.
+    it('names the audiences it takes when it refuses one', () => {
+      expect(refusal({ ...line, audience: 'PLAYERS' })).toBe("A drawing's audience must be ALL or GM");
     });
 
     it('fills only a rectangle, an ellipse or a polygon', () => {
@@ -229,13 +235,13 @@ describe('DrawingPreviewSchema', () => {
 });
 
 // A map's markup layer has two shares, each with room of its own: the
-// DM's, and the players' together. One decision for what a share has room
+// GM's, and the players' together. One decision for what a share has room
 // for, which the add and the import both ask.
 describe('drawingShare', () => {
-  it('puts a drawing for everyone in the DM\'s share when its author is the campaign\'s DM, and in the players\' otherwise', () => {
-    expect(drawingShare({ authorId: 'dm', audience: 'ALL' }, 'dm')).toBe('DM');
+  it('puts a drawing for everyone in the GM\'s share when its author is the campaign\'s GM, and in the players\' otherwise', () => {
+    expect(drawingShare({ authorId: 'dm', audience: 'ALL' }, 'dm')).toBe('GM');
     expect(drawingShare({ authorId: 'mara', audience: 'ALL' }, 'dm')).toBe('PLAYERS');
-    // A former DM's, a removed member's, one whose author's account is gone.
+    // A former GM's, a removed member's, one whose author's account is gone.
     expect(drawingShare({ authorId: 'former-dm', audience: 'ALL' }, 'dm')).toBe('PLAYERS');
     expect(drawingShare({ authorId: null, audience: 'ALL' }, 'dm')).toBe('PLAYERS');
     expect(drawingShare({ authorId: null, audience: 'ALL' }, null)).toBe('PLAYERS');
@@ -243,24 +249,24 @@ describe('drawingShare', () => {
 
   // The players' share holds only drawings a player is sent, so its refusal
   // tells a player nothing they cannot count.
-  it('puts every drawing for the DM alone in the DM\'s share, whoever wrote it', () => {
-    expect(drawingShare({ authorId: 'dm', audience: 'DM' }, 'dm')).toBe('DM');
-    expect(drawingShare({ authorId: 'former-dm', audience: 'DM' }, 'dm')).toBe('DM');
-    expect(drawingShare({ authorId: null, audience: 'DM' }, 'dm')).toBe('DM');
-    expect(drawingShare({ authorId: null, audience: 'DM' }, null)).toBe('DM');
+  it('puts every drawing for the GM alone in the GM\'s share, whoever wrote it', () => {
+    expect(drawingShare({ authorId: 'dm', audience: 'GM' }, 'dm')).toBe('GM');
+    expect(drawingShare({ authorId: 'former-dm', audience: 'GM' }, 'dm')).toBe('GM');
+    expect(drawingShare({ authorId: null, audience: 'GM' }, 'dm')).toBe('GM');
+    expect(drawingShare({ authorId: null, audience: 'GM' }, null)).toBe('GM');
   });
 });
 
 describe('archiveShare', () => {
   it('is the share an archive names, or by the drawing for one that names none', () => {
-    expect(archiveShare({ share: 'DM' }, 'ALL')).toBe('DM');
+    expect(archiveShare({ share: 'GM' }, 'ALL')).toBe('GM');
     expect(archiveShare({ share: 'PLAYERS' }, 'ALL')).toBe('PLAYERS');
     expect(archiveShare({}, 'ALL')).toBe('PLAYERS');
-    expect(archiveShare({ share: 'nobody' }, 'DM')).toBe('DM');
+    expect(archiveShare({ share: 'nobody' }, 'GM')).toBe('GM');
   });
 
-  it('is the DM\'s for a drawing for the DM alone, whatever share the archive names', () => {
-    expect(archiveShare({ share: 'PLAYERS' }, 'DM')).toBe('DM');
+  it('is the GM\'s for a drawing for the GM alone, whatever share the archive names', () => {
+    expect(archiveShare({ share: 'PLAYERS' }, 'GM')).toBe('GM');
   });
 });
 
@@ -278,16 +284,16 @@ describe('markupLimitReached', () => {
   });
 
   it('gives each share 1,000 drawings and 100,000 points, the old map\'s room between them', () => {
-    expect(DRAWING_LIMITS.markupShares).toEqual({ DM: { drawings: 1000, points: 100000 }, PLAYERS: { drawings: 1000, points: 100000 } });
+    expect(DRAWING_LIMITS.markupShares).toEqual({ GM: { drawings: 1000, points: 100000 }, PLAYERS: { drawings: 1000, points: 100000 } });
   });
 });
 
 describe('the refusal for a full share', () => {
-  // A player learns nothing of the DM's drawings from it: it names their
+  // A player learns nothing of the GM's drawings from it: it names their
   // share, and no count.
   it('names the share and gives no count', () => {
     expect(MARKUP_SHARE_FULL.PLAYERS).toBe("The players' share of this map's drawing is full. Erase some first.");
-    expect(MARKUP_SHARE_FULL.DM).toBe("Your share of this map's drawing is full. Erase some first.");
+    expect(MARKUP_SHARE_FULL.GM).toBe("Your share of this map's drawing is full. Erase some first.");
     for (const message of Object.values(MARKUP_SHARE_FULL)) expect(message).not.toMatch(/\d/);
   });
 });

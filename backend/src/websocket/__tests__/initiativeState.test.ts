@@ -3,7 +3,7 @@
  *
  * Entries follow their tokens. A player is given only the combatants whose
  * token they were sent at all, with the name, picture and hit points exactly
- * as that token was sent to them; the DM gets every combatant with the token
+ * as that token was sent to them; the GM gets every combatant with the token
  * as it is now. No database: the recipient's token list is an input.
  */
 
@@ -40,7 +40,7 @@ describe('projectCombatState', () => {
     expect(projectCombatState({ ...state, currentTokenId: 'hero' }, sent, false).currentTokenId).toBe('hero');
   });
 
-  it('gives the DM every combatant with the token as it is now, and the stored copy when the token is gone', () => {
+  it('gives the GM every combatant with the token as it is now, and the stored copy when the token is gone', () => {
     const all = new Map([['hero', token('hero', { hp: hp(3) })], ['goblin', token('goblin', { hp: hp(7) })]]);
     const seen = projectCombatState(state, all, true);
     expect(seen.combatants.map((c) => c.tokenId)).toEqual(['hero', 'goblin', 'hidden']);

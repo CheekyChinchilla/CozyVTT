@@ -21,16 +21,16 @@ vi.mock('@/contexts/WebSocketContext', () => ({
 vi.mock('@/services/api', () => ({
   api: { getUser: vi.fn().mockResolvedValue({ user: { displayName: 'Owner' } }) },
 }));
-vi.mock('../../character-sheets/dnd5e/DnD5eCharacterView', () => ({
-  DnD5eCharacterView: ({ onRoll }: { onRoll?: (expression: string, purpose: string) => void }) => (
+vi.mock('../../character-sheets/fifth-edition/FifthEditionCharacterView', () => ({
+  FifthEditionCharacterView: ({ onRoll }: { onRoll?: (expression: string, purpose: string) => void }) => (
     <button type="button" onClick={() => onRoll?.('1d20+3', 'Stealth')}>Stealth</button>
   ),
 }));
 
 const character = {
-  id: 'char-1', userId: 'owner', name: 'Shadow Assassin', gameSystem: 'DND_5E', data: {}, campaignId: 'camp-1',
+  id: 'char-1', userId: 'owner', name: 'Shadow Assassin', gameSystem: 'FIFTH_EDITION', data: {}, campaignId: 'camp-1',
 } as unknown as Character;
-const membership = { userId: 'dm', campaignId: 'camp-1', role: 'DM', characterIds: [] } as unknown as CampaignMembership;
+const membership = { userId: 'dm', campaignId: 'camp-1', role: 'GM', characterIds: [] } as unknown as CampaignMembership;
 
 describe('CharacterSheetViewerModal rolls', () => {
   it('names the character when no public name is given', () => {

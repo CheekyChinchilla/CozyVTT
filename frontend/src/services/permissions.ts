@@ -28,8 +28,8 @@ export function canEditCharacter(
     return true;
   }
 
-  // User is DM of the campaign
-  if (membership && membership.role === 'DM') {
+  // User is GM of the campaign
+  if (membership && membership.role === 'GM') {
     return true;
   }
 
@@ -59,15 +59,15 @@ export function canEditCharacterIn(
  */
 export function characterEditRefusal(user: Pick<User, 'id'>, character: Pick<Character, 'userId'>): string {
   return character.userId === user.id
-    ? "You watch this character's campaign as a spectator, so you cannot edit the character there. Ask its DM to make you a player."
-    : 'You do not have permission to edit this character. Only its owner or the DM of its campaign can edit it.';
+    ? "You watch this character's campaign as a spectator, so you cannot edit the character there. Ask its GM to make you a player."
+    : 'You do not have permission to edit this character. Only its owner or the GM of its campaign can edit it.';
 }
 
 /**
  * Check if a user can roll a character's dice
  *
  * Rolling uses the sheet's own modifiers, so it is an action taken *as* that
- * character rather than a way of reading one. The owner may, and the DM may so
+ * character rather than a way of reading one. The owner may, and the GM may so
  * they can cover for an absent player. Everyone else in the campaign — other
  * players and spectators alike — may still open and read the sheet, which the
  * server deliberately allows, but not roll from it.
@@ -101,8 +101,8 @@ export function canRollAsCharacter(
     return true;
   }
 
-  // User is DM of the campaign
-  if (membership && membership.role === 'DM') {
+  // User is GM of the campaign
+  if (membership && membership.role === 'GM') {
     return true;
   }
 
@@ -111,7 +111,7 @@ export function canRollAsCharacter(
 
 /**
  * Check if a user can remove a character from a campaign
- * Character owners and DMs can remove characters
+ * Character owners and GMs can remove characters
  * @param user - Current user
  * @param character - Character to remove
  * @param membership - User's campaign membership
@@ -127,8 +127,8 @@ export function canRemoveCharacterFromCampaign(
     return true;
   }
 
-  // User is DM
-  if (membership?.role === 'DM') {
+  // User is GM
+  if (membership?.role === 'GM') {
     return true;
   }
 

@@ -22,44 +22,44 @@ const goblin: NpcStatBlock = {
   challengeRating: '1/4',
   actions: [
     {
-      name: 'Scimitar',
-      description: 'Melee Weapon Attack: +4 to hit, reach 5 ft. Hit: 5 (1d6 + 2) slashing damage.',
+      name: 'Handaxe',
+      description: 'Melee Weapon Attack: +3 to hit, reach 5 ft. Hit: 4 (1d6 + 1) slashing damage.',
     },
   ],
 };
 
 const token = (over: Partial<Token>): Token => ({
-  id: 'g', name: 'Goblin Boss', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
+  id: 'g', name: 'Goblin', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
   layer: TokenLayer.TOKEN, visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {},
   type: TokenType.NPC, disposition: 'hostile' as Token['disposition'], hp: null, showHpBar: false, notes: '', initiative: null,
   statBlock: goblin, ...over,
 });
 
-function rollScimitar(t: Token): string | undefined {
+function rollHandaxe(t: Token): string | undefined {
   const onRoll = vi.fn();
-  render(<NpcRollPicker token={t} gameSystem="DND_5E" onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
-  fireEvent.click(screen.getByRole('button', { name: /^Scimitar \(Attack/ }));
+  render(<NpcRollPicker token={t} gameSystem="FIFTH_EDITION" onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
+  fireEvent.click(screen.getByRole('button', { name: /^Handaxe \(Attack/ }));
   expect(onRoll).toHaveBeenCalledTimes(1);
   return (onRoll.mock.calls[0] as [string, string, string | undefined])[2];
 }
 
 describe('the name a stat-block roll is filed under', () => {
   it("is the token's for an ordinary creature", () => {
-    expect(rollScimitar(token({}))).toBe('Goblin Boss');
+    expect(rollHandaxe(token({}))).toBe('Goblin');
   });
 
   it('is Unknown creature for an obscured token', () => {
-    expect(rollScimitar(token({ obscured: true }))).toBe('Unknown creature');
+    expect(rollHandaxe(token({ obscured: true }))).toBe('Unknown creature');
   });
 
   it('is Unknown creature for a hidden token, which players are not sent at all', () => {
-    expect(rollScimitar(token({ visible: false }))).toBe('Unknown creature');
+    expect(rollHandaxe(token({ visible: false }))).toBe('Unknown creature');
   });
 });
 
 function rollCustom(t: Token): string | undefined {
   const onRoll = vi.fn();
-  render(<NpcRollPicker token={t} gameSystem="DND_5E" onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
+  render(<NpcRollPicker token={t} gameSystem="FIFTH_EDITION" onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
   fireEvent.change(screen.getByPlaceholderText('e.g. 2d6+3'), { target: { value: '1d20+2' } });
   fireEvent.click(screen.getByTitle('Roll'));
   expect(onRoll).toHaveBeenCalledTimes(1);
@@ -70,7 +70,7 @@ function rollCustom(t: Token): string | undefined {
 // token's name too, and the guide promises the same rule there.
 describe('the name a custom roll from the picker is filed under', () => {
   it("is the token's for an ordinary creature", () => {
-    expect(rollCustom(token({}))).toBe('Goblin Boss');
+    expect(rollCustom(token({}))).toBe('Goblin');
   });
 
   it.each([
@@ -84,7 +84,7 @@ describe('the name a custom roll from the picker is filed under', () => {
 
 describe('a stat-block roll for a spirit-plane creature', () => {
   it('is filed under Unknown creature, since the dice log reaches players on the material plane', () => {
-    expect(rollScimitar(token({ layer: TokenLayer.SPIRIT }))).toBe('Unknown creature');
+    expect(rollHandaxe(token({ layer: TokenLayer.SPIRIT }))).toBe('Unknown creature');
   });
 });
 
@@ -92,7 +92,7 @@ describe('a stat-block roll for a spirit-plane creature', () => {
 describe('the close button', () => {
   it('is named Close', () => {
     const onClose = vi.fn();
-    render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
+    render(<NpcRollPicker token={token({})} gameSystem="FIFTH_EDITION" onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -100,7 +100,7 @@ describe('the close button', () => {
   // It was 20 pixels square. The size is set on a touch screen only, which
   // jsdom cannot show, so the classes are what is checked.
   it('is big enough for a finger, with its cross in the middle', () => {
-    render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
+    render(<NpcRollPicker token={token({})} gameSystem="FIFTH_EDITION" onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
     expect(screen.getByRole('button', { name: 'Close' }).className.split(/\s+/))
       .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
   });
@@ -109,7 +109,7 @@ describe('the close button', () => {
 describe('the roll mode', () => {
   function rollWithDisadvantage(option: RegExp) {
     const onRoll = vi.fn();
-    render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
+    render(<NpcRollPicker token={token({})} gameSystem="FIFTH_EDITION" onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
     fireEvent.click(screen.getByRole('button', { name: 'Normal' }));
     fireEvent.click(screen.getByRole('button', { name: 'Disadvantage' }));
     fireEvent.click(screen.getByRole('button', { name: option }));
@@ -117,11 +117,11 @@ describe('the roll mode', () => {
   }
 
   it('rolls an attack twice with Disadvantage, keeping the lower, and the log says so', () => {
-    expect(rollWithDisadvantage(/^Scimitar \(Attack/).slice(0, 2)).toEqual(['2d20kl1+4', 'Scimitar Attack (Disadvantage)']);
+    expect(rollWithDisadvantage(/^Handaxe \(Attack/).slice(0, 2)).toEqual(['2d20kl1+3', 'Handaxe Attack (Disadvantage)']);
   });
 
   it('leaves the damage as it is', () => {
-    const [expression, purpose] = rollWithDisadvantage(/^Scimitar \(Damage/);
+    const [expression, purpose] = rollWithDisadvantage(/^Handaxe \(Damage/);
     expect(expression).not.toMatch(/2d20/);
     expect(purpose).not.toMatch(/Disadvantage/);
   });
@@ -134,11 +134,11 @@ describe('where it is drawn', () => {
   it('is on the body, outside the panel group it is opened from', () => {
     render(
       <div data-group>
-        <NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />
+        <NpcRollPicker token={token({})} gameSystem="FIFTH_EDITION" onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />
       </div>,
     );
 
-    const picker = screen.getByText('Roll for Goblin Boss').closest('.fixed');
+    const picker = screen.getByText('Roll for Goblin').closest('.fixed');
     expect(picker).not.toBeNull();
     expect(picker?.closest('[data-group]')).toBeNull();
     expect(picker?.parentElement).toBe(document.body);
@@ -154,9 +154,9 @@ describe('near the edge of the screen', () => {
   it('flips to the left of and above the point', () => {
     HTMLDivElement.prototype.getBoundingClientRect = () =>
       ({ left: 0, top: 0, right: 300, bottom: 400, width: 300, height: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
-    render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={900} anchorY={600} />);
+    render(<NpcRollPicker token={token({})} gameSystem="FIFTH_EDITION" onRoll={vi.fn()} onClose={vi.fn()} anchorX={900} anchorY={600} />);
 
-    const picker = screen.getByText('Roll for Goblin Boss').closest<HTMLElement>('.fixed')!;
+    const picker = screen.getByText('Roll for Goblin').closest<HTMLElement>('.fixed')!;
     expect([picker.style.left, picker.style.top]).toEqual(['600px', '200px']);
   });
 });
@@ -165,7 +165,7 @@ describe('near the edge of the screen', () => {
 // double tap to ping.
 describe('while it is open', () => {
   it('is a menu on the screen, until it closes', () => {
-    const { unmount } = render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
+    const { unmount } = render(<NpcRollPicker token={token({})} gameSystem="FIFTH_EDITION" onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
     expect(anyMenuShown()).toBe(true);
     unmount();
     expect(anyMenuShown()).toBe(false);
@@ -180,7 +180,7 @@ describe('beside another menu', () => {
     const stop = whenMenuOpens(told);
     const onClose = vi.fn();
     try {
-      render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
+      render(<NpcRollPicker token={token({})} gameSystem="FIFTH_EDITION" onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
       expect(told).toHaveBeenCalledTimes(1);
       expect(onClose).not.toHaveBeenCalled();
     } finally {

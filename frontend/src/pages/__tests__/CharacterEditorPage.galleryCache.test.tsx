@@ -14,7 +14,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterEditorPage from '../CharacterEditorPage';
-import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { fantasyD20Character } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
 import { queryKeys, toCharacterSummary } from '@/hooks/queries';
 import type { Character, CharacterSummary } from '@/types';
 
@@ -41,7 +41,7 @@ import characterService from '@/services/character.service';
 const getCharacter = characterService.getCharacter as ReturnType<typeof vi.fn>;
 const updateCharacter = characterService.updateCharacter as ReturnType<typeof vi.fn>;
 
-const other = { ...pf2eCharacter(), id: 'char-2', name: 'Someone else' } as Character;
+const other = { ...fantasyD20Character(), id: 'char-2', name: 'Someone else' } as Character;
 
 function renderPage(client: QueryClient) {
   return render(
@@ -57,19 +57,19 @@ function renderPage(client: QueryClient) {
 
 function clientHoldingList(): QueryClient {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
-  client.setQueryData<CharacterSummary[]>(queryKeys.characters, [toCharacterSummary(pf2eCharacter()), toCharacterSummary(other)]);
+  client.setQueryData<CharacterSummary[]>(queryKeys.characters, [toCharacterSummary(fantasyD20Character()), toCharacterSummary(other)]);
   return client;
 }
 
 // The sheet loads on demand. Loaded here first, the first test does not wait
 // on the import, which on a busy machine outlasted the default wait.
 beforeAll(async () => {
-  await import('@/components/character-sheets/pathfinder2e/Pathfinder2eCharacterSheet');
+  await import('@/components/character-sheets/fantasy-d20/FantasyD20CharacterSheet');
 }, 30_000);
 
 beforeEach(() => {
   showToast.mockReset();
-  getCharacter.mockReset().mockResolvedValue(pf2eCharacter());
+  getCharacter.mockReset().mockResolvedValue(fantasyD20Character());
   updateCharacter.mockReset();
 });
 
@@ -79,13 +79,13 @@ afterEach(() => {
 
 describe('the Characters page list after a full-page save', () => {
   it('holds the saved character, and is marked for a refetch', async () => {
-    const saved = { ...pf2eCharacter({ characterName: 'Seelah the Bold' }), updatedAt: '2026-01-01T00:00:09.000Z' };
+    const saved = { ...fantasyD20Character({ characterName: 'Maren the Bold' }), updatedAt: '2026-01-01T00:00:09.000Z' };
     updateCharacter.mockResolvedValue(saved);
     const client = clientHoldingList();
     renderPage(client);
 
     const name = (await screen.findByPlaceholderText('Character Name')) as HTMLInputElement;
-    fireEvent.change(name, { target: { value: 'Seelah the Bold' } });
+    fireEvent.change(name, { target: { value: 'Maren the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(client.getQueryData<CharacterSummary[]>(queryKeys.characters)?.[0]).toEqual(toCharacterSummary(saved)));
@@ -94,16 +94,16 @@ describe('the Characters page list after a full-page save', () => {
   });
 
   it('holds the newer version after a save refused as out of date', async () => {
-    const fresh = { ...pf2eCharacter({ deity: 'Changed elsewhere' }), updatedAt: '2026-01-01T00:00:05.000Z' };
+    const fresh = { ...fantasyD20Character({ deity: 'Changed elsewhere' }), updatedAt: '2026-01-01T00:00:05.000Z' };
     updateCharacter.mockRejectedValue({
       response: { status: 409, data: { error: 'Conflict', code: 'CHARACTER_CHANGED', message: 'changed' } },
     });
-    getCharacter.mockResolvedValueOnce(pf2eCharacter()).mockResolvedValue(fresh);
+    getCharacter.mockResolvedValueOnce(fantasyD20Character()).mockResolvedValue(fresh);
     const client = clientHoldingList();
     renderPage(client);
 
     const name = (await screen.findByPlaceholderText('Character Name')) as HTMLInputElement;
-    fireEvent.change(name, { target: { value: 'Seelah the Bold' } });
+    fireEvent.change(name, { target: { value: 'Maren the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(client.getQueryData<CharacterSummary[]>(queryKeys.characters)?.[0]).toEqual(toCharacterSummary(fresh)));
@@ -111,7 +111,7 @@ describe('the Characters page list after a full-page save', () => {
 
   it('does not write the sheet to the browser console', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    updateCharacter.mockResolvedValue(pf2eCharacter());
+    updateCharacter.mockResolvedValue(fantasyD20Character());
     renderPage(clientHoldingList());
 
     await screen.findByPlaceholderText('Character Name');

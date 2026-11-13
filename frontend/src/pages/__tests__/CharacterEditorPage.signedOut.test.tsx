@@ -10,7 +10,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterEditorPage from '../CharacterEditorPage';
-import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { fantasyD20Character } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
 
 const showToast = vi.fn();
 const auth = { user: { id: 'user-1', platformRole: 'USER' } };
@@ -51,7 +51,7 @@ function renderPage() {
 
 beforeEach(() => {
   showToast.mockReset();
-  getCharacter.mockReset().mockResolvedValue(pf2eCharacter());
+  getCharacter.mockReset().mockResolvedValue(fantasyD20Character());
   updateCharacter.mockReset();
 });
 
@@ -61,21 +61,21 @@ describe('saving from the full-page editor while signed out', () => {
     renderPage();
 
     const name = (await screen.findByPlaceholderText('Character Name')) as HTMLInputElement;
-    fireEvent.change(name, { target: { value: 'Seelah the Bold' } });
+    fireEvent.change(name, { target: { value: 'Maren the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/signed out/i));
     expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/auth/login');
-    expect(screen.getByPlaceholderText('Character Name')).toHaveValue('Seelah the Bold');
+    expect(screen.getByPlaceholderText('Character Name')).toHaveValue('Maren the Bold');
     expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/signed out/i), 'error');
   });
 
   it('saves with the same button once signed in again, and the notice goes', async () => {
-    updateCharacter.mockRejectedValueOnce(signedOut).mockResolvedValueOnce(pf2eCharacter());
+    updateCharacter.mockRejectedValueOnce(signedOut).mockResolvedValueOnce(fantasyD20Character());
     renderPage();
 
     const name = (await screen.findByPlaceholderText('Character Name')) as HTMLInputElement;
-    fireEvent.change(name, { target: { value: 'Seelah the Bold' } });
+    fireEvent.change(name, { target: { value: 'Maren the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));

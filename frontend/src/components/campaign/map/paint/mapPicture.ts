@@ -66,18 +66,18 @@ export async function pictureIsDrawn(url: string, campaignId: string | undefined
   return answer !== null && answer !== 'gone' && isDrawnPicture(answer, campaignId);
 }
 
-/** What the map's picture is, for the DM; 'unknown' for anyone else, who is never offered Paint. */
+/** What the map's picture is, for the GM; 'unknown' for anyone else, who is never offered Paint. */
 export function useMapPictureKind(
   map: { imageUrl?: string | null } | null | undefined,
   campaignId: string | undefined,
-  isDM: boolean,
+  isGM: boolean,
 ): MapPictureKind {
   const url = map ? map.imageUrl ?? '' : null;
   const assetId = url ? extractAssetId(url) : null;
   const [known, setKnown] = useState<{ url: string; kind: MapPictureKind } | null>(null);
 
   useEffect(() => {
-    if (!isDM || !url || !assetId) return undefined;
+    if (!isGM || !url || !assetId) return undefined;
     let current = true;
     void ask(assetId).then((answer) => {
       if (!current) return;
@@ -89,9 +89,9 @@ export function useMapPictureKind(
     return () => {
       current = false;
     };
-  }, [isDM, url, assetId, campaignId]);
+  }, [isGM, url, assetId, campaignId]);
 
-  if (!isDM || url === null) return 'unknown';
+  if (!isGM || url === null) return 'unknown';
   if (url === '') return 'none';
   if (!assetId) return 'uploaded';
   return known?.url === url ? known.kind : 'unknown';

@@ -13,21 +13,39 @@
  */
 import path from 'path';
 import zlib from 'zlib';
-import { createReadStream, createWriteStream } from 'fs';
+import { once } from 'events';
+import { createReadStream, type WriteStream } from 'fs';
 import fs from 'fs/promises';
 import { Readable, Transform, Writable } from 'stream';
 import { pipeline } from 'stream/promises';
-import unzipper from 'unzipper';
-import type { CentralDirectory, File as ArchiveEntry } from 'unzipper';
+import { fromFdPromise, type Entry as DirectoryRecord, type ZipFile } from 'yauzl';
+import { errorCode } from './errors';
 
 /**
- * Reject archive entry paths that attempt traversal or absolute escape.
+ * The longest entry name, in bytes, an archive may have. The reader keeps
+ * every name of a directory in memory, and a name can be 65,535 bytes, so
+ * an import of 1,000 such names held about 131 MB. This version writes at
+ * most about 320 bytes: a backup's uploads (`uploads/`, three folders and a
+ * stored file's name, which the file system holds to 255 bytes) and an
+ * export's assets (`assets/`, the asset's id and an extension of at most 20
+ * characters; an export from 1.6.0 or earlier took the extension at any
+ * length). A backup leaves out a longer name, as it does any other this
+ * check refuses.
+ */
+export const MAX_ARCHIVE_NAME_BYTES = 1024;
+
+/**
+ * Reject archive entry paths that attempt traversal or absolute escape, hold
+ * a NUL character, or are longer than MAX_ARCHIVE_NAME_BYTES.
  * Accepts only simple relative paths that stay beneath the extraction root.
  */
 export function isSafeArchivePath(name: string): boolean {
   if (!name) return false;
+  if (Buffer.byteLength(name, 'utf8') > MAX_ARCHIVE_NAME_BYTES) return false;
   if (name.includes('..')) return false;
   if (name.includes('\\')) return false;
+  // No file system takes a name with a NUL in it.
+  if (name.includes('\0')) return false;
   // Must be a simple relative path under the expected directory.
   const normalized = path.posix.normalize(name);
   if (normalized.startsWith('/') || normalized.startsWith('..')) return false;
@@ -48,10 +66,41 @@ function gibibytes(bytes: number): string {
 }
 
 /**
+ * What the file system says when an archive names a file it cannot make:
+ * a folder in its place (EISDIR), a file where a folder is needed (ENOTDIR,
+ * EEXIST), or a part of the name too long (ENAMETOOLONG).
+ */
+const NAME_CANNOT_BE_WRITTEN = new Set(['EISDIR', 'ENOTDIR', 'EEXIST', 'ENAMETOOLONG']);
+
+/**
+ * A stream writing a file at `destPath`, its file already open. A stream
+ * left to open its own file reports a failure as an 'error' event, and one
+ * that comes before anything listens ends the process; this rejects instead.
+ */
+async function openNewFile(destPath: string, flags: 'w' | 'wx'): Promise<WriteStream> {
+  const handle = await fs.open(destPath, flags);
+  try {
+    return handle.createWriteStream();
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    throw error;
+  }
+}
+
+/** Stop `out` and wait for its file to close, listening for any error closing it. */
+async function discard(out: WriteStream): Promise<void> {
+  if (out.closed) return;
+  const closed = once(out, 'close').catch(() => undefined);
+  out.destroy();
+  await closed;
+}
+
+/**
  * Extract every file entry in `directory`, the directory of the archive at
  * `archivePath`, beneath `destRoot`, streaming each to disk. Throws
- * ArchiveRefusedError if any entry escapes `destRoot`, the entry count exceeds
- * `maxFiles`, or an entry cannot be read, and ArchiveLimitError ('total') if
+ * ArchiveRefusedError if any entry escapes `destRoot`, names a file that
+ * cannot be written there, the entry count exceeds `maxFiles`, or an entry
+ * cannot be read, and ArchiveLimitError ('total') if
  * the running decompressed total exceeds `maxTotalBytes`, each with a message
  * for the person who sent the archive.
  *
@@ -64,7 +113,7 @@ function gibibytes(bytes: number): string {
  */
 export async function extractArchiveSafely(
   archivePath: string,
-  directory: CentralDirectory,
+  directory: ArchiveDirectory,
   destRoot: string,
   options: SafeExtractOptions
 ): Promise<void> {
@@ -96,15 +145,26 @@ export async function extractArchiveSafely(
       throw new ArchiveRefusedError(`The archive has an unsafe file path, which a backup never has: ${entry.path}`);
     }
 
-    await fs.mkdir(path.dirname(destPath), { recursive: true });
+    // A name the folder cannot take: the folder itself ("./" with content),
+    // a file where an earlier entry made a folder or the other way round, or
+    // a part of the name longer than the file system allows.
+    const cannotBeWritten = () => new ArchiveRefusedError(`The archive is damaged, or holds a file name that cannot be written: ${entry.path}`);
+    if (destPath === resolvedRoot) throw cannotBeWritten();
+    let out: WriteStream;
+    try {
+      await fs.mkdir(path.dirname(destPath), { recursive: true });
+      out = await openNewFile(destPath, 'w');
+    } catch (error) {
+      if (NAME_CANNOT_BE_WRITTEN.has(errorCode(error) ?? '')) throw cannotBeWritten();
+      throw error;
+    }
 
     // Decompressed bytes are counted as they flow, so a zip bomb is stopped
     // part-way and never lands on disk whole.
-    const out = createWriteStream(destPath);
     try {
       await unpackEntry(archivePath, entry, limits, out);
     } catch (error) {
-      out.destroy();
+      await discard(out);
       if (error instanceof ArchiveLimitError) {
         throw new ArchiveLimitError(`The archive unpacks to more than the ${gibibytes(options.maxTotalBytes)} a backup may hold.`, 'total');
       }
@@ -117,18 +177,38 @@ export async function extractArchiveSafely(
 //
 // An archive says how many entries it has and how large each one unpacks to,
 // and either can be a lie. Reading the directory costs memory for every entry
-// it lists (over a kilobyte each, so a 50 MB archive listing a million entries
-// needs more memory than the backend has), and an entry can unpack to a
-// thousand times its packed size. So the entry count is read from the
-// archive's last bytes before the directory is, and every entry is unpacked
-// through a counter that stops it the moment it passes its limit.
+// it lists, so a small archive listing a million entries would need more
+// memory than the backend has, and an entry can unpack to a thousand times
+// its packed size. So the entry count is taken from the archive's end before
+// any entry of the directory is read, and every entry is unpacked through a
+// counter that stops it the moment it passes its limit.
+//
+// yauzl reads the directory: it finds the end-of-directory record (and the
+// ZIP64 one it points to) and reads exactly the number of entries that record
+// lists, one at a time. The count checked is that same number, so no record
+// the reader goes on to use can escape the check. Unpacking is done here.
 
-const END_OF_DIRECTORY = 0x06054b50;
-const ZIP64_END_LOCATOR = 0x07064b50;
-const ZIP64_END_OF_DIRECTORY = 0x06064b50;
 const LOCAL_FILE_HEADER = 0x04034b50;
-/** How far from the end unzipper looks for the end-of-directory record. */
-const UNZIPPER_TAIL_BYTES = 80;
+
+/** One entry of an archive's directory. */
+export interface ArchiveEntry {
+  /** The entry's name, read as UTF-8; checked by isSafeArchivePath before use. */
+  path: string;
+  /** A folder is an empty entry whose name ends in a slash. */
+  type: 'File' | 'Directory';
+  compressedSize: number;
+  /** What the directory claims the entry unpacks to, which can be a lie. */
+  uncompressedSize: number;
+  /** The general purpose flags: bit 0 marks an encrypted entry. */
+  flags: number;
+  compressionMethod: number;
+  offsetToLocalFileHeader: number;
+}
+
+/** An archive's directory: every entry it lists, in order. */
+export interface ArchiveDirectory {
+  files: ArchiveEntry[];
+}
 
 /**
  * An archive the server will not read, with a message for the person who
@@ -164,60 +244,87 @@ async function readAt(handle: fs.FileHandle, position: number, length: number): 
 const NOT_A_ZIP = 'The file is not a ZIP archive, or it is damaged.';
 
 /**
- * How many entries an archive's directory lists, read from its end the way
- * unzipper finds it: the first end-of-directory record in the last 80 bytes,
- * and the ZIP64 record it points to when the short record's fields are full.
+ * Open the archive at `filePath` and hand `read` its reader, which has found
+ * the archive's end and read no entry yet. A file that cannot be opened
+ * throws as the file system says; one whose end cannot be found is refused.
  */
-export async function countListedEntries(filePath: string): Promise<number> {
+async function withArchive<T>(filePath: string, read: (zip: ZipFile) => Promise<T>): Promise<T> {
   const handle = await fs.open(filePath, 'r');
   try {
-    const { size } = await handle.stat();
-    const tailStart = Math.max(0, size - UNZIPPER_TAIL_BYTES);
-    const tail = await readAt(handle, tailStart, size - tailStart);
-    let at = -1;
-    for (let i = 0; i + 4 <= tail.length; i++) {
-      if (tail.readUInt32LE(i) === END_OF_DIRECTORY) {
-        at = i;
-        break;
-      }
+    let zip: ZipFile;
+    try {
+      // Names are read as bytes and decoded below, so isSafeArchivePath
+      // judges every name and a refusal names it. Sizes are checked as each
+      // entry unpacks. With autoClose off, the reader never closes the file:
+      // this handle does.
+      zip = await fromFdPromise(handle.fd, { decodeStrings: false, validateEntrySizes: false, autoClose: false });
+    } catch {
+      throw new ArchiveRefusedError(NOT_A_ZIP);
     }
-    if (at === -1 || at + 22 > tail.length) throw new ArchiveRefusedError(NOT_A_ZIP);
-
-    const diskNumber = tail.readUInt16LE(at + 4);
-    const listed = tail.readUInt16LE(at + 10);
-    const directoryOffset = tail.readUInt32LE(at + 16);
-    if (diskNumber !== 0xffff && listed !== 0xffff && directoryOffset !== 0xffffffff) return listed;
-
-    // ZIP64: the locator sits just before the short record and says where the
-    // long one is, which carries the count in eight bytes.
-    const locator = await readAt(handle, tailStart + at - 20, 20);
-    if (locator.length < 20 || locator.readUInt32LE(0) !== ZIP64_END_LOCATOR) throw new ArchiveRefusedError(NOT_A_ZIP);
-    const record = await readAt(handle, Number(locator.readBigUInt64LE(8)), 56);
-    if (record.length < 56 || record.readUInt32LE(0) !== ZIP64_END_OF_DIRECTORY) throw new ArchiveRefusedError(NOT_A_ZIP);
-    const count = record.readBigUInt64LE(32);
-    return count > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : Number(count);
+    return await read(zip);
   } finally {
     await handle.close();
   }
 }
 
 /**
- * Open an archive on disk, refusing one whose directory lists more than
- * `maxEntries` entries before reading the directory.
+ * One directory record as an ArchiveEntry, keeping none of its buffers.
+ * A record whose entry cannot lie inside the archive's `fileSize` bytes is
+ * refused: a ZIP64 field can claim an offset or size near 2^64, which reading
+ * the file there would fail on, and a stored entry claiming more bytes than
+ * follow its header would be read on into the rest of the archive.
  */
-export async function openArchiveFile(filePath: string, maxEntries: number): Promise<CentralDirectory> {
-  const listed = await countListedEntries(filePath);
-  if (listed > maxEntries) {
-    throw new ArchiveRefusedError(
-      `The archive lists ${listed.toLocaleString('en-US')} files, more than the ${maxEntries.toLocaleString('en-US')} it may hold.`
-    );
-  }
-  try {
-    return await unzipper.Open.file(filePath);
-  } catch {
-    // The end of the archive was found but its directory cannot be read.
+function entryOf(record: DirectoryRecord, fileSize: number): ArchiveEntry {
+  if (record.relativeOffsetOfLocalHeader + 30 + record.compressedSize > fileSize) {
     throw new ArchiveRefusedError(NOT_A_ZIP);
   }
+  // Refused before it is kept, and without repeating it.
+  if (record.fileNameRaw.length > MAX_ARCHIVE_NAME_BYTES) {
+    throw new ArchiveRefusedError(
+      `The archive has a file name longer than ${MAX_ARCHIVE_NAME_BYTES.toLocaleString('en-US')} bytes, which an archive from this server never has.`
+    );
+  }
+  const name = record.fileNameRaw.toString('utf8');
+  return {
+    path: name,
+    type: record.uncompressedSize === 0 && /[/\\]$/.test(name) ? 'Directory' : 'File',
+    compressedSize: record.compressedSize,
+    uncompressedSize: record.uncompressedSize,
+    flags: record.generalPurposeBitFlag,
+    compressionMethod: record.compressionMethod,
+    offsetToLocalFileHeader: record.relativeOffsetOfLocalHeader,
+  };
+}
+
+/**
+ * How many entries an archive's directory lists, read from its end-of-
+ * directory record, or the ZIP64 record it points to, as the reader reads it.
+ */
+export async function countListedEntries(filePath: string): Promise<number> {
+  return withArchive(filePath, async (zip) => zip.entryCount);
+}
+
+/**
+ * Read the directory of an archive on disk, refusing one that lists more than
+ * `maxEntries` entries before any entry is read.
+ */
+export async function openArchiveFile(filePath: string, maxEntries: number): Promise<ArchiveDirectory> {
+  return withArchive(filePath, async (zip) => {
+    if (zip.entryCount > maxEntries) {
+      throw new ArchiveRefusedError(
+        `The archive lists ${zip.entryCount.toLocaleString('en-US')} files, more than the ${maxEntries.toLocaleString('en-US')} it may hold.`
+      );
+    }
+    const files: ArchiveEntry[] = [];
+    try {
+      for await (const record of zip.eachEntry()) files.push(entryOf(record, zip.fileSize));
+    } catch (error) {
+      if (error instanceof ArchiveRefusedError) throw error;
+      // The end of the archive was found but its directory cannot be read.
+      throw new ArchiveRefusedError(NOT_A_ZIP);
+    }
+    return { files };
+  });
 }
 
 /** A running total of what one archive has unpacked, against its limit. */
@@ -249,9 +356,13 @@ export interface EntryLimits {
  * soon as it passes either limit.
  *
  * The entry's packed bytes are read with a stream of our own, and every
- * stream is in one pipeline, so a stopped entry closes the archive file.
- * unzipper's own entry stream does not: stopping it part-way leaves the file
- * open, and a few hundred refused entries would use up the process's files.
+ * stream is in one pipeline, so a stopped entry closes the archive file. A
+ * stream that left it open when stopped part-way would let a few hundred
+ * refused entries use up the process's files.
+ *
+ * A file `destination` is opened before it comes here (openNewFile): the
+ * quick refusals below destroy it, and a file still being opened then would
+ * fail later with no one listening, once its folder had been removed.
  */
 async function unpackEntry(archivePath: string, entry: ArchiveEntry, limits: EntryLimits, destination: Writable): Promise<void> {
   // The size the directory claims is a quick refusal, never the only check.
@@ -272,11 +383,14 @@ async function unpackEntry(archivePath: string, entry: ArchiveEntry, limits: Ent
   let start: number;
   try {
     const header = await readAt(handle, entry.offsetToLocalFileHeader, 30);
-    if (header.length < 30 || header.readUInt32LE(0) !== LOCAL_FILE_HEADER) {
+    const damaged = header.length < 30 || header.readUInt32LE(0) !== LOCAL_FILE_HEADER;
+    start = damaged ? 0 : entry.offsetToLocalFileHeader + 30 + header.readUInt16LE(26) + header.readUInt16LE(28);
+    // The local header's name and extra field can push the packed bytes past
+    // the end, which the directory alone does not show.
+    if (damaged || start + entry.compressedSize > (await handle.stat()).size) {
       destination.destroy();
       throw new ArchiveRefusedError(`The archive is damaged: ${entry.path} cannot be read.`);
     }
-    start = entry.offsetToLocalFileHeader + 30 + header.readUInt16LE(26) + header.readUInt16LE(28);
   } finally {
     await handle.close();
   }
@@ -342,12 +456,14 @@ export async function writeArchiveEntry(
   destPath: string,
   limits: EntryLimits
 ): Promise<number> {
-  const out = createWriteStream(destPath, { flags: 'wx' });
+  // Opened before the entry is read, so a quick refusal below cannot leave
+  // a file still opening once its folder is removed.
+  const out = await openNewFile(destPath, 'wx');
   try {
     await unpackEntry(archivePath, entry, limits, out);
     return out.bytesWritten;
   } catch (error) {
-    out.destroy();
+    await discard(out);
     await fs.unlink(destPath).catch(() => undefined);
     throw error;
   }

@@ -4,7 +4,7 @@
  *
  * A frame is checked against the campaign its connection is in, and then
  * waits on the plane check (a database read for a spirit-plane token moved
- * by anyone but the DM). Joining another campaign forgets the drags of the
+ * by anyone but the GM). Joining another campaign forgets the drags of the
  * one left, so a frame that was waiting decided who its drag goes to afresh,
  * among the new campaign's members, and sent them a token of a map that is
  * not theirs.
@@ -43,26 +43,26 @@ jest.setTimeout(20000);
 const runId = randomUUID().slice(0, 8);
 
 let server: WsTestServer;
-let dmId: string;
-let otherDmId: string;
+let gmId: string;
+let otherGmId: string;
 let playerId: string;
 let campaignId: string;
 let otherCampaignId: string;
 let mapId: string;
 
 beforeAll(async () => {
-  const [dm, otherDm, player] = await Promise.all(['dm', 'otherdm', 'player'].map((name) =>
+  const [gm, otherGm, player] = await Promise.all(['dm', 'otherdm', 'player'].map((name) =>
     prisma.user.create({ data: { email: `dragswitch-${name}-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: `Switch ${name}` } })));
-  dmId = dm.id;
-  otherDmId = otherDm.id;
+  gmId = gm.id;
+  otherGmId = otherGm.id;
   playerId = player.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Drag switch ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
-  otherCampaignId = (await prisma.campaign.create({ data: { name: `Drag elsewhere ${runId}`, ownerId: otherDmId, vibeSettings: {} } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Drag switch ${runId}`, ownerId: gmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
+  otherCampaignId = (await prisma.campaign.create({ data: { name: `Drag elsewhere ${runId}`, ownerId: otherGmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
-      { userId: otherDmId, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
+      { userId: otherGmId, campaignId: otherCampaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId: otherCampaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -82,16 +82,16 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: { in: [campaignId, otherCampaignId] } } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, otherDmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, otherGmId, playerId] } } });
   await prisma.$disconnect();
 });
 
 it('sends a frame still being checked when its connection joins another campaign to nobody there', async () => {
-  const dm = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
-  const otherDm = await server.connectAndAuth(await server.loginAs(otherDmId), otherCampaignId);
+  const gm = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
+  const otherGm = await server.connectAndAuth(await server.loginAs(otherGmId), otherCampaignId);
   const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
 
-  const frame = waitForEvent(dm, 'token.moved');
+  const frame = waitForEvent(gm, 'token.moved');
   player.emit('token.move.start', { tokenId: 'hero', mapId });
   player.emit('token.move', { tokenId: 'hero', mapId, x: 9, y: 9 });
   await frame;
@@ -109,13 +109,13 @@ it('sends a frame still being checked when its connection joins another campaign
   player.emit('authenticate', { campaignId: otherCampaignId });
   await joined;
 
-  const noMove = expectNoEvent(otherDm, 'token.moved', 800);
-  const noToken = expectNoEvent(otherDm, 'token:appeared', 800);
+  const noMove = expectNoEvent(otherGm, 'token.moved', 800);
+  const noToken = expectNoEvent(otherGm, 'token:appeared', 800);
   release();
   await noMove;
   await noToken;
 
   player.disconnect();
-  otherDm.disconnect();
-  dm.disconnect();
+  otherGm.disconnect();
+  gm.disconnect();
 });

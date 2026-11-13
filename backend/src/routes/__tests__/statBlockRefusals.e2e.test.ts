@@ -16,11 +16,11 @@ import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampai
 
 const app = createTestApp();
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let creatureId: string;
 let templateId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const statBlock = {
   ac: 12, hpMax: 7, speed: '30 ft.', challengeRating: '1/4',
@@ -32,31 +32,31 @@ const longTrait = { ...statBlock, traits: [{ name: 'Nimble Escape', description:
 const tooLarge = { ...statBlock, traits: Array.from({ length: 20 }, (_, i) => ({ name: `Trait ${i}`, description: 'x'.repeat(4000) })) };
 
 beforeAll(async () => {
-  const user = await createTestUser({ displayName: 'Refusal DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Stat block refusals' })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD }).expect(200);
-  creatureId = (await dm.post(`/api/campaigns/${campaignId}/creatures`).send({ name: 'Goblin', statBlock }).expect(201)).body.id;
-  templateId = (await dm.post(`/api/campaigns/${campaignId}/token-templates`).send({ name: 'Goblin', type: 'npc', statBlock }).expect(201)).body.id;
+  const user = await createTestUser({ displayName: 'Refusal GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Stat block refusals' })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD }).expect(200);
+  creatureId = (await gm.post(`/api/campaigns/${campaignId}/creatures`).send({ name: 'Goblin', statBlock }).expect(201)).body.id;
+  templateId = (await gm.post(`/api/campaigns/${campaignId}/token-templates`).send({ name: 'Goblin', type: 'npc', statBlock }).expect(201)).body.id;
 });
 
 afterAll(async () => {
   await prisma.creatureTemplate.deleteMany({ where: { campaignId } });
   await prisma.tokenTemplate.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
 /** Each route that takes a stat block, sending `statBlock` with what else it needs. */
 const routes: Array<[string, (statBlock: object) => request.Test]> = [
-  ['creating a creature', (block) => dm.post(`/api/campaigns/${campaignId}/creatures`).send({ name: 'Goblin Boss', statBlock: block })],
-  ['changing a creature', (block) => dm.put(`/api/campaigns/${campaignId}/creatures/${creatureId}`).send({ statBlock: block })],
-  ['creating a token template', (block) => dm.post(`/api/campaigns/${campaignId}/token-templates`).send({ name: 'Goblin Boss', type: 'npc', statBlock: block })],
-  ['changing a token template', (block) => dm.put(`/api/campaigns/${campaignId}/token-templates/${templateId}`).send({ statBlock: block })],
-  ['saving a token as a template', (block) => dm.post(`/api/campaigns/${campaignId}/token-templates/from-token`).send({ name: 'Goblin Boss', type: 'npc', statBlock: block })],
+  ['creating a creature', (block) => gm.post(`/api/campaigns/${campaignId}/creatures`).send({ name: 'Hobgoblin', statBlock: block })],
+  ['changing a creature', (block) => gm.put(`/api/campaigns/${campaignId}/creatures/${creatureId}`).send({ statBlock: block })],
+  ['creating a token template', (block) => gm.post(`/api/campaigns/${campaignId}/token-templates`).send({ name: 'Hobgoblin', type: 'npc', statBlock: block })],
+  ['changing a token template', (block) => gm.put(`/api/campaigns/${campaignId}/token-templates/${templateId}`).send({ statBlock: block })],
+  ['saving a token as a template', (block) => gm.post(`/api/campaigns/${campaignId}/token-templates/from-token`).send({ name: 'Hobgoblin', type: 'npc', statBlock: block })],
 ];
 
 it.each(routes)('names a refused trait description when %s', async (_route, send) => {
@@ -72,7 +72,7 @@ it.each(routes)('says a stat block is over 64 KB when %s', async (_route, send) 
 });
 
 it('names a refused name', async () => {
-  const res = await dm.post(`/api/campaigns/${campaignId}/creatures`).send({ name: 'x'.repeat(201), statBlock });
+  const res = await gm.post(`/api/campaigns/${campaignId}/creatures`).send({ name: 'x'.repeat(201), statBlock });
   expect(res.status).toBe(400);
   expect(res.body.message).toMatch(/^name: /);
 });

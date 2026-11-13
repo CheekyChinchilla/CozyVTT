@@ -101,10 +101,10 @@ export async function loadCampaignMembership(
 }
 
 /**
- * Require user to be DM of the campaign
- * Only ONE DM allowed per campaign
+ * Require user to be GM of the campaign
+ * Only ONE GM allowed per campaign
  */
-export function requireDM(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export function requireGM(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (!req.campaignMembership) {
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -112,10 +112,10 @@ export function requireDM(req: AuthenticatedRequest, res: Response, next: NextFu
     });
   }
 
-  if (req.campaignMembership.role !== 'DM') {
+  if (req.campaignMembership.role !== 'GM') {
     return res.status(403).json({
       error: 'Forbidden',
-      message: 'This action requires Dungeon Master (DM) role',
+      message: 'This action requires the GM role',
     });
   }
 
@@ -123,9 +123,9 @@ export function requireDM(req: AuthenticatedRequest, res: Response, next: NextFu
 }
 
 /**
- * Require user to be DM or Player (excludes Spectators)
+ * Require user to be GM or Player (excludes Spectators)
  */
-export function requireDMOrPlayer(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export function requireGMOrPlayer(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (!req.campaignMembership) {
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -144,7 +144,7 @@ export function requireDMOrPlayer(req: AuthenticatedRequest, res: Response, next
 }
 
 /**
- * Allow campaign members with any role (DM, Player, or Spectator)
+ * Allow campaign members with any role (GM, Player, or Spectator)
  * Simply verifies membership exists (already checked by loadCampaignMembership)
  */
 export function requireCampaignMember(req: AuthenticatedRequest, res: Response, next: NextFunction) {

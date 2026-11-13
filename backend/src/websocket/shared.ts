@@ -55,7 +55,7 @@ export interface Token {
   displayMode?: 'pog' | 'top-down' | 'full-art';
   statBlock?: Record<string, unknown> | null;
   creatureTemplateId?: string | null;
-  /** Identity hidden from players who do not control it; see utils/tokenMask.ts. DM-only on write. */
+  /** Identity hidden from players who do not control it; see utils/tokenMask.ts. GM-only on write. */
   obscured?: boolean;
 }
 
@@ -199,8 +199,8 @@ const tokenMoves: SocketCeiling = {
   windows: [{ limit: 30, windowMs: SECOND }],
   refusal: 'Too many token moves at once. Wait a moment, then move it again.',
 };
-/** The DM's events, each its own budget: a click apiece in the web client, a tool call apiece from the bridge. */
-const dmEvent = (what: string): SocketCeiling => ({
+/** The GM's events, each its own budget: a click apiece in the web client, a tool call apiece from the bridge. */
+const gmEvent = (what: string): SocketCeiling => ({
   windows: [{ limit: 50, windowMs: SECOND }],
   refusal: `Too many ${what} at once. Wait a moment, then try again.`,
 });
@@ -209,9 +209,9 @@ const drawingClears: SocketCeiling = {
   windows: [{ limit: 5, windowMs: 10 * SECOND }],
   refusal: 'Too many clears of the drawings at once. Wait a few seconds, then try again.',
 };
-const atmosphere = dmEvent('atmosphere changes');
-const spiritLayer = dmEvent('spirit layer changes');
-const initiative = dmEvent('initiative changes');
+const atmosphere = gmEvent('atmosphere changes');
+const spiritLayer = gmEvent('spirit layer changes');
+const initiative = gmEvent('initiative changes');
 
 /**
  * Abuse ceilings on the events a member sends by hand, each its own budget
@@ -259,10 +259,10 @@ export const SOCKET_CEILINGS = {
     windows: [{ limit: 50, windowMs: 10 * SECOND }],
     refusal: 'Too many attempts to join a campaign at once. Wait a few seconds, then reload the page.',
   },
-  // The DM's. Any user can run a campaign of their own, so these are as open
+  // The GM's. Any user can run a campaign of their own, so these are as open
   // to a script as the players' events. map.change is the costly one: the
   // whole map, rebuilt for and sent to every member.
-  'map.change': dmEvent('map updates'),
+  'map.change': gmEvent('map updates'),
   'atmosphere.effect.set': atmosphere,
   'atmosphere.audio.set': atmosphere,
   'vibe.update': atmosphere,
@@ -276,10 +276,10 @@ export const SOCKET_CEILINGS = {
   'initiative.start': initiative,
   'initiative.next': initiative,
   'initiative.end': initiative,
-  // The DM's own rolls; a player's count against their dice rolls.
+  // The GM's own rolls; a player's count against their dice rolls.
   'initiative.roll': initiative,
-  'dice.clearHistory': dmEvent('requests to clear the dice log'),
-  'exploration:reset': dmEvent('explored-area resets'),
+  'dice.clearHistory': gmEvent('requests to clear the dice log'),
+  'exploration:reset': gmEvent('explored-area resets'),
   // Drawing on the map: one add per stroke, shape or label, which is a
   // write under the map's lock, and one remove per tap of the eraser.
   'drawing:add': {
@@ -486,19 +486,19 @@ export function applyWsFogOperation(fog: FogState, operation: FogOperation): voi
 }
 
 /**
- * Send a map's fog to every socket in the campaign, by role: the DM gets the
+ * Send a map's fog to every socket in the campaign, by role: the GM gets the
  * full grid, everyone else their revealed cells. The socket handler and the
  * REST route both go through this, so a reveal reaches the table the same
  * way whichever path made it.
  */
 export async function broadcastFogState(io: Server, campaignId: string, mapId: string, fog: FogState): Promise<void> {
-  // A prepared map's fog is the DM's until they switch to it (canReadMap).
+  // A prepared map's fog is the GM's until they switch to it (canReadMap).
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
   const sockets = await campaignSockets(io, campaignId);
   for (const s of sockets) {
     const role = (s as unknown as AuthenticatedSocket).role;
     if (!canReadMap(role, mapId, campaign?.currentMapId)) continue;
-    if (role === 'DM') {
+    if (role === 'GM') {
       emitNewestState(s, 'fog:updated', { mapId, fogState: fog }, mapId);
     } else {
       emitNewestState(s, 'fog:cells', {
@@ -514,10 +514,10 @@ export async function broadcastFogState(io: Server, campaignId: string, mapId: s
 
 /**
  * Send a user's explored memory to those who show it: that user's own
- * sockets in the campaign, so a second tab stays in step, and the DM sockets
+ * sockets in the campaign, so a second tab stays in step, and the GM sockets
  * whose Player Preview is on that user (previewingMemoryOf), so the preview
  * follows the memory as it grows. Each send is the whole memory, a few times
- * a second while a player moves, so a DM socket not previewing them is not
+ * a second while a player moves, so a GM socket not previewing them is not
  * sent it. Nobody else: one player's memory is never another's to see.
  */
 export async function broadcastExplorationState(
@@ -534,7 +534,7 @@ export async function broadcastExplorationState(
   for (const s of sockets) {
     const member = s as unknown as AuthenticatedSocket;
     const own = member.userId === userId && canReadMap(member.role, mapId, campaign?.currentMapId);
-    if (own || (member.role === 'DM' && member.previewingMemoryOf === userId)) {
+    if (own || (member.role === 'GM' && member.previewingMemoryOf === userId)) {
       emitNewestState(s, 'exploration:state', { mapId, userId, cells }, `${mapId}:${userId}`);
     }
   }
@@ -555,12 +555,12 @@ export interface HandlerContext {
 }
 
 /**
- * Send every connected member the map as they are allowed to see it: the DM
+ * Send every connected member the map as they are allowed to see it: the GM
  * everything, each player only what their role, plane and sight permit. One
  * resync path for a map switch, a spirit-realm crossing, a lighting or
  * Global Illumination change, and a light, wall or door change on a lit map,
  * so a player is never left holding a token the server would no longer send
- * them, or missing one it now would. `players` leaves out the DM, who is
+ * them, or missing one it now would. `players` leaves out the GM, who is
  * sent everything whatever the light.
  */
 export async function broadcastMapData(
@@ -577,13 +577,13 @@ export async function broadcastMapData(
   // map.changed puts every page onto the map it carries, so it only ever
   // carries the table's. Asked here, after the reads above, as well as by
   // each caller: a resend that passed its caller's check can still be under
-  // way when the DM switches maps, and would put the table back.
+  // way when the GM switches maps, and would put the table back.
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
   if (campaign?.currentMapId !== map.id) return;
   for (const s of stillInCampaign(members, campaignId)) {
     const member = s as unknown as AuthenticatedSocket;
-    if (audience === 'players' && member.role === 'DM') continue;
-    const spiritVisible = member.role === 'DM' ? true : member.userId ? (visibility.get(member.userId) ?? false) : false;
+    if (audience === 'players' && member.role === 'GM') continue;
+    const spiritVisible = member.role === 'GM' ? true : member.userId ? (visibility.get(member.userId) ?? false) : false;
     const mapData = filterMapData(map, member.role || 'PLAYER', spiritVisible, member.userId);
     s.emit('map.changed', { mapId: map.id, mapData, spiritVisible });
   }

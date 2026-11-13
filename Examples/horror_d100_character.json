@@ -1,0 +1,389 @@
+{
+  "cozyVttVersion": "1.0",
+  "exportedAt": "2026-11-12T00:00:00.000Z",
+  "character": {
+    "name": "Dr. Eleanor Voss",
+    "gameSystem": "HORROR_D100",
+    "data": {
+      "characterName": "Dr. Eleanor Voss",
+      "playerName": "Jane Doe",
+      "profession": "Scholar",
+      "era": "1920s",
+      "age": "38",
+      "sex": "Female",
+      "residence": "Worcester, Massachusetts",
+      "birthplace": "Boston, Massachusetts",
+      "characteristics": {
+        "STR": 9,
+        "CON": 11,
+        "SIZ": 10,
+        "DEX": 10,
+        "CHA": 13,
+        "INT": 16,
+        "POW": 12,
+        "EDU": 17
+      },
+      "hitPoints": {
+        "maximum": 11,
+        "current": 11
+      },
+      "powerPoints": {
+        "maximum": 12,
+        "current": 12
+      },
+      "sanity": {
+        "starting": 60,
+        "maximum": 99,
+        "current": 58
+      },
+      "move": 10,
+      "skills": {
+        "appraise": {
+          "value": 30,
+          "experienceCheck": true
+        },
+        "bargain": {
+          "value": 5,
+          "experienceCheck": false
+        },
+        "brawl": {
+          "value": 25,
+          "experienceCheck": false
+        },
+        "climb": {
+          "value": 40,
+          "experienceCheck": false
+        },
+        "command": {
+          "value": 5,
+          "experienceCheck": false
+        },
+        "demolition": {
+          "value": 1,
+          "experienceCheck": false
+        },
+        "disguise": {
+          "value": 1,
+          "experienceCheck": false
+        },
+        "dodge": {
+          "value": 20,
+          "experienceCheck": false
+        },
+        "fastTalk": {
+          "value": 5,
+          "experienceCheck": false
+        },
+        "fineManipulation": {
+          "value": 5,
+          "experienceCheck": false
+        },
+        "firstAid": {
+          "value": 30,
+          "experienceCheck": false
+        },
+        "gaming": {
+          "value": 30,
+          "experienceCheck": false
+        },
+        "grapple": {
+          "value": 25,
+          "experienceCheck": false
+        },
+        "hide": {
+          "value": 10,
+          "experienceCheck": false
+        },
+        "insight": {
+          "value": 35,
+          "experienceCheck": false
+        },
+        "jump": {
+          "value": 25,
+          "experienceCheck": false
+        },
+        "listen": {
+          "value": 40,
+          "experienceCheck": false
+        },
+        "martialArts": {
+          "value": 1,
+          "experienceCheck": false
+        },
+        "medicine": {
+          "value": 15,
+          "experienceCheck": false
+        },
+        "navigate": {
+          "value": 10,
+          "experienceCheck": false
+        },
+        "perform": {
+          "value": 5,
+          "experienceCheck": false
+        },
+        "persuade": {
+          "value": 40,
+          "experienceCheck": false
+        },
+        "psychotherapy": {
+          "value": 1,
+          "experienceCheck": false
+        },
+        "research": {
+          "value": 70,
+          "experienceCheck": true
+        },
+        "sense": {
+          "value": 10,
+          "experienceCheck": false
+        },
+        "sleightOfHand": {
+          "value": 5,
+          "experienceCheck": false
+        },
+        "spot": {
+          "value": 45,
+          "experienceCheck": true
+        },
+        "status": {
+          "value": 35,
+          "experienceCheck": false
+        },
+        "stealth": {
+          "value": 10,
+          "experienceCheck": false
+        },
+        "strategy": {
+          "value": 1,
+          "experienceCheck": false
+        },
+        "swim": {
+          "value": 25,
+          "experienceCheck": false
+        },
+        "teach": {
+          "value": 35,
+          "experienceCheck": false
+        },
+        "throw": {
+          "value": 25,
+          "experienceCheck": false
+        },
+        "track": {
+          "value": 10,
+          "experienceCheck": false
+        },
+        "languageOwn": {
+          "language": "English",
+          "value": 85,
+          "experienceCheck": false
+        },
+        "art": [],
+        "artillery": [],
+        "craft": [],
+        "drive": [
+          {
+            "specialty": "Automobile",
+            "value": 35,
+            "experienceCheck": false
+          }
+        ],
+        "energyWeapon": [],
+        "etiquette": [],
+        "firearm": [
+          {
+            "specialty": "Handgun",
+            "value": 30,
+            "experienceCheck": true
+          }
+        ],
+        "heavyMachine": [],
+        "heavyWeapon": [],
+        "knowledge": [
+          {
+            "specialty": "Accounting",
+            "value": 5,
+            "experienceCheck": false
+          },
+          {
+            "specialty": "Anthropology",
+            "value": 35,
+            "experienceCheck": false
+          },
+          {
+            "specialty": "Archaeology",
+            "value": 50,
+            "experienceCheck": false
+          },
+          {
+            "specialty": "Blasphemous Lore",
+            "value": 0,
+            "experienceCheck": false
+          },
+          {
+            "specialty": "History",
+            "value": 65,
+            "experienceCheck": true
+          },
+          {
+            "specialty": "Law",
+            "value": 5,
+            "experienceCheck": false
+          },
+          {
+            "specialty": "Natural History",
+            "value": 20,
+            "experienceCheck": false
+          },
+          {
+            "specialty": "Occult",
+            "value": 30,
+            "experienceCheck": true
+          }
+        ],
+        "languageOther": [
+          {
+            "specialty": "Latin",
+            "value": 45,
+            "experienceCheck": false
+          },
+          {
+            "specialty": "French",
+            "value": 25,
+            "experienceCheck": false
+          }
+        ],
+        "meleeWeapon": [],
+        "missileWeapon": [],
+        "parry": [],
+        "pilot": [],
+        "repair": [],
+        "ride": [],
+        "science": [
+          {
+            "specialty": "Biology",
+            "value": 15,
+            "experienceCheck": false
+          },
+          {
+            "specialty": "Geology",
+            "value": 10,
+            "experienceCheck": false
+          }
+        ],
+        "shield": [],
+        "technicalSkill": [],
+        "own": []
+      },
+      "weapons": [
+        {
+          "name": "Fist",
+          "skill": "Brawl",
+          "skillValue": 25,
+          "damage": "1D3+dm",
+          "range": "Short",
+          "attacks": 1,
+          "ammo": null,
+          "malfunction": null,
+          "notes": ""
+        },
+        {
+          "name": "Medium Revolver (.38)",
+          "skill": "Firearm (Handgun)",
+          "skillValue": 30,
+          "damage": "1D8",
+          "range": "25 meters",
+          "attacks": 1,
+          "ammo": 6,
+          "malfunction": 100,
+          "notes": "6-round cylinder; 12 spare rounds in purse"
+        }
+      ],
+      "armor": [],
+      "conditions": {
+        "unconscious": false,
+        "dying": false,
+        "majorWound": false,
+        "temporaryInsanity": false
+      },
+      "distinctiveFeatures": [
+        "Ink-stained fingers",
+        "A faint scar across the left palm"
+      ],
+      "spells": [],
+      "possessions": [
+        {
+          "name": "Medium Revolver (.38)",
+          "notes": "Registered; kept in purse"
+        },
+        {
+          "name": "Reference Book",
+          "notes": "A field guide to the rocks of the region"
+        },
+        {
+          "name": "Chemistry Set",
+          "notes": "For testing the samples she brings back"
+        },
+        {
+          "name": "Flashlight",
+          "notes": "Extra batteries in her bag"
+        },
+        {
+          "name": "First Aid Kit",
+          "notes": "Basic supplies"
+        }
+      ],
+      "wealth": {
+        "level": "Average",
+        "cash": 45,
+        "assets": "University salary; small inheritance from father; apartment in Worcester",
+        "notes": ""
+      },
+      "story": [
+        {
+          "title": "Her work",
+          "text": "Dr. Voss teaches ancient history and Near Eastern archaeology at a small New England university. She has led three expeditions to the Middle East, and one trip to a dig site in rural England that she refuses to discuss."
+        },
+        {
+          "title": "What she is like",
+          "text": "Sharp-eyed, with ink-stained fingers and an air of mild impatience. Methodical and slow to trust. She holds that knowledge is its own justification, and that hiding from a strange universe helps no one."
+        },
+        {
+          "title": "Professor Crane",
+          "text": "Harold Crane was her mentor, and died in circumstances nobody has explained. She first opened one of his books in the university library's locked reading room, and wishes she had not."
+        },
+        {
+          "title": "The English dig",
+          "text": "She came back with a scar across her left palm and a scarab amulet of uncertain origin, which she keeps in a locked box. Her journal says only that she saw the outline of something that should not have been there."
+        }
+      ],
+      "contacts": [
+        {
+          "name": "Dr. Ruth Hollis",
+          "role": "Head Librarian, the university",
+          "notes": "Trusts her; sometimes sets aside restricted volumes for her to read."
+        },
+        {
+          "name": "Frank Daltrey",
+          "role": "Private detective, Worcester",
+          "notes": "Has helped her on sensitive matters before. Pragmatic."
+        },
+        {
+          "name": "Sister Agnes",
+          "role": "Nurse, St. Mary's Hospital",
+          "notes": "Patches her up without asking too many questions."
+        }
+      ],
+      "appearance": {
+        "age": 38,
+        "height": "5'6\"",
+        "weight": "128 lbs",
+        "eyes": "Gray",
+        "hair": "Dark brown, often pinned up",
+        "skin": "Fair"
+      },
+      "notes": "Has been dreaming of the English dig site every night for two weeks, and wakes with sand in her hands. Has not told anyone."
+    }
+  }
+}

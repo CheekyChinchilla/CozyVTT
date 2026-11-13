@@ -1,7 +1,7 @@
 /**
  * A new header colour or token picture is an unsaved change.
  *
- * The D&D 5e, Pathfinder 2e and Call of Cthulhu editors keep both outside the
+ * The 5E, Fantasy d20 and Horror d100 editors keep both outside the
  * form they compare to decide what is unsaved, so choosing only a colour or a
  * picture and then leaving closed the editor without asking, and the choice
  * was lost.
@@ -11,8 +11,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Character } from '@/types';
 import CharacterSheetEditorModal from '../CharacterSheetEditorModal';
-import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
-import { cocCharacter } from '@/components/character-sheets/call-of-cthulhu-7e/__tests__/cocFixture';
+import { fantasyD20Character } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
+import { horrorD100Character } from '@/components/character-sheets/horror-d100/__tests__/sheetFixture';
 
 vi.mock('@/hooks/queries', () => ({
   useServerConfigQuery: () => ({ data: undefined }),
@@ -25,8 +25,8 @@ vi.mock('@/services/api', () => ({
 }));
 
 const ability = { score: 10, modifier: 0 };
-const dnd5eCharacter = {
-  id: 'char-1', userId: 'user-1', name: 'Aldra', gameSystem: 'DND_5E', campaignId: null,
+const fifthEditionCharacter = {
+  id: 'char-1', userId: 'user-1', name: 'Aldra', gameSystem: 'FIFTH_EDITION', campaignId: null,
   tokenImageUrl: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
   data: {
     characterName: 'Aldra', class: 'Fighter', level: 1, race: 'Human', proficiencyBonus: 2,
@@ -41,9 +41,9 @@ const dnd5eCharacter = {
 // Each system's own presets: the first is what a sheet with no colour opens
 // with, the second is a different one.
 const systems = [
-  { system: 'D&D 5e', character: () => dnd5eCharacter, current: 'Classic Red', other: 'Royal Blue' },
-  { system: 'Pathfinder 2e', character: () => pf2eCharacter(), current: 'Pathfinder Blue', other: 'Golden' },
-  { system: 'Call of Cthulhu', character: () => cocCharacter(), current: 'Dark Forest', other: 'Noir Shadow' },
+  { system: '5E', character: () => fifthEditionCharacter, current: 'Classic Red', other: 'Royal Blue' },
+  { system: 'Fantasy d20', character: () => fantasyD20Character(), current: 'Royal Blue', other: 'Golden' },
+  { system: 'Horror d100', character: () => horrorD100Character(), current: 'Dark Forest', other: 'Noir Shadow' },
 ];
 
 describe.each(systems)('leaving the $system editor', ({ character, current, other }) => {

@@ -3,9 +3,9 @@
  *
  * It went to the campaign's library, where every member, spectators
  * included, can browse it, so a map prepared days ahead could be seen in the
- * Asset Library before the DM switched to it. Upload New now asks: Personal,
+ * Asset Library before the GM switched to it. Upload New now asks: Personal,
  * selected at first, which players see only once the map using it is on
- * screen, or the campaign's library, which keeps it for the table if the DM
+ * screen, or the campaign's library, which keeps it for the table if the GM
  * leaves. Each choice says so in a line of its own.
  */
 

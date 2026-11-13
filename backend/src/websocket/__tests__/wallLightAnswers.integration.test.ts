@@ -1,7 +1,7 @@
 /**
  * The edits that add walls and lights can be answered.
  *
- * The DM's page draws a wall or a light as it sends it. A refused add was an
+ * The GM's page draws a wall or a light as it sends it. A refused add was an
  * `error` event that named nothing, so the page could not tell which of its
  * edits had been refused and kept drawing it. `wall:add`, `walls:replace`
  * and `light:add` sent with an acknowledgement are now answered once,
@@ -24,10 +24,10 @@ jest.setTimeout(30000);
 const runId = randomUUID().slice(0, 8);
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 type Answer = { ok: true } | { ok: false; error: string };
@@ -66,22 +66,22 @@ async function asked(page: ClientSocket, event: string, data: object): Promise<A
 }
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: `wallanswers-${name}-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: `Answers ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Wall answers ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Wall answers ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 beforeEach(async () => {
@@ -94,14 +94,14 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
 describe('wall:add', () => {
   it('answers ok for a wall it stores', async () => {
     const mapId = await mapOf(false);
-    const page = await server.connectAndAuth(dmCookie, campaignId);
+    const page = await server.connectAndAuth(gmCookie, campaignId);
 
     expect(await asked(page, 'wall:add', { mapId, segment: wall() })).toEqual({ ok: true });
     expect((await counts(mapId)).walls).toBe(1);
@@ -110,7 +110,7 @@ describe('wall:add', () => {
 
   it('answers the refusal of a wall past the cap', async () => {
     const mapId = await mapOf(true);
-    const page = await server.connectAndAuth(dmCookie, campaignId);
+    const page = await server.connectAndAuth(gmCookie, campaignId);
 
     expect(await asked(page, 'wall:add', { mapId, segment: wall() })).toEqual({ ok: false, error: TOO_MANY_WALLS_MESSAGE });
     expect((await counts(mapId)).walls).toBe(MAX_WALL_SEGMENTS);
@@ -119,19 +119,19 @@ describe('wall:add', () => {
 
   it('answers any other refusal the same way', async () => {
     const mapId = await mapOf(false);
-    const page = await server.connectAndAuth(dmCookie, campaignId);
+    const page = await server.connectAndAuth(gmCookie, campaignId);
 
     expect(await asked(page, 'wall:add', { mapId: randomUUID(), segment: wall() })).toEqual({ ok: false, error: 'Map not found' });
     expect(await asked(page, 'wall:add', { mapId, segment: { ...wall(), x2: 'far' } })).toMatchObject({ ok: false });
     page.disconnect();
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    expect(await asked(player, 'wall:add', { mapId, segment: wall() })).toEqual({ ok: false, error: 'Only DMs can add wall segments' });
+    expect(await asked(player, 'wall:add', { mapId, segment: wall() })).toEqual({ ok: false, error: 'Only GMs can add wall segments' });
     player.disconnect();
   });
 
   it('answers an add past the edit ceiling, where it was dropped without a word', async () => {
     const mapId = await mapOf(false);
-    const page = await server.connectAndAuth(dmCookie, campaignId);
+    const page = await server.connectAndAuth(gmCookie, campaignId);
 
     const answers = await Promise.all(Array.from({ length: MAP_EDITS_PER_SECOND + 1 }, () =>
       new Promise<Answer>((resolve) => { page.emit('wall:add', { mapId, segment: wall() }, resolve); })));
@@ -143,7 +143,7 @@ describe('wall:add', () => {
 
   it('still refuses with an error event when sent without an acknowledgement', async () => {
     const mapId = await mapOf(true);
-    const page = await server.connectAndAuth(dmCookie, campaignId);
+    const page = await server.connectAndAuth(gmCookie, campaignId);
     const refused = waitForEvent<{ message: string }>(page, 'error');
 
     page.emit('wall:add', { mapId, segment: wall() });
@@ -156,7 +156,7 @@ describe('wall:add', () => {
 describe('walls:replace', () => {
   it('answers ok for a list it stores, and the refusal of one past the cap', async () => {
     const mapId = await mapOf(false);
-    const page = await server.connectAndAuth(dmCookie, campaignId);
+    const page = await server.connectAndAuth(gmCookie, campaignId);
 
     expect(await asked(page, 'walls:replace', { mapId, segments: [wall(), wall()] })).toEqual({ ok: true });
     expect(await asked(page, 'walls:replace', { mapId, segments: Array.from({ length: MAX_WALL_SEGMENTS + 1 }, wall) }))
@@ -169,7 +169,7 @@ describe('walls:replace', () => {
 describe('light:add', () => {
   it('answers ok for a light it stores, and the refusal of one past the cap', async () => {
     const roomy = await mapOf(false);
-    const page = await server.connectAndAuth(dmCookie, campaignId);
+    const page = await server.connectAndAuth(gmCookie, campaignId);
     expect(await asked(page, 'light:add', { mapId: roomy, light: light() })).toEqual({ ok: true });
     expect((await counts(roomy)).lights).toBe(1);
 

@@ -4,7 +4,7 @@
  * only about the light or the wall: a creature the new light showed stayed
  * missing until something moved, and one whose light went out stayed in
  * their browser. Each such change now sends every player the map as they
- * can now see it; the DM, who is sent everything, is left alone.
+ * can now see it; the GM, who is sent everything, is left alone.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -21,7 +21,7 @@ jest.setTimeout(20000);
 
 const runId = randomUUID().slice(0, 8);
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 
@@ -58,14 +58,14 @@ async function litMap(name: string, globalIllumination: boolean, walls: unknown[
 }
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(['dm', 'player'].map((n) =>
+  const [gm, player] = await Promise.all(['dm', 'player'].map((n) =>
     prisma.user.create({ data: { email: `sight-${n}-${runId}@test.cozyvtt.local`, passwordHash: 'unused', displayName: `Sight ${n}` } })));
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Sight ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Sight ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -77,29 +77,29 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
 it('shows a creature to a player when a light is placed on it, and hides it when the light goes', async () => {
   const mapId = await litMap('Dark field', false);
   const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
-  const dm = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  const gm = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
   const lightId = randomUUID();
 
   const shown = mapWhere(player, (ids) => ids.includes('goblin'));
-  const dmLeftAlone = expectNoEvent(dm, 'map.changed', 1500);
+  const gmLeftAlone = expectNoEvent(gm, 'map.changed', 1500);
   // On the goblin's square: token rows count up from the bottom of the map,
   // so (8, 2) on a 20-square map is centred at (425, 875) in pixels.
-  dm.emit('light:add', { mapId, light: { id: lightId, x: 425, y: 875, brightRadius: 2, dimRadius: 4, color: '#ffaa33', enabled: true } });
+  gm.emit('light:add', { mapId, light: { id: lightId, x: 425, y: 875, brightRadius: 2, dimRadius: 4, color: '#ffaa33', enabled: true } });
   expect(await shown).toEqual(expect.arrayContaining(['hero', 'goblin']));
-  await dmLeftAlone;
+  await gmLeftAlone;
 
   const hidden = mapWhere(player, (ids) => !ids.includes('goblin'));
-  dm.emit('light:remove', { mapId, lightId });
+  gm.emit('light:remove', { mapId, lightId });
   expect(await hidden).toEqual(['hero']);
   player.disconnect();
-  dm.disconnect();
+  gm.disconnect();
 });
 
 it('shows a creature behind a door once the door opens', async () => {
@@ -107,13 +107,13 @@ it('shows a creature behind a door once the door opens', async () => {
   const door = { id: doorId, x1: 250, y1: 0, x2: 250, y2: 1000, type: 'door-closed' };
   const mapId = await litMap('Door', true, [door]);
   const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
-  const dm = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  const gm = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
 
   const shown = mapWhere(player, (ids) => ids.includes('goblin'));
-  dm.emit('wall:update', { mapId, segment: { ...door, type: 'door-open' } });
+  gm.emit('wall:update', { mapId, segment: { ...door, type: 'door-open' } });
   expect(await shown).toEqual(expect.arrayContaining(['hero', 'goblin']));
   player.disconnect();
-  dm.disconnect();
+  gm.disconnect();
 });
 
 // So a shutdown, and the end of a test file, let it run first.

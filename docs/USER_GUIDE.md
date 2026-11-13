@@ -1,3 +1,6 @@
+<!-- This file holds material under the ORC License, beside CozyVTT's own text under the AGPL-3.0. -->
+<!-- See GAME_CONTENT_NOTICES.md for the notice and credits. -->
+
 # CozyVTT User Guide
 
 Welcome to CozyVTT — your cozy, self-hosted virtual tabletop for adventuring with friends. Whether you're rolling dice across a dungeon crawl or weaving stories through the astral plane, CozyVTT keeps everyone at the same table, no matter where they are.
@@ -17,7 +20,8 @@ This guide covers everything you need to get started, from the setup wizard to a
 7. [Running Sessions](#running-sessions)
 8. [Advanced Features](#advanced-features)
 9. [Your Profile](#your-profile)
-10. [Troubleshooting & FAQ](#troubleshooting--faq)
+10. [Credits](#credits)
+11. [Troubleshooting & FAQ](#troubleshooting--faq)
 
 ---
 
@@ -47,7 +51,7 @@ Create the administrator account. This is the most powerful account on the platf
 **Step 3 — System Configuration**
 Give your instance its identity:
 
-- **Instance Name** — Appears in the browser tab and in every email the instance sends (e.g., "The Hearthstone Tavern"). You can change it later under **Admin Panel → Settings**.
+- **Instance Name** — Appears in the browser tab and in every email the instance sends (e.g., "The Mossy Lantern"). You can change it later under **Admin Panel → Settings**.
 - **Enable Public Registration** — Tick it to let new users register themselves. For private groups, leave it unticked and create accounts manually from the Admin Panel
 
 Earlier versions also asked for a **Timezone** here and showed it under **Admin Panel → Settings**. Nothing ever used it, so it has been removed; times are shown in each person's own browser time zone, as they always were. An instance that saved one keeps it stored, unused.
@@ -97,9 +101,11 @@ CozyVTT has two platform-level roles:
 | Role | What they can do |
 |------|-----------------|
 | **Admin** | Manage the entire platform: users, settings, backups, and global assets |
-| **User** | Create campaigns (as DM), join campaigns (as player), manage characters |
+| **User** | Create campaigns (as game master, or GM), join campaigns (as player), manage characters |
 
 Your role badge is visible on your profile page.
+
+**Never signed in (admins).** In the **Users** tab of the Admin Panel, the **Last Login** column shows when each account last signed in. An account whose owner has not signed in yet, such as one you invited or created, shows **Never signed in** there instead. On an instance with email set up, such a row also has an **Invite** button, which emails a fresh invitation link and cancels any link sent before. Running the setup wizard counts as signing in, and so does registering when it signs the person in straight away; an account that had to wait for an administrator's approval counts from its first sign-in. Once the owner has signed in, the button goes away and **Send Reset Link** is the way to help them.
 
 ### The activity log (admins)
 
@@ -129,13 +135,13 @@ The instance writes lines of its own too, such as an account locked after too ma
 
 ### Campaign Roles
 
-Within a campaign you have one of three roles. Whoever creates a campaign is its DM, and everyone the DM invites joins as a player:
+Within a campaign you have one of three roles. Whoever creates a campaign is its game master (GM), and everyone the GM invites joins as a player:
 
 | Role | What they can do |
 |------|-----------------|
-| **DM** | Everything: maps, tokens, fog and lighting, the initiative order, inviting and removing members |
-| **Player** | Move the tokens they control, roll dice, chat and whisper, draw on the map while the DM allows it, keep notes, and read and edit their own characters. They can leave the campaign with **Leave Campaign**, in the **Campaign Info** panel ([Leaving a campaign](PLAYER_GUIDE.md#leaving-a-campaign)) |
-| **Spectator** | Watch the map, follow and write in the chat, whispers included, and ping the map; they keep private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, draw on the map, or edit a character sheet, even their own, while they are a spectator. They can still add one of their characters to the campaign's roster, take one out of it, or delete one of their own characters, and leave the campaign as a player can. There is no control in the app for making someone a spectator yet; the role can only be set through the API |
+| **GM** | Everything: maps, tokens, fog and lighting, the initiative order, inviting and removing members |
+| **Player** | Move the tokens they control, roll dice, chat and whisper, draw on the map while the GM allows it, keep notes, and read and edit their own characters. They can leave the campaign with **Leave Campaign**, in the **Campaign Info** panel ([Leaving a campaign](PLAYER_GUIDE.md#leaving-a-campaign)) |
+| **Spectator** | Watch the map, follow and write in the chat, whispers included, and ping the map; they keep private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, draw on the map, or edit a character sheet, even their own, while they are a spectator. They can still add one of their characters to the campaign's roster, take one out of it, or delete one of their own characters, and leave the campaign as a player can. The GM makes someone a spectator, or a player again, on the **Members** tab of **Campaign Settings** ([Changing a member's role](GM_GUIDE.md#changing-a-members-role)) |
 
 ---
 
@@ -149,7 +155,7 @@ After logging in, the **Dashboard** is your home base. From here you can see eve
 
 **Quick Stats** — A summary row showing how many campaigns you're running, how many you're playing in, and how many are currently active.
 
-**Pending Invitations** — If a DM has invited you to a campaign, a banner appears here. You can accept (and choose which of your characters to bring) or decline.
+**Pending Invitations** — If a GM has invited you to a campaign, a banner appears here. You can accept (and choose which of your characters to bring) or decline.
 
 *Screenshot pending — Pending invitation banner.*
 
@@ -157,7 +163,7 @@ After logging in, the **Dashboard** is your home base. From here you can see eve
 
 *Screenshot pending — Campaign card grid with status indicators.*
 
-**Notes From Campaigns You Have Left** — Shown only if you left a campaign, or a DM removed you from one, in which you kept personal notes or saved rolls. **Open** beside a campaign shows each note and your saved rolls, and **Download** in the window it opens saves them all as one Markdown file. They cannot be changed here. If the campaign is deleted, they are deleted with it.
+**Notes From Campaigns You Have Left** — Shown only if you left a campaign, or a GM removed you from one, in which you kept personal notes or saved rolls. **Open** beside a campaign shows each note and your saved rolls, and **Download** in the window it opens saves them all as one Markdown file. They cannot be changed here. If the campaign is deleted, they are deleted with it.
 
 **Your Characters**, **Asset Library**, **Documents** and **Character Templates** — each section has a button that takes you to that page in one click.
 
@@ -184,11 +190,11 @@ The campaign page is your command center during play. On a computer, or a tablet
 
 *Screenshot pending — Full campaign page layout with labeled panels.*
 
-- **Left Sidebar** — Campaign info, the campaign roster, and (for DMs) the token roster
+- **Left Sidebar** — Campaign info, the campaign roster, and (for GMs) the token roster
 - **Center Canvas** — The battle map where tokens live and adventures happen
 - **Right Sidebar** — a tabbed panel with **Chat**, **Dice**, **Initiative**, **Notes** and **Session** (vibe, session controls and past sessions); a badge on the Chat tab shows unread messages while you're on another tab. When the panel is too narrow for every name, the tabs other than the open one show only their icon; point at one to see its name
 
-You can **drag the dividers** between the columns to resize them, and collapse the side columns entirely to give the map more room. On a touch screen, such as a tablet held sideways, a divider takes your finger anywhere in a strip 44 pixels wide around it, so you need not hit the thin line itself. A menu or a picker open over that strip takes your tap itself. Your layout and last-used tab are remembered per browser. The **header bar** across the top contains navigation, connection status, and DM controls.
+You can **drag the dividers** between the columns to resize them, and collapse the side columns entirely to give the map more room. On a touch screen, such as a tablet held sideways, a divider takes your finger anywhere in a strip 44 pixels wide around it, so you need not hit the thin line itself. A menu or a picker open over that strip takes your tap itself. Your layout and last-used tab are remembered per browser. The **header bar** across the top contains navigation, connection status, and GM controls.
 
 **In a window narrower than 1,024 pixels**, such as a phone, most tablets held upright, or a laptop with two windows side by side, the page uses its compact layout, described in the next section.
 
@@ -210,20 +216,20 @@ The bar along the bottom:
 | **Chat** | The chat. A number on the button counts messages that arrived while the chat was closed |
 | **Dice** | The dice roller |
 | **Initiative** | The initiative tracker |
-| **Party** | The campaign's info, the roster and, for the DM, the **Token Roster** |
-| **More** | **Notes**, **Session** (the vibe, the session controls and past sessions), **Documents** and **Shortcuts**; for the DM, every tool of the header's toolbar: **Map Library**, **Token Manager**, **Creature Library**, **Token Templates**, **Spirit Layer**, **Atmosphere** and **Campaign Settings**; and **Owner Settings** for the campaign's owner when someone else is the DM |
+| **Party** | The campaign's info, the roster and, for the GM, the **Token Roster** |
+| **More** | **Notes**, **Session** (the vibe, the session controls and past sessions), **Documents** and **Shortcuts**; for the GM, every tool of the header's toolbar: **Map Library**, **Token Manager**, **Creature Library**, **Token Templates**, **Spirit Layer**, **Atmosphere** and **Campaign Settings**; and **Owner Settings** for the campaign's owner when someone else is the GM |
 
 Each opens as a sheet that rises over the map. **Chat**, **Dice**, **Initiative** and **Party** open at half the screen's height, so the map above stays in view and you can still pinch, pan and tap it. Tap the bar at the top of a sheet, or drag it up, to make the sheet full height, and tap or drag it down again to make it half. To close a sheet, tap its **✕**, tap its button again or **Map**, drag it down by the bar at its top, press **Esc**, or use the phone's **Back**. **Back** also closes a window opened over the map, such as a tool from **More** or a character sheet opened from a token, and a character editor with changes not yet saved asks **Discard Changes?** first. Tapping another button switches to its sheet. **Notes**, **Session** and **More** open at full height.
 
-In the **Chat** sheet **To**, the message box and **Send** share one line (the box grows to four lines as you type, with **To** and **Send** at its foot), and each message is one block that starts with its sender and time, with the text running on after them, so several short messages show at once. Whispers, the DM's messages, system messages and a message marked **Not sent** keep their colours and icons. The count of messages shown, **Load More** and, for the DM, **Clear old join and leave messages** are at the top of the chat: scroll up to reach them.
+In the **Chat** sheet **To**, the message box and **Send** share one line (the box grows to four lines as you type, with **To** and **Send** at its foot), and each message is one block that starts with its sender and time, with the text running on after them, so several short messages show at once. Whispers, the GM's messages, system messages and a message marked **Not sent** keep their colours and icons. The count of messages shown, **Load More** and, for the GM, **Clear old join and leave messages** are at the top of the chat: scroll up to reach them.
 
-In the **Dice** sheet each roll takes two lines, as it does on a computer, so several show at once: who rolled it, what for and when, then the expression and the dice it threw, with the total beside them in large type. On a narrow line the purpose is shortened first, so the name and the secret mark stay whole. A die that advantage or disadvantage dropped is struck through, a critical or a fumble is coloured and named, and a secret roll is marked **🔒 Secret**. The sheet's own heading names the panel, so the roll list starts at its top. Under the list the seven dice share one row, **d20** first, and **Roll** and **More** sit beside the expression. Everything else is under **More**: **Adv**, **Dis**, **4d6kh3**, your saved rolls and **Saved**, **Character** and **Purpose**, **Secret Roll**, **Clear all fields**, the eye (show or hide secret rolls, once the list holds one) and, for the DM, the bin (**Clear**). While it is closed, **More** counts how many of **Character**, **Purpose** and **Secret Roll** the next roll still carries. The roll list is the sheet's one scroll area: the controls under it stay put.
+In the **Dice** sheet each roll takes two lines, as it does on a computer, so several show at once: who rolled it, what for and when, then the expression and the dice it threw, with the total beside them in large type. On a narrow line the purpose is shortened first, so the name and the secret mark stay whole. A die that advantage or disadvantage dropped is struck through, a critical or a fumble is coloured and named, and a secret roll is marked **🔒 Secret**. The sheet's own heading names the panel, so the roll list starts at its top. Under the list the seven dice share one row, **d20** first, and **Roll** and **More** sit beside the expression. Everything else is under **More**: **Adv**, **Dis**, **4d6kh3**, your saved rolls and **Saved**, **Character** and **Purpose**, **Secret Roll**, **Clear all fields**, the eye (show or hide secret rolls, once the list holds one) and, for the GM, the bin (**Clear**). While it is closed, **More** counts how many of **Character**, **Purpose** and **Secret Roll** the next roll still carries. The roll list is the sheet's one scroll area: the controls under it stay put.
 
-The map's toolbar is one row at its top: **Zoom Out**, the zoom, **Zoom In**, **Ping**, **Draw** and **More**. That **More** opens **Map controls**: **Fit to Screen**, the grid and its colour, the **Ruler**, the **AoE Shape**, and for the DM **Mapmaker** on a map they can paint, **Show tools** (the **Fog of War**, **Walls** and **Lights** panels) and the spirit tokens. **Draw** and **Mapmaker** open their tools in a strip across the bottom of the map, with the map above it to draw or paint on; while Mapmaker is on, **Ping** and **Draw** leave the toolbar. The drawing and painting tools sit in a row that scrolls sideways; an end of the row with more past it fades out under an arrow. A token's details show at the bottom of the map when you tap it.
+The map's toolbar is one row at its top: **Zoom Out**, the zoom, **Zoom In**, **Ping**, **Draw** and **More**. That **More** opens **Map controls**: **Fit to Screen**, the grid and its colour, the **Ruler**, the **AoE Shape**, and for the GM **Mapmaker** on a map they can paint, **Show tools** (the **Fog of War**, **Walls** and **Lights** panels) and the spirit tokens. **Draw** and **Mapmaker** open their tools in a strip across the bottom of the map, with the map above it to draw or paint on; while Mapmaker is on, **Ping** and **Draw** leave the toolbar. The drawing and painting tools sit in a row that scrolls sideways; an end of the row with more past it fades out under an arrow. A token's details show at the bottom of the map when you tap it.
 
 Menus open as a list from the bottom of the screen: press and hold a token, a door, a character in the roster or a combatant in the initiative tracker. Tap an item, or **Cancel**.
 
-**A DM preparing a map** the table is not on sees a banner across the top of the map naming the map on their screen and the one the table is on, with **Back to the table**, **Bring everyone here** and **What reaches the table?** (on a phone on its side, **Back**, **Bring everyone** and an info button). The phone's **Back** goes back to the table. Players see nothing of it (see [Preparing a map while the table plays](DM_GUIDE.md#preparing-a-map-while-the-table-plays) in the DM Guide).
+**A GM preparing a map** the table is not on sees a banner across the top of the map naming the map on their screen and the one the table is on, with **Back to the table**, **Bring everyone here** and **What reaches the table?** (on a phone on its side, **Back**, **Bring everyone** and an info button). The phone's **Back** goes back to the table. Players see nothing of it (see [Preparing a map while the table plays](GM_GUIDE.md#preparing-a-map-while-the-table-plays) in the GM Guide).
 
 **A phone on its side** has no room for the bar, so its buttons move into the header, and sheets open from the right at the map's full height. A token's, a door's and a character's menu open from the right too, with **Cancel** at the foot.
 
@@ -272,37 +278,37 @@ Other browsers have the same option in their own menu, often named **Add to Home
 
 Maps are the battlegrounds, taverns, and dungeons your players will explore. Before a session, upload your map images to the **Asset Library** (see [The Asset Library](#the-asset-library)), then add them to your campaign, or draw a map in CozyVTT.
 
-As the DM, click **Map Library** (the map icon) in the campaign header.
+As the GM, click **Map Library** (the map icon) in the campaign header.
 
 *Screenshot pending — Map Library panel.*
 
 From here you can:
-- **Create Map** from an uploaded image in your asset library, or one you upload there with **Upload New**, which goes to your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](DM_GUIDE.md#adding-maps-to-your-campaign)); **Draw a map** in the same window, which starts a blank map of the size and colour you choose (see [Drawing a map](DM_GUIDE.md#drawing-a-map)); or **Import UVTT** from a mapping tool
+- **Create Map** from an uploaded image in your asset library, or one you upload there with **Upload New**, which goes to your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](GM_GUIDE.md#adding-maps-to-your-campaign)); **Draw a map** in the same window, which starts a blank map of the size and colour you choose (see [Drawing a map](GM_GUIDE.md#drawing-a-map)); or **Import UVTT** from a mapping tool
 - **Set Active** to switch to a different map — this updates the view for all connected players immediately
-- **Open to prepare** to open a map on your own screen only, while the table stays where it is (see [Preparing a map while the table plays](DM_GUIDE.md#preparing-a-map-while-the-table-plays))
+- **Open to prepare** to open a map on your own screen only, while the table stays where it is (see [Preparing a map while the table plays](GM_GUIDE.md#preparing-a-map-while-the-table-plays))
 - **Edit** a map's settings, export it, or delete it
 
 *GIF pending — Switching the active map mid-session.*
 
 ### Managing Campaign Settings
 
-Click **Campaign Settings** (the gear icon) in the campaign header. Here you can update the campaign name, description, and other properties, among them **Players may draw** on the **General** tab, which lets players draw on the map and is on until you turn it off (see [Drawing on the map](DM_GUIDE.md#drawing-on-the-map)).
+Click **Campaign Settings** (the gear icon) in the campaign header. Here you can update the campaign name, description, and other properties, among them **Players may draw** on the **General** tab, which lets players draw on the map and is on until you turn it off (see [Drawing on the map](GM_GUIDE.md#drawing-on-the-map)).
 
 ### Managing Your Roster
 
-Players join your campaign by accepting an invitation. Once they're in, they appear in the **Campaign Roster** on the left sidebar. You can see all current members and their characters, with the hit points of each (see [The Campaign Roster](DM_GUIDE.md#the-campaign-roster)).
+Players join your campaign by accepting an invitation. Once they're in, they appear in the **Campaign Roster** on the left sidebar. You can see all current members and their characters, with the hit points of each (see [The Campaign Roster](GM_GUIDE.md#the-campaign-roster)).
 
 To invite someone:
 1. Click **Invite Player** in the left sidebar, or on the **Members** tab of **Campaign Settings**
-2. Type at least 2 letters of their display name in **Search by display name**, or the whole name if it is one letter long, and pick them from the people who match (they need an account first). See [Inviting Players](DM_GUIDE.md#inviting-players)
+2. Type at least 2 letters of their display name in **Search by display name**, or the whole name if it is one letter long, and pick them from the people who match (they need an account first). See [Inviting Players](GM_GUIDE.md#inviting-players)
 3. They'll see a pending invitation on their dashboard
 
-**Handing the campaign to someone else.** A campaign has one DM, and that seat
-can be passed to another member — useful when you are handing off to a co-DM or
+**Handing the campaign to someone else.** A campaign has one GM, and that seat
+can be passed to another member — useful when you are handing off to a co-GM or
 stepping back from a game that carries on without you. It does not change who
 *owns* the campaign, so if you created it you can still delete it and can take
 the seat back later. See
-[Handing the game to someone else](DM_GUIDE.md#handing-the-game-to-someone-else).
+[Handing the game to someone else](GM_GUIDE.md#handing-the-game-to-someone-else).
 
 ---
 
@@ -310,7 +316,7 @@ the seat back later. See
 
 Tokens represent characters, monsters, NPCs, and objects on the map.
 
-**Placing tokens:** Open the **Token Manager** (the crossed-swords icon in the header) to add, configure, and manage all tokens in your campaign. DMs can also place tokens directly from the **Creature Library** (see [DM Guide](DM_GUIDE.md#the-creature-library)).
+**Placing tokens:** Open the **Token Manager** (the crossed-swords icon in the header) to add, configure, and manage all tokens in your campaign. GMs can also place tokens directly from the **Creature Library** (see [GM Guide](GM_GUIDE.md#the-creature-library)).
 
 *Screenshot pending — Token Manager panel.*
 
@@ -318,7 +324,7 @@ Each token has:
 - **Name** — Displayed on hover
 - **Image** — Choose from your asset library (TOKEN type assets), or leave blank for a colored-letter placeholder
 - **Type** — Player, NPC / Creature, or Object
-- **HP** — Hit points, which players see only for their own token or once the DM turns on the token's HP bar
+- **HP** — Hit points, which players see only for their own token or once the GM turns on the token's HP bar
 - **Size** — How many grid squares the token occupies (default 1×1)
 - **Display Mode** — **Pog** (circular), **Top-Down** (overhead art), or **Full-Art** (full rectangular image)
 - **Disposition** — Hostile (red), Friendly (teal), or Neutral (amber) — affects a creature's placeholder color and ring
@@ -334,7 +340,7 @@ Each token has:
 
 **Selecting and the keyboard:** Clicking a token also selects it, marked with a dashed light-blue ring, and the keyboard then acts on it: the arrow keys move it a square (five with **Shift**), **,** and **.** step to the previous or next token you can act on, and **Enter** opens its menu. Press **?** on the map for every key, or see [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts).
 
-**Turning tokens:** Right-click a token and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees, to show which way it faces, or select it and press **[** or **]**. The DM can turn any token at any time, and set an exact angle in **Edit Token**; a player can turn the tokens they control whenever they can move them, which is at any time except while the session is paused or has ended.
+**Turning tokens:** Right-click a token and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees, to show which way it faces, or select it and press **[** or **]**. The GM can turn any token at any time, and set an exact angle in **Edit Token**; a player can turn the tokens they control whenever they can move them, which is at any time except while the session is paused or has ended.
 
 *GIF pending — Picking up a token and putting it down across the map.*
 
@@ -368,19 +374,19 @@ Give the character a name and click **Create Character**. The dialog closes, **C
 
 The Character Editor is where you fill in every detail about your character — stats, skills, equipment, backstory, the works. What you see here depends on your game system. On a screen less than 640 pixels wide, or less than 500 pixels tall such as a phone turned sideways, a sheet and its editor take the whole screen.
 
-*Screenshot pending — Character editor with D&D 5e sheet open.*
+*Screenshot pending — Character editor with 5E sheet open.*
 
 Click **Save** to save your progress. A timestamp in the header shows when your character was last saved. If you try to leave with changes you haven't saved, you'll be asked to confirm first — that covers the back arrow and closing or reloading the browser tab. After a save, leaving is silent. Anything you type while a save is still going through stays in the editor, which then stays open with it, counted as unsaved, until you press **Save** again.
 
 **If a save is refused because a box is too long or a list has too many entries**, a message starting "Not saved." names the first five boxes at fault and what is wrong with each, such as `backstory: Can be at most 100,000 characters`, and says how many more there are. Nothing you typed is lost; the editor stays open. Shorten or remove what the message names, then press **Save** again. A sheet saved before a limit existed still opens as it was; the limit is checked the next time you save. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
 
-**The D&D 5e editor checks a sheet before saving it.** If **Race** or **Class** is empty, maximum hit points or **Armor Class** is below 1, an attack, item or spell you typed in has no name, a hit die has no class, or the spell save DC or passive Perception would be below 1, nothing is saved. A red box above the sheet lists what to fix, the editor opens the tab the first one is on, and a note under each box says what is wrong; it goes as soon as you change that box. The boxes also stop at what a sheet stores when you leave them: **Armor Class** and maximum hit points at 1, a custom skill's **Other** at -30 to +30, and the **Other bonus** of the spell save DC and of passive Perception where either would reach 1; the text boxes stop at the length a sheet stores. An attack holds at most 20 properties. A sheet stored with more than 20 spell slots of a level, or an initiative, passive Perception or spellcasting bonus outside -30 to +30, opens with that number brought within range and a note above the sheet naming each one, such as "level 3 spell slots (24 to 20)"; saving keeps the new values.
+**The 5E editor checks a sheet before saving it.** If **Race** or **Class** is empty, maximum hit points or **Armor Class** is below 1, an attack, item or spell you typed in has no name, a hit die has no class, or the spell save DC or passive Perception would be below 1, nothing is saved. A red box above the sheet lists what to fix, the editor opens the tab the first one is on, and a note under each box says what is wrong; it goes as soon as you change that box. The boxes also stop at what a sheet stores when you leave them: **Armor Class** and maximum hit points at 1, a custom skill's **Other** at -30 to +30, and the **Other bonus** of the spell save DC and of passive Perception where either would reach 1; the text boxes stop at the length a sheet stores. An attack holds at most 20 properties. A sheet stored with more than 20 spell slots of a level, or an initiative, passive Perception or spellcasting bonus outside -30 to +30, opens with that number brought within range and a note above the sheet naming each one, such as "level 3 spell slots (24 to 20)"; saving keeps the new values.
 
-**The Pathfinder 2e and Call of Cthulhu editors check names before saving.** If a Pathfinder 2e sheet's ancestry, heritage or class is empty, or a strike, lore, spell, ritual, item or feat has no name, or a Call of Cthulhu sheet's occupation or era is empty or a weapon has no name, nothing is saved. A red box above the sheet lists what to fill in, and the editor opens the tab the first one is on.
+**The Fantasy d20 and Horror d100 editors check names before saving.** If a Fantasy d20 sheet's ancestry, heritage or class is empty, or a strike, lore, spell, ritual, item or feat has no name, or a Horror d100 sheet's profession or era is empty, one of its seven characteristics has no number, or a weapon or a piece of armor has no name, nothing is saved. A red box above the sheet lists what to fill in, and the editor opens the tab the first one is on.
 
-**If the character changed while you were editing it**, for example your DM took hit points at the table or you saved it from another window, your save is refused so that it cannot put the old values back. Nothing you typed is lost. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the newest version of the character. Press **Save my changes** to save them, or **Keep editing** to go back to the editor without saving anything. If you changed something that was also changed in the newer version, it is listed under **Changed in both places** with both values; pick the one to keep for each, and **Save my changes** becomes available. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
+**If the character changed while you were editing it**, for example your GM took hit points at the table or you saved it from another window, your save is refused so that it cannot put the old values back. Nothing you typed is lost. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the newest version of the character. Press **Save my changes** to save them, or **Keep editing** to go back to the editor without saving anything. If you changed something that was also changed in the newer version, it is listed under **Changed in both places** with both values; pick the one to keep for each, and **Save my changes** becomes available. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
 
-**Lists on a sheet stop at 500 entries.** On a D&D 5e, Pathfinder 2e or Call of Cthulhu sheet that covers inventory or possessions, attacks, strikes or weapons, spells, cantrips, features, feats and the other lists, and the boxes that take a list, such as languages, senses and possessions; the traits of one Pathfinder 2e strike stop at 50, a D&D 5e sheet's **Your Own Skills** at 30, and the **Other Damage Rolls** of one D&D 5e attack at 10. At 500 the **+ Add** button is greyed out and a note under it says the list is full; remove an entry to add another. The Cantrips box and the boxes that take a list stop taking entries at the limit. On a Pathfinder 2e sheet an item bonus is from -30 to +30 and a spell rank has at most 20 slots, no more of them used than there are; the boxes correct a number outside that when you leave them, and lowering a rank's total brings its used count down with it. A sheet saved with more entries opens with all of them, and cannot be saved until the list is shortened; the message after **Save** names the list.
+**Lists on a sheet stop at 500 entries.** On a 5E, Fantasy d20 or Horror d100 sheet that covers inventory or possessions, attacks, strikes or weapons, spells, cantrips, features, feats and the other lists, and the boxes that take a list, such as languages, senses and possessions; the traits of one Fantasy d20 strike stop at 50, a 5E sheet's **Your Own Skills** at 30, and the **Other Damage Rolls** of one 5E attack at 10, while a Horror d100 sheet's Firearm specialties run to 503 and its **Own Skills** to 504, so that a character converted from before 1.7.0 keeps every one it had. At 500 the **+ Add** button is greyed out and a note under it says the list is full; remove an entry to add another. The Cantrips box and the boxes that take a list stop taking entries at the limit. On a Fantasy d20 sheet an item bonus is from -30 to +30 and a spell rank has at most 20 slots, no more of them used than there are; the boxes correct a number outside that when you leave them, and lowering a rank's total brings its used count down with it. A sheet saved with more entries opens with all of them, and cannot be saved until the list is shortened; the message after **Save** names the list.
 
 While a sheet has changes you haven't saved, you stay signed in however long you take. **If you are signed out anyway**, for example because your computer slept for over an hour or your password was changed on another device, your changes are not lost. Pressing **Save** shows "You've been signed out" above the sheet and keeps everything you typed. Click **Sign in in a new tab**, sign in there, come back to the editor and press **Save** again. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
 
@@ -388,7 +394,7 @@ You can also click **Export** in the editor header at any time to download a JSO
 
 ### Character Templates
 
-A template is a starter sheet somebody has already filled in and shared. If you're new to a system — or your DM has prepared something for you — starting from one saves you a blank page.
+A template is a starter sheet somebody has already filled in and shared. If you're new to a system — or your GM has prepared something for you — starting from one saves you a blank page.
 
 Open **Character Templates** from the dashboard. Every template on the instance is listed; filter by game system, search by name, or tick **Only mine** to see just your own.
 
@@ -401,13 +407,13 @@ Open **Character Templates** from the dashboard. Every template on the instance 
 - while creating a character, if you want to keep the character and share it at the same time
 - **Import** on the templates page, which publishes a character JSON file as a template
 
-Templates you publish are visible to everyone on your instance, so a template never keeps the player's name, and a Call of Cthulhu investigator's Keeper's Notes are left out. You can edit or delete your own at any time while you have an account; if you delete your account, they stay in the library for everyone, no longer linked to you. One account can publish up to 500 templates; past that, publishing another says so, and deleting one you no longer need makes room.
+Templates you publish are visible to everyone on your instance, so a template never keeps the player's name, and a Horror d100 character's GM's Notes are left out. You can edit or delete your own at any time while you have an account; if you delete your account, they stay in the library for everyone, no longer linked to you. One account can publish up to 500 templates; past that, publishing another says so, and deleting one you no longer need makes room.
 
 **Editing one.** The pencil on one of your templates opens **Edit Template**, with the name and description at the top and the sheet below. **Save Details** saves the name and description and closes the dialog; the sheet's own **Save** saves the sheet, and the dialog stays open showing it. If the sheet has changes you haven't saved, closing the dialog asks first, and **Save Details** keeps it open so you can save them. The template's sheet has no token picture box, because a template's picture has to be a global asset (see the note below).
 
 If someone else saved the template while you had it open, such as a template editor tidying it, your save is refused so that it cannot put the older version back. For the sheet, a box headed **This template has changed** lists your changes, already put onto the newest version, and works as it does for a character (see [The Character Editor](#the-character-editor)): **Save my changes** saves them, **Keep editing** goes back without saving. For **Save Details**, if the other person changed the name or description too, a message under the name says what it is now called, and pressing **Save Details** again saves yours in its place; otherwise yours is saved straight away.
 
-**Importing from another instance.** The **Import** button accepts any character JSON — one you exported from this instance, one you wrote yourself, or one exported from a *different* CozyVTT server. That last case is the useful one: export a character from wherever you built it, bring the file to a new instance, and publish it there for that group to copy. Character exports and templates hold the same thing — a sheet plus a game system — so no conversion is involved. You'll see a preview before anything is published, and you can set the name and description at that point. A file made for a game system this instance doesn't have is refused when you choose it, and the message names the system.
+**Importing from another instance.** The **Import** button accepts any character JSON — one you exported from this instance, one you wrote yourself, or one exported from a *different* CozyVTT server. That last case is the useful one: export a character from wherever you built it, bring the file to a new instance, and publish it there for that group to copy. Character exports and templates hold the same thing — a sheet plus a game system — so no conversion is involved. You'll see a preview before anything is published, and you can set the name and description at that point. A file made for a game system this instance doesn't have is refused when you choose it, with the message "This character is for a game system this CozyVTT does not have."
 
 > **A note on template images.** A template's picture has to be a **global** asset, because everyone who can see the template needs to be able to load it — a personal asset would show as broken for everyone but you. If you don't have permission to upload global assets, pick an existing global one or leave the image blank.
 
@@ -424,7 +430,7 @@ You can only choose a campaign you are already a member of.
 
 *GIF pending — Assigning a character to a campaign.*
 
-Once assigned, that character becomes available as a token in the campaign, and the DM can see them in the campaign roster.
+Once assigned, that character becomes available as a token in the campaign, and the GM can see them in the campaign roster.
 
 ---
 
@@ -432,24 +438,25 @@ Once assigned, that character becomes available as a token in the campaign, and 
 
 CozyVTT includes sheets for several popular game systems. Here's a quick overview of what each one covers:
 
-Every box on a sheet has a length limit, far above what a sheet needs: a character's name can be up to 200 characters, notes, descriptions, backstories and features up to 100,000, the D&D 5e proficiency boxes up to 2,000, a few short D&D 5e boxes (a skill of your own's name, a further damage line, a hit die, a weapon property) up to 40 to 60, and any other box up to 1,000.
+Every box on a sheet has a length limit, far above what a sheet needs: a character's name can be up to 200 characters, notes, descriptions, backstories and features up to 100,000, the 5E proficiency boxes up to 2,000, a few short 5E boxes (a skill of your own's name, a further damage line, a hit die, a weapon property) up to 40 to 60, and any other box up to 1,000.
 
-#### Dungeons & Dragons 5th Edition
+#### 5E (SRD 5.1)
 
-The classic. Covers all the D&D 5e essentials:
+Covers all the 5E essentials:
 
 - Ability scores and modifiers
 - Skills with proficiency tracking
 - Hit points, armor class, and saving throws
 - Skill and saving throw bonuses worked out from your scores, with an **Other** box beside each for anything else that adds to it
 - Initiative, passive Perception, spell save DC and spell attack worked out for you, each with an **Other bonus** box that takes -30 to +30
+- An **Advantage on initiative** box, for a character whose initiative rolls two d20s and keeps the higher ([Rolling Your Own Initiative](PLAYER_GUIDE.md#rolling-your-own-initiative))
 - Spells, spell slots (up to 20 of each level), and spellcasting stats
 - Equipment, weapons, and inventory
 - Features, traits, and background info
 
-*Screenshot pending — D&D 5e character sheet.*
+*Screenshot pending — 5E character sheet.*
 
-#### Pathfinder 2nd Edition
+#### Fantasy d20 (ORC)
 
 The action-economy tactician's dream:
 
@@ -457,31 +464,34 @@ The action-economy tactician's dream:
 - Skills with trained/expert/master/legendary proficiencies
 - Class features, feats, and focus points: the pool holds 1 point with your first focus spell, up to 3 as you set it, and the points left stay within it
 - Spells and spell slots, with the spell attack and spell DC worked out from one **Spellcasting proficiency** and each its own item bonus
+- Class DC worked out from the **Key Attribute** your class names and its proficiency. A new sheet has none chosen: its Class DC reads 10, the proficiency is greyed out, and nothing is saved for it until you choose one
 - Inventory with bulk tracking: ten light items make 1 Bulk, and you are encumbered only above 5 + Strength
 - Ancestry, background, and heritage
 
-*Screenshot pending — Pathfinder 2e character sheet.*
+*Screenshot pending — Fantasy d20 character sheet.*
 
-#### Call of Cthulhu 7th Edition
+#### Horror d100
 
-For when the vibes turn from cozy to eldritch:
+For when the vibes turn from cozy to eldritch. The sheet follows the open d100 rules: its characteristics, what it works out from them, its skills and its terms are theirs, in CozyVTT's own words. It has five tabs:
 
-- Characteristics (STR, CON, SIZ, DEX, APP, INT, POW, EDU), plus a separate Luck Score
-- Derived stats: HP, Sanity, Magic Points, Movement Rate
-- Dodge, which starts at half DEX and is raised with skill points and improvements on the Skills tab, like any other skill
-- Skills with base values and advancement tracking. On the **Skills** tab of **Edit**, each specialised list has an add control: Fighting and Firearms specialisations and sciences offer the rulebook's choices at their base values (Sword 20%, Bow 15%, Physics 1%) or **Other** to name your own, and **Add Language** and **Add Skill** add a row to name. Each added row has a name box and a remove button, and Art/Craft, Pilot, Survival and your own language each take a specialisation
-- Weapons and attacks
-- Backstory, personal description, and ideals
-- Possessions and important people
-- **Keeper's Notes**, on the Backstory tab, for the Keeper alone: only the DM of the investigator's campaign can see or change them, so the investigator's player and the rest of the table never see them. They stay with the campaign: moving the investigator into another campaign, bringing it into one when you accept an invitation, or copying it, leaves them behind.
+- **Overview.**
+  - Characteristics: STR, CON, SIZ, INT, POW, DEX and CHA, and EDU, which is optional (untick **Use EDU** in the editor to leave it out). Under each is the roll it gives at five times its value: Effort for STR, Stamina for CON, Idea for INT, Luck for POW, Agility for DEX, Charm for CHA and Knowledge for EDU. SIZ gives none.
+  - Sanity: current, starting and maximum. Maximum Sanity is 100 less **Knowledge (Blasphemous Lore)**, and never above 99; when that skill rises, current Sanity comes down to the new maximum. The bar, and the word beside it (Stable, Shaken, Fragile or Breaking), show how much of the Sanity the character started with is left.
+  - Derived attributes, worked out for you: maximum hit points (CON plus SIZ, halved and rounded up), the major wound level (half of that, rounded up), maximum power points (equal to POW), the damage modifier (from STR plus SIZ) and the experience bonus (half INT, rounded up). Changing a characteristic moves them, and keeps the damage you have taken and the power points you have spent.
+  - Current hit points, which can go below 0, current power points, and MOV, which starts at 10 and is yours to change.
+  - Four conditions to tick: Major Wound, Dying, Unconscious and Temporary Insanity.
+- **Skills.** The rules' skills in their six categories (Combat, Communication, Manipulation, Mental, Perception and Physical), each with its base chance beside your value. A value can be anything from 0 up, below the base chance too. Each skill has an experience check to tick, except Status and Knowledge (Blasphemous Lore), which experience does not raise, and a notes button that opens a line for notes. Skills that come in specialties, such as Firearm, Knowledge, Language, Melee Weapon, Drive, Repair and Science, are added with the one add control under their category: choose the skill in its list and press **Add**. Firearm, Knowledge, Melee Weapon and Science list the rules' choices at their base chances (Firearm (Shotgun), 30%; Knowledge (Occult), 5%; Melee Weapon (Sword), 15%; Science (Physics), 1%) and **Other**, which adds one for you to name; the rest add a row to name. Perception has no such skills, so it has no add control. **Own Skills**, at the bottom, takes any skill the list lacks. Each added row has a name box and a remove button. Dodge starts at twice DEX, Gaming at INT plus POW and Language (Own) at five times INT (or EDU if higher); when you change one of those characteristics, the skill moves by the same amount as its base chance, so the points you put in stay.
+- **Combat.** Weapons and armor. A weapon rolls at the sheet's value for the **Skill** it names, such as **Brawl** or **Firearm (Handgun)**, or at its own **Value** where the sheet has no such skill, and **Add Weapon** starts one as a fist: Brawl, `1D3+dm`, range Short. On a phone each weapon is a card of its own, with its figures under their names. In a weapon's damage, `+dm` rolls your damage modifier (`+DB`, as older sheets wrote it, does too). Each weapon has a line for notes. Each piece of armor has a name, an armor value and notes.
+- **Possessions.** Wealth (a level such as Average or Affluent, cash, assets and notes), possessions, one to a line, and contacts.
+- **Story.** Notes with titles of your own: **Add Note** adds one, and each can be renamed, moved up or down, and removed. Below them are distinctive features and spells, one to a line, and appearance.
 
-*Screenshot pending — Call of Cthulhu 7e character sheet.*
+The read-only sheet shows the same things, and at the table a click on a characteristic, a skill or a weapon rolls it.
 
-#### Shadowrun 6th Edition
+**GM's Notes**, on the Story tab, are for the GM alone: only the GM of the character's campaign can see or change them, so the character's player and the rest of the table never see them. They stay with the campaign: moving the character into another campaign, bringing it into one when you accept an invitation, or copying it, leaves them behind.
 
-Street magic meets corporate dystopia:
+**A character made before version 1.7.0** was converted when your instance was upgraded, when the sheet was rebuilt on the open d100 rules. Each characteristic was divided by 5, with APP becoming CHA; hit points and power points were worked out again, keeping the damage taken and the points spent; maximum Sanity was worked out from Knowledge (Blasphemous Lore), and current Sanity came down to it where it was higher; every skill the rebuilt sheet lists kept its value under the skill it became (Locksmith under Fine Manipulation, Psychology under Insight, Natural World under Knowledge (Natural History)); Art/Craft, Charm, Intimidate and Survival went under **Own Skills** where you had used them (a value other than the starting one, a specialisation, a note or a tick) and otherwise left the sheet; the Luck score became the Luck roll at five times POW; MOV became 10; and each filled box of the old Backstory tab became a note on the Story tab, as did the character's talents, its long-term insanity tick and the notes under Luck. Nothing was thrown away: at the bottom of the Story tab, **Original values** lists what the character held before, every old skill value and the old Sanity numbers among them. It is shown to the character's owner and the campaign's GM, and cannot be changed. A value the rebuilt sheet had no place for, such as a specialisation typed on a skill that takes none, is listed there under **Kept as written**, exactly as it was typed; copy it to where it belongs, for example into a note on the Story tab. Most characters have nothing under that heading, and then it is not shown. Check the character over, and set any value you want different.
 
-> **Note:** Shadowrun 6th Edition is planned, not available yet. CozyVTT has groundwork for its rules, but no character sheet, so it is left out of the lists you pick a game system from.
+*Screenshot pending — Horror d100 character sheet.*
 
 #### Flexible System
 
@@ -492,6 +502,18 @@ A Flexible sheet can hold up to 100 sections. A stats section holds up to 200 st
 To put the sections, or the entries of a list, in another order, drag them up or down. With a mouse you can take hold of one anywhere but in a text box; on a phone or a tablet, take hold of the grip, the six dots at its left, so that a swipe anywhere else scrolls the sheet.
 
 *Screenshot pending — Flexible character sheet.*
+
+#### Unsupported system
+
+CozyVTT once held the start of a sheet for a fourth game system. It never offered that system in its lists, but a script could make campaigns, characters, templates and creatures for it. The upgrade to 1.7.0 keeps every one of them and gives each no game system:
+
+- **A character or template** shows **Flexible** where its system is named, and opens as a Flexible sheet with no sections. What it held is still stored with it: saving the sheet keeps it, and for a character it is in the file **Export** writes.
+- **A campaign** plays as any campaign with no system: it takes Flexible characters, and its creatures, rolls and initiative are those of a campaign with none.
+- **A creature** stays in the Creature Library with no system.
+
+Importing a campaign archive that names that system makes a campaign with no system and says so in the import window. A character file that names it is imported the same way: the window says *This file's game system is no longer supported, so the character is imported with none, as a Flexible sheet.*, and what the file held is stored with the character.
+
+**Unsupported system** is what the app shows wherever it names a game system it does not know. The sheet of such a character opens as a Flexible sheet that you can read but not change, under the line *This character was made for a game system CozyVTT no longer supports. Its data is kept; you can export or delete it.* A template's opens the same way, under the line *This template was made for a game system CozyVTT no longer supports. Its data is kept; you can delete it.* Since 1.7.0 the server neither stores nor sends such a system, so you should meet neither unless a page was left open across an upgrade; reload it.
 
 ---
 
@@ -512,7 +534,7 @@ The Asset Library is where all your campaign media lives — maps, token images,
 
 A PNG that is animated is refused for now, for every kind of picture.
 
-A map drawn in CozyVTT keeps its picture in the campaign's library too, named **Drawn map** and tagged `cozyvtt-drawn-map`, one for each drawn map: each save writes over it, and no earlier version is kept (see [Drawing a map](DM_GUIDE.md#drawing-a-map)).
+A map drawn in CozyVTT keeps its picture in the campaign's library too, named **Drawn map** and tagged `cozyvtt-drawn-map`, one for each drawn map: each save writes over it, and no earlier version is kept (see [Drawing a map](GM_GUIDE.md#drawing-a-map)).
 
 A map, token or avatar picture can be at most 16,384 pixels wide and 16,384 pixels tall (a WebP at most 16,383, the most the format allows). An animated GIF or WebP also has limits, because every player's browser unpacks every frame of it:
 
@@ -535,7 +557,7 @@ Click **Upload Asset** to add a new asset. You'll choose:
 - An optional description, up to 1,000 characters
 - The **scope** — where this asset lives:
   - **Personal** — Only you can see and use it
-  - **Campaign** — Shared with everyone in a specific campaign: one you run, or, for a token picture, one you play in. A map picture is the exception: its campaign's players and spectators see it only while a table they sit at is on a map using it, or in a document shared with the campaign, and it leaves their library when the table moves on, so a map the DM is preparing stays a surprise. A player who put such a picture in their own notes, or chose it as a character's picture, may stop seeing it there once the table leaves that map, and a browser that has shown it before can go on showing it from its cache
+  - **Campaign** — Shared with everyone in a specific campaign: one you run, or, for a token picture, one you play in. A map picture is the exception: its campaign's players and spectators see it only while a table they sit at is on a map using it, or in a document shared with the campaign, and it leaves their library when the table moves on, so a map the GM is preparing stays a surprise. A player who put such a picture in their own notes, or chose it as a character's picture, may stop seeing it there once the table leaves that map, and a browser that has shown it before can go on showing it from its cache
   - **Global** — Available platform-wide (Admin/Global Asset Manager only)
 - Optional tags for easy filtering later: up to 50, each up to 50 characters
 
@@ -547,7 +569,7 @@ Use the **search bar** to find assets across your whole library, by part of a na
 
 ### Viewing and Managing Assets
 
-Click any asset card to open its **detail panel** on the right, with its preview, description, tags and details. Tags cannot be changed after the upload. The panel also lets you move it to another library with **Move to…** and delete it, where you may: an asset you uploaded (one in a campaign's library while you are still in that campaign; if you do not run that campaign, only while nothing but your own characters, the tokens you control and your own documents use it, and otherwise it is the campaign's DM's to delete or move), any asset in the library of a campaign you run as its DM, and any asset at all for a server admin. Only the person who uploaded an asset can move it to **Personal**, which is their own library. An avatar always stays in your personal library. Press **Escape**, click **Close** (the **×** at its top) or click outside the panel to close it.
+Click any asset card to open its **detail panel** on the right, with its preview, description, tags and details. Tags cannot be changed after the upload. The panel also lets you move it to another library with **Move to…** and delete it, where you may: an asset you uploaded (one in a campaign's library while you are still in that campaign; if you do not run that campaign, only while nothing but your own characters, the tokens you control and your own documents use it, and otherwise it is the campaign's GM's to delete or move; just after an upgrade from a version before 1.6.0, deleting or moving one first checks up to 100 of the older documents of the campaign's other members for the pictures they show, and while some are left unchecked it is refused with a message saying so, for you to try again later; a document whose file is missing or cannot be read stays unchecked, and then only the campaign's GM can delete or move the asset), any asset in the library of a campaign you run as its GM, and any asset at all for a server admin. Only the person who uploaded an asset can move it to **Personal**, which is their own library. An avatar always stays in your personal library. Press **Escape**, click **Close** (the **×** at its top) or click outside the panel to close it.
 
 **Deleting an asset asks first, and warns you if it is still in use.** The first question names the asset. If a map, a token, a character, a character template, a creature, a token template, a campaign's ambient sound or the sound of one of a campaign's times of day still uses it, or a text or Markdown document can show it (one that names it by its address, written by someone in the campaign who can see the picture, or by its uploader), nothing is deleted yet: a second window lists where it is used, and the file is removed only if you choose **Delete anyway**. A deleted file cannot be brought back, and everything in that list is left without its picture or sound. You see names for the campaigns you run, your own characters and documents, global documents and shared character templates; anything else is only counted ("2 maps you cannot see"), so the list never reveals other people's campaigns. Documents work the same way from the Documents page. A note that shows a picture by its address is not checked. An administrator deleting a file from the **Assets** tab of the Admin Panel is asked the same two questions, and sees everything in the list by name, whoever's campaign it is in.
 
@@ -592,11 +614,11 @@ This is decided by where you put it when you upload or write it:
 
 | Scope | Who can read it |
 |-------|-----------------|
-| **Personal** | You alone, until a DM shares it with a campaign (see below). |
-| **Campaign** | Every member of that campaign, immediately. Only the campaign's DM can put a document here. |
+| **Personal** | You alone, until a GM shares it with a campaign (see below). |
+| **Campaign** | Every member of that campaign, immediately. Only the campaign's GM can put a document here. |
 | **Global** | Everyone on the instance. Only an administrator or a global asset manager can put a document here. |
 
-A DM can share their own documents, and Global ones, with their campaign from inside it, and stop sharing later. A document someone else shared with a table you play at is yours to read there, not to share on. Sharing does not copy the file; the campaign's members read the same document you have, and if you edit it they see the new text next time they open it.
+A GM can share their own documents, and Global ones, with their campaign from inside it, and stop sharing later. A document someone else shared with a table you play at is yours to read there, not to share on. Sharing does not copy the file; the campaign's members read the same document you have, and if you edit it they see the new text next time they open it.
 
 ### Reading
 
@@ -609,7 +631,7 @@ Open a text or Markdown document and press **Edit**. Who can edit a document is 
 | Scope | Who can edit it |
 |-------|-----------------|
 | **Personal** | You, and an administrator. |
-| **Campaign** | Whoever wrote or uploaded it while they are still in the campaign, the campaign's DM, and an administrator. Someone who leaves or is removed from the campaign can no longer edit what they put there. |
+| **Campaign** | Whoever wrote or uploaded it while they are still in the campaign, the campaign's GM, and an administrator. Someone who leaves or is removed from the campaign can no longer edit what they put there. |
 | **Global** | An administrator, and whoever wrote or uploaded it while they are still a global asset manager. |
 
 What you type is saved exactly as typed, and replaces the old text all at once: a save the server cannot finish, because it was restarted for example, leaves the document as it was before. If a save is refused, your text stays in the box and the reason is shown. Closing the editor or the **New document** window with Escape, the X or Cancel asks first once there is something typed or changed, and **Keep writing** or **Keep editing** takes you back to the text. Nothing is asked when there is nothing to lose.
@@ -618,7 +640,7 @@ What you type is saved exactly as typed, and replaces the old text all at once: 
 
 Uploads are checked rather than trusted. A PDF must really be a PDF, and a text or Markdown file must really be text; a program renamed to `.md` is refused. Documents are always shown as text or as a PDF, never as a web page, so a file that contains HTML or a script is displayed as-is and nothing in it can run. There is no need to avoid typing `<` or `>` in a document; they show as typed.
 
-Pictures in a Markdown document or note only load from your own CozyVTT, and only a map, token or avatar picture from the asset library. An image that points at another website would make every reader's browser contact that site, revealing who opened the document, and one that points anywhere else on your CozyVTT would make every reader's browser ask for that page as them; instead its description (or *image not shown*, when it has none) is shown and nothing is fetched. To show a picture, upload it to your asset library as a map or token image and use its address, which looks like `/api/assets/maps/` or `/api/assets/tokens/` followed by a long id: for example `![The old mill](/api/assets/maps/bc5f19c0-158b-4330-a5cc-6133666a4fec)`. To find it, right-click the picture in the **Asset Library** and choose your browser's **Open image in new tab**: the address bar of the new tab shows it. For a handout, a DM uploads its picture with **Campaign** as the scope: a map picture in the campaign's library, in a handout the DM wrote or uploaded and shared with the campaign, shows to every member of that campaign, as long as its address is within the handout's first 1 MB. A picture in the DM's **Personal** library is not shown that way, and anywhere else, such as your own notes, a campaign's map picture shows to its players only while the table is on a map using it (see [Uploading Assets](#uploading-assets)).
+Pictures in a Markdown document or note only load from your own CozyVTT, and only a map, token or avatar picture from the asset library. An image that points at another website would make every reader's browser contact that site, revealing who opened the document, and one that points anywhere else on your CozyVTT would make every reader's browser ask for that page as them; instead its description (or *image not shown*, when it has none) is shown and nothing is fetched. To show a picture, upload it to your asset library as a map or token image and use its address, which looks like `/api/assets/maps/` or `/api/assets/tokens/` followed by a long id: for example `![The old mill](/api/assets/maps/bc5f19c0-158b-4330-a5cc-6133666a4fec)`. To find it, right-click the picture in the **Asset Library** and choose your browser's **Open image in new tab**: the address bar of the new tab shows it. For a handout, a GM uploads its picture with **Campaign** as the scope: a map picture in the campaign's library, in a handout the GM wrote or uploaded and shared with the campaign, shows to every member of that campaign, as long as its address is within the handout's first 1 MB. A picture in the GM's **Personal** library is not shown that way, and anywhere else, such as your own notes, a campaign's map picture shows to its players only while the table is on a map using it (see [Uploading Assets](#uploading-assets)).
 
 Links in a document or note open in a new tab, so following one never takes you away from the table.
 
@@ -626,11 +648,11 @@ Links in a document or note open in a new tab, so following one never takes you 
 
 ## Running Sessions
 
-This section is primarily for players during an active session. For DM-specific features, see the [DM Guide](DM_GUIDE.md).
+This section is primarily for players during an active session. For GM-specific features, see the [GM Guide](GM_GUIDE.md).
 
 ### Joining a Session
 
-Navigate to your campaign from the dashboard and connect to the session. If the DM has started a session, you'll see a live status indicator in the header.
+Navigate to your campaign from the dashboard and connect to the session. If the GM has started a session, you'll see a live status indicator in the header.
 
 *GIF pending — Connecting to an active session.*
 
@@ -644,7 +666,7 @@ The **Chat** panel on the right sidebar is how everyone communicates during a se
 
 Type your message in the input field and press **Enter** to send (**Shift+Enter** starts a new line). The box grows as you type, up to six lines on a computer and four on a phone, then scrolls, and shrinks back once the message is sent. Messages show your display name and a timestamp. System notices, such as a session starting, pausing or ending, are a small centred line, so people's messages stand out. A message can be up to 2,000 characters; the count appears under the box as you get close.
 
-Your message shows as *sending…* until the server has it. If it doesn't get through (the connection dropped, or the DM's chat cooldown hasn't run out yet), it is marked **Not sent** with the reason. Click **Retry** to send it again, or **Discard** to remove it. If the first try did reach the server after all, retrying within ten minutes does not post it twice (a restart of the server in between forgets that it arrived).
+Your message shows as *sending…* until the server has it. If it doesn't get through (the connection dropped, or the GM's chat cooldown hasn't run out yet), it is marked **Not sent** with the reason. Click **Retry** to send it again, or **Discard** to remove it. If the first try did reach the server after all, retrying within ten minutes does not post it twice (a restart of the server in between forgets that it arrived).
 
 While you are scrolled up reading earlier messages, new ones don't pull you down; a **Jump to newest** button appears at the bottom instead, and takes you to them. The **Dice** panel does the same for new rolls.
 
@@ -654,8 +676,8 @@ The chat holds the newest 400 messages. While you are at the newest message, the
 
 A whisper is a message that only you and one other member of the campaign can see.
 
-1. In the **To** list above the message box, choose the person. The DM has a group of their own at the top, **DM** (or **DM, not in session**). The other members in the session right now come next, under **In session**, and the rest under **Not in session**.
-   You should see "Only you and Mara can see this." under the box (with their name in place of Mara's). When the person is the DM, the DM's shield shows beside it.
+1. In the **To** list above the message box, choose the person. The GM has a group of their own at the top, **GM** (or **GM, not in session**). The other members in the session right now come next, under **In session**, and the rest under **Not in session**.
+   You should see "Only you and Mara can see this." under the box (with their name in place of Mara's). When the person is the GM, the GM's shield shows beside it.
 2. Type your message and press **Enter**.
    It appears in the chat with a lock, **Whisper to Mara** and its own colour. Mara sees it with a lock and **Whisper from** your name.
 3. To talk to the whole table again, choose **Everyone** in the **To** list. The list keeps the person you chose until you change it.
@@ -666,15 +688,15 @@ To whisper a single message without changing the list, start it with `/w` (or `/
 
 | When | What is shown beside the name |
 |---|---|
-| Two members share a name | Their role, and a player's character: **Dana (DM)**, **Mara (Player, Vex)**, **Mara (Player)**, **Ash (Spectator)** |
+| Two members share a name | Their role, and a player's character: **Dana (GM)**, **Mara (Player, Nesk)**, **Mara (Player)**, **Ash (Spectator)** |
 | That is still the same for two of them | The day each joined: **Mara (Player, joined 3 Oct)** |
 | They joined on the same day | Their order of joining, the earlier first: **Mara (Player, joined 3 Oct, 1)**, **Mara (Player, joined 3 Oct, 2)** |
 
-A name alone cannot make someone the DM: only the real DM is in the **DM** group and gets the shield under the box.
+A name alone cannot make someone the GM: only the real GM is in the **GM** group and gets the shield under the box.
 
 To reply to a whisper, click **Whisper from** (or **Whisper to**) on it: the **To** list switches to that person.
 
-**Who can read a whisper:** you and the person you chose, and nobody else. The DM sees a whisper only when they are one of the two. Whispers stay in the chat history like other messages, so the two of you see them again after a refresh. They are stored on the server like all chat, so whoever runs the server can read them in its database and its backups.
+**Who can read a whisper:** you and the person you chose, and nobody else. The GM sees a whisper only when they are one of the two. Whispers stay in the chat history like other messages, so the two of you see them again after a refresh. They are stored on the server like all chat, so whoever runs the server can read them in its database and its backups.
 
 If the person leaves the campaign, the **To** list keeps them and says they are no longer in the campaign, and a whisper to them is marked **Not sent**. **Retry** on a whisper that was not sent sends it to the same person again.
 
@@ -692,8 +714,8 @@ to you and belong to the one campaign, and the same button is where you rename,
 edit or delete them.
 
 A saved roll can also keep a **Character** and a **Purpose** of its own, both
-optional, up to 200 characters each. This is for a DM who saves a creature's
-attack, say "Goblin boss" and "Scimitar attack", and does not want to retype the
+optional, up to 200 characters each. This is for a GM who saves a creature's
+attack, say "Hobgoblin" and "Longsword attack", and does not want to retype the
 name every time:
 
 | When you press the saved roll's button | The roll is made as | The roll is for |
@@ -728,7 +750,7 @@ something earlier. A roll of your own always brings you down to it. The list
 survives a refresh.
 
 **Secret rolls.** Tick **Secret Roll** (on a phone, under **More**) before rolling and the other players
-never see it. Your DM does — deliberately, so they can settle an argument about
+never see it. Your GM does — deliberately, so they can settle an argument about
 what was really rolled — and the checkbox says so. Your own secret rolls stay in
 your list marked **🔒 Secret**, so you can look back at them; the **Secret**
 button at the top of the panel (on a phone, the eye under **More**), which appears once the list holds a secret roll,
@@ -747,17 +769,17 @@ from the dropdown, and **+** starts a new one. They save themselves a moment
 after you stop typing; the line underneath tells you whether everything is
 saved.
 
-**These are private.** Nobody else can read them — your DM included. That is
+**These are private.** Nobody else can read them — your GM included. That is
 enforced by the server, not just hidden in the page. A single note can run to
 100,000 characters, roughly fifty printed pages.
 
 ### Past Sessions
 
 The **Session** tab has a **Past Sessions** list: every finished session,
-newest first, with its date, how long you played, and whatever the DM wrote
+newest first, with its date, how long you played, and whatever the GM wrote
 about it when they ended it. It is the thing to read before the next game.
 
-Everyone in the campaign sees the same list. A session the DM wrote nothing for
+Everyone in the campaign sees the same list. A session the GM wrote nothing for
 still appears, marked as having no notes.
 
 ### Moving Around the Map
@@ -771,14 +793,14 @@ The toolbar at the top left of the map holds the controls for your own view; poi
 | **Toggle Grid** | Shows or hides the grid lines, which start shown. While they are shown, the **Grid Color** button beside it switches them between black and white |
 | **Ruler**, **AoE Shape** | Measure a distance and lay a spell area over the map (see [Measuring and Spell Areas](PLAYER_GUIDE.md#measuring-and-spell-areas)) |
 | **Ping** | The next click or tap on the map shows everyone that spot, as **Tab** does over the map (see [Pointing at the Map](PLAYER_GUIDE.md#pointing-at-the-map)). Click it again, or press **Esc**, to put it away without pinging. On a touch screen, two quick taps on empty ground ping too, while no tool is up |
-| **Draw** | Opens the drawing tools: a pen, lines, arrows, rectangles, ellipses, polygons, text labels, an eraser and a laser pointer, in a colour and width you choose. The table sees what you draw as you draw it. The DM always has it; a player has it while the DM lets players draw, except while the session is paused or has ended; while they may not draw, it offers only the **Eraser** and **Clear mine**, and only while the map holds drawings of theirs; a spectator does not have it, and nobody has it on a map with no picture or one whose picture failed to load (see [Drawing and pointing](PLAYER_GUIDE.md#drawing-and-pointing) and, for the DM, [Drawing on the map](DM_GUIDE.md#drawing-on-the-map)) |
-| **Mapmaker** | The DM's, on a map drawn in CozyVTT or one with no picture: paints the map's picture with brushes and textures, shapes, rooms that add their own walls, stamps, a fill bucket, text and more, on the DM's screen until **Save** makes it the map's picture (see [Drawing a map](DM_GUIDE.md#drawing-a-map)) |
+| **Draw** | Opens the drawing tools: a pen, lines, arrows, rectangles, ellipses, polygons, text labels, an eraser and a laser pointer, in a colour and width you choose. The table sees what you draw as you draw it. The GM always has it; a player has it while the GM lets players draw, except while the session is paused or has ended; while they may not draw, it offers only the **Eraser** and **Clear mine**, and only while the map holds drawings of theirs; a spectator does not have it, and nobody has it on a map with no picture or one whose picture failed to load (see [Drawing and pointing](PLAYER_GUIDE.md#drawing-and-pointing) and, for the GM, [Drawing on the map](GM_GUIDE.md#drawing-on-the-map)) |
+| **Mapmaker** | The GM's, on a map drawn in CozyVTT or one with no picture: paints the map's picture with brushes and textures, shapes, rooms that add their own walls, stamps, a fill bucket, text and more, on the GM's screen until **Save** makes it the map's picture (see [Drawing a map](GM_GUIDE.md#drawing-a-map)) |
 
 To move the view, drag an empty part of the map; on a touch screen, drag it with one finger.
 
 ### Moving Your Token
 
-When the DM has placed your character's token on the map, you can move it: **click** the token to pick it up, move the pointer to where you want it, and **click** that square to put it down. Right-click, press **Esc**, or move the pointer off the map, to put it back where it was.
+When the GM has placed your character's token on the map, you can move it: **click** the token to pick it up, move the pointer to where you want it, and **click** that square to put it down. Right-click, press **Esc**, or move the pointer off the map, to put it back where it was.
 
 Clicking the token also selects it. Then the arrow keys move it one square at a time, or five with **Shift**, and **[** and **]** turn it (see [Moving Your Token](PLAYER_GUIDE.md#moving-your-token) in the player guide).
 
@@ -788,19 +810,19 @@ On a touch screen, put your finger on the token, slide it to the square and lift
 
 Token movement is broadcast to everyone in real time — your party can watch you walk into that very suspicious hallway.
 
-> **Note:** Token movement is disabled while the session is paused and after the DM has ended it, until the next session starts.
+> **Note:** Token movement is disabled while the session is paused and after the GM has ended it, until the next session starts.
 
 ### The Vibe Tracker
 
-The **Vibe Tracker**, in the **Session** tab, shows the time of day the DM has set for the scene: dawn, day, dusk and night by default, or periods the DM has named. Each one tints the whole map with its own colour filter, and the header shows which is current.
+The **Vibe Tracker**, in the **Session** tab, shows the time of day the GM has set for the scene: dawn, day, dusk and night by default, or periods the GM has named. Each one tints the whole map with its own colour filter, and the header shows which is current.
 
-It's your DM's way of setting the tone without breaking the narrative.
+It's your GM's way of setting the tone without breaking the narrative.
 
 *Screenshot pending — Vibe tracker showing the current period.*
 
 ### The Initiative Tracker
 
-The **Initiative** tab on the right sidebar shows the turn order as the DM adds combatants, who's active once combat starts, and HP for creatures whose HP bar the DM has turned on and for any creature token you control; your own character's hit points are on your sheet and roster card, not in the tracker. A creature the DM has hidden is not listed, nor one on a map the DM has not switched to, nor one on the other plane when the DM uses the spirit layer; one that is merely out of your sight is.
+The **Initiative** tab on the right sidebar shows the turn order as the GM adds combatants, who's active once combat starts, and HP for creatures whose HP bar the GM has turned on and for any creature token you control; your own character's hit points are on your sheet and roster card, not in the tracker. A creature the GM has hidden is not listed, nor one on a map the GM has not switched to, nor one on the other plane when the GM uses the spirit layer; one that is merely out of your sight is.
 
 *Screenshot pending — Initiative tracker panel during combat.*
 
@@ -816,38 +838,38 @@ Whoever's turn it is also gets a pulsing gold ring around their token on the map
 
 CozyVTT saves as you play: token positions, fog, walls, lights, drawings, chat and dice history, and the atmosphere are all stored the moment they change, so there is no save button and nothing is lost by closing the page. When you come back, everything is right where you left it. The one exception is an initiative order, which lasts only while the server is running.
 
-Ending a session records it, with the DM's notes, under **Past Sessions**.
+Ending a session records it, with the GM's notes, under **Past Sessions**.
 
 ### Multi-Map Support
 
-A campaign can have multiple maps loaded at once. The DM can switch the active map at any time, and all players are taken to the new map immediately. Great for transitions between locations without stopping the action.
+A campaign can have multiple maps loaded at once. The GM can switch the active map at any time, and all players are taken to the new map immediately. Great for transitions between locations without stopping the action.
 
-*GIF pending — DM switching maps mid-session.*
+*GIF pending — GM switching maps mid-session.*
 
 ### The Spirit Layer
 
-The Spirit Layer is a second plane for the map, used for games where some characters can perceive things others can't — astral space, the ethereal plane, the spirit world. It is a separate plane rather than a see-through overlay: a player viewing the spirit realm sees the tokens on that plane instead of the ordinary ones, including instead of their own. The DM chooses which tokens live on it, who can see it, and the visual style.
+The Spirit Layer is a second plane for the map, used for games where some characters can perceive things others can't — astral space, the ethereal plane, the spirit world. It is a separate plane rather than a see-through overlay: a player viewing the spirit realm sees the tokens on that plane instead of the ordinary ones, including instead of their own. The GM chooses which tokens live on it, who can see it, and the visual style.
 
-If you are a player and the map has gone dark or your token has vanished, ask your DM whether the Spirit Layer is switched on — see [The Spirit Layer](DM_GUIDE.md#the-spirit-layer) in the DM guide.
+If you are a player and the map has gone dark or your token has vanished, ask your GM whether the Spirit Layer is switched on — see [The Spirit Layer](GM_GUIDE.md#the-spirit-layer) in the GM guide.
 
 *Screenshot pending — Map with spirit layer overlay.*
 
 ### Ambient Atmosphere
 
-DMs can set ambient audio tracks and visual atmosphere effects from the Atmosphere panel. Six visual overlays are available — rain, mist, leaves, sparkles, snow, and wind. Players hear the audio and see the visual effects automatically when connected to an active session.
+GMs can set ambient audio tracks and visual atmosphere effects from the Atmosphere panel. Six visual overlays are available — rain, mist, leaves, sparkles, snow, and wind. Players hear the audio and see the visual effects automatically when connected to an active session.
 
-The track your DM chooses is fetched by your own browser from the instance, which is why you can hear a track that lives in the DM's personal library. That access lasts as long as the track is playing and covers only that one track.
+The track your GM chooses is fetched by your own browser from the instance, which is why you can hear a track that lives in the GM's personal library. That access lasts as long as the track is playing and covers only that one track.
 
 *Screenshot pending — Atmosphere controls panel.*
 
 ### Dynamic Lighting
 
-When a DM enables dynamic lighting on a map, players only see what their tokens can make out: bright light shows clearly, dim light and the dark within a token's **darkvision** show half-dark, and everything else is black. A token's darkvision (in grid squares; 12 is 60 ft at 5 ft a square) is set by the DM and starts at none. A map's **Global Illumination** setting makes everything in line of sight count as lit; maps made before 1.5.0 have it on, which is how lighting always behaved. Areas a player has explored stay on their map in grey until they can see them again; each player has their own memory of a map, and the DM can turn it off per map or reset it. Light sources placed by the DM have two radii:
+When a GM enables dynamic lighting on a map, players only see what their tokens can make out: bright light shows clearly, dim light and the dark within a token's **darkvision** show half-dark, and everything else is black. A token's darkvision (in grid squares; 12 is 60 ft at 5 ft a square) is set by the GM and starts at none. A map's **Global Illumination** setting makes everything in line of sight count as lit; maps made before 1.5.0 have it on, which is how lighting always behaved. Areas a player has explored stay on their map in grey until they can see them again; each player has their own memory of a map, and the GM can turn it off per map or reset it. Light sources placed by the GM have two radii:
 
 - **Bright radius** — full visibility, strong glow (e.g. the inner 20 ft of a torch)
 - **Dim radius** — reduced visibility with a fainter glow (e.g. the outer 20 ft of a torch)
 
-Where two dim light zones overlap, the area is treated as bright light. This matches the light rules in D&D 5e, Pathfinder 2e, and most other TTRPG systems.
+Where two dim light zones overlap, the area is treated as bright light. This matches the light rules in 5E, Fantasy d20, and most other TTRPG systems.
 
 **Light does not see for you.** A lit area is only visible to you if your token
 could actually see it — walls block sight as well as light, so a lamp burning
@@ -896,9 +918,38 @@ Click your avatar (the round picture at the top right of the dashboard) to reach
 
 ### Updating Your Profile
 
-Click **Edit** beside **Profile Information** to change your display name or bio, then click **Save Changes**. Your email address is shown there but cannot be changed (see [How do I change my email address?](#how-do-i-change-my-email-address)).
+Click **Edit** beside **Profile Information** to change your display name or bio, then click **Save Changes**. Your email address is changed on its own, with **Change Email** under it (see [Changing Your Email Address](#changing-your-email-address)).
 
 The Profile page takes a display name of 1 to 50 characters, and a bio of up to 500. Invisible characters, such as zero-width spaces and the marks that turn text round to read right to left, are removed when it is saved, so a name cannot look blank or pretend to be someone else's by reversing part of it. The invisible joiners that emoji such as families and skin tones, and Persian, Urdu and Indic names, need are kept only where the characters on both sides are neither spaces nor plain ASCII (the unaccented English letters, digits and punctuation of a US keyboard), so a joiner between two accented letters such as é is kept too; next to a plain ASCII character or a space, at either end, or two in a row, they are removed. The invisible tags that make up the Scotland, Wales and England flags are kept in those flags and removed anywhere else. Display names are not unique: someone else on your instance can have the same one.
+
+### Changing Your Email Address
+
+Your email address is how you sign in, and where a password reset link is sent.
+
+1. On your **Profile & Settings** page, click **Change Email** under your address in **Profile Information**.
+2. Type the new address in **New Email Address** and your password in **Current Password**.
+3. Click **Change Email**. **Cancel**, or **Escape** while the form has the focus, closes it and changes nothing.
+
+If it worked, the page says "Email changed to" and the new address, and shows the new address in **Profile Information**. Sign in with the new address from now on.
+
+When the address changes:
+
+- Any password reset or invitation link already sent to your account stops working.
+- If your instance sends email, the old address gets a notice that the address was changed, so you hear about it if it was not you. The form says whether a notice will be sent.
+
+If it is refused, the form says why and keeps what you typed:
+
+| Message | What it means |
+|---|---|
+| "Enter a valid email address" | The new address is not shaped like an address. Nothing was sent |
+| "That is already your email address" | The new address is the one you have now, perhaps in different capitals. Nothing was sent |
+| "Current password is incorrect" | The password was wrong. It counts towards the ten wrong passwords in fifteen minutes described under [Logging In](#logging-in) |
+| "Too many wrong passwords, please try again later" | Ten wrong passwords in fifteen minutes, counted together with changing your password and deleting your account. Try again fifteen minutes after the first of the ten |
+| "Email already in use" | Another account on this instance has that address |
+| "You have tried to change your email address 5 times in the last hour, the most this server allows. Please try again later." | Every try that reaches this check counts, with the right password or a wrong one, and whether or not the address was taken. The two refusals at the top of this table are made by the page, and a try refused with "Too many wrong passwords" is turned away before the check; none of those count. You can try again an hour after the first of the five. The limit stops someone using your sign-in to find out which addresses have accounts |
+| "The server is busy, try again in a moment." | Too many passwords were being checked on the server at once. Try again shortly; the try still counts towards the five |
+
+The count is kept in the backend's memory, so restarting it also clears it. Someone using your signed-in browser can use up your five tries for an hour even without your password, since a try with a wrong password counts; they cannot change the address without it.
 
 **Uploading an Avatar:**
 Click on your current avatar (or the placeholder), or press **Tab** until it is outlined and then **Enter**, to choose an image file (JPEG, PNG or WebP). The **Crop Avatar** window opens: drag the picture with the mouse, a finger or a pen to frame it, or move it with the arrow keys (hold **Shift** to move it further), and use the zoom slider to dial in exactly the right framing, then click **Apply & Upload** to save. **Cancel** or **Esc** closes the window without changing your avatar. On a phone turned on its side the picture and its controls sit side by side, so the whole window fits on the screen.
@@ -954,6 +1005,29 @@ Click **Sign Out** in the Danger Zone section, or **Logout** at the top of the d
 
 ---
 
+## Credits
+
+CozyVTT's three game systems draw on rules their publishers released under open licences, and those licences ask for a credit wherever the rules are used. **About CozyVTT** shows those credits, with CozyVTT's own licence, its no-warranty notice and a link to its source code.
+
+To open it, click **About CozyVTT**:
+
+| Where | What you see |
+|---|---|
+| The dashboard | At the foot of the page, under your campaigns |
+| Your **Profile & Settings** page | At the foot of the page, under **Danger Zone** |
+| The sign-in page | Under the sign-in form, so it can be read without an account |
+| A campaign | At the foot of the **Campaign Info** panel, under **Your role** (on a phone, in **Party**) |
+
+The window lists each game system's credit under the system's name, then the statements CozyVTT makes about its own material. The web addresses in a credit open in a new tab. Close the window with **Close**, the **X** or `Esc`.
+
+The full notices are in [GAME_CONTENT_NOTICES.md](../GAME_CONTENT_NOTICES.md), which also says what each game system takes from its open rules. The open game rules CozyVTT draws on are not offered under its own licence, the AGPL-3.0: each stays under its own.
+
+The Creature Library also credits the SRD 5.1 at its foot while it may show SRD material: when it lists an SRD creature, in its list or under **Favorites**, or any creature on an instance that holds SRD creatures, since a copy of one is marked only **Custom**.
+
+If you host CozyVTT for other people, leave **About CozyVTT** where they can open it; [the hardening checklist](DEPLOYMENT.md#hardening-checklist) says why.
+
+---
+
 ## Troubleshooting & FAQ
 
 ### CozyVTT does not open on an old phone, tablet or computer
@@ -977,7 +1051,7 @@ An administrator is restoring CozyVTT from a backup. When the restore starts, an
 
 ### My token disappeared from the map
 
-Token placement is managed by the DM. If your token isn't on the map, ask your DM to place it. Character assignment to a campaign must happen before a token can be placed.
+Token placement is managed by the GM. If your token isn't on the map, ask your GM to place it. Character assignment to a campaign must happen before a token can be placed.
 
 ### I can't see the maps or my character sheet is blank
 
@@ -987,13 +1061,13 @@ If a character sheet window says **Error Loading Character Sheet**, that sheet h
 
 ### I lost connection mid-session
 
-CozyVTT reconnects by itself for as long as the connection is away, trying again every few seconds at first and then every 30 seconds, and at once when you come back to a tab or a phone screen you had left. The connection indicator shows **Connecting...** meanwhile. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away, a pause or the end of the session, the map the table moved to, the vibe, the weather and ambient track, the spirit layer, and a dice history the DM cleared are all brought up to date once you're back. A chat message you send while disconnected is marked **Not sent**; click **Retry** once you are back. If the indicator shows **Connection Error** or **Disconnected**, press **Retry**, or refresh the page; everything should be right where you left it.
+CozyVTT reconnects by itself for as long as the connection is away, trying again every few seconds at first and then every 30 seconds, and at once when you come back to a tab or a phone screen you had left. The connection indicator shows **Connecting...** meanwhile. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away, a pause or the end of the session, the map the table moved to, the vibe, the weather and ambient track, the spirit layer, and a dice history the GM cleared are all brought up to date once you're back. A chat message you send while disconnected is marked **Not sent**; click **Retry** once you are back. If the indicator shows **Connection Error** or **Disconnected**, press **Retry**, or refresh the page; everything should be right where you left it.
 
-If the page says "You were removed from this campaign." or "This campaign was deleted.", the DM has removed you or the campaign is gone, and the page takes you to your dashboard. It says "You left this campaign." when you have left it, from this tab or another.
+If the page says "You were removed from this campaign." or "This campaign was deleted.", the GM has removed you or the campaign is gone, and the page takes you to your dashboard. It says "You left this campaign." when you have left it, from this tab or another. A page that reconnects more than a minute after you left or were removed says "You are not a member of this campaign." instead, and one that reconnects after the campaign was deleted says "This campaign does not exist. It may have been deleted." See [If you leave or are removed](PLAYER_GUIDE.md#if-you-leave-or-are-removed).
 
 ### Someone else is editing my character
 
-Only you (the character owner) and the DM of an assigned campaign can edit a character. If you think someone else has access they shouldn't, contact your platform administrator.
+Only you (the character owner) and the GM of an assigned campaign can edit a character. If you think someone else has access they shouldn't, contact your platform administrator.
 
 ### My dice rolls aren't showing up
 
@@ -1001,17 +1075,17 @@ Rolls appear in the **Dice** panel, the tab beside Chat — not in the conversat
 
 ### How do I change my email address?
 
-Email addresses cannot be changed from the app. Contact your platform administrator. The Admin Panel has no control for it either: an admin changes it through the API, with `PUT /api/users/:id` (see the [API Reference](API_REFERENCE.md)).
+Click **Change Email** on your **Profile & Settings** page; see [Changing Your Email Address](#changing-your-email-address). If you can no longer sign in, ask your platform administrator. The Admin Panel has no control for changing someone else's address: an admin does it through the API, with `PUT /api/users/:id` (see the [API Reference](API_REFERENCE.md)).
 
 ### How do I delete my account?
 
 Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, enter your password, and click **Delete My Account**. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. It also deletes your avatar, and every personal file you uploaded that nothing uses: a file in your own library that no map, token, character, template, creature or campaign sound uses, and that you have not shared into a campaign, is removed from the server, a moment after the page says your account is gone.
 
-Your chat messages and the dice rolls you made stay in their campaigns, no longer linked to you. So do the files you uploaded into a campaign, and documents you shared into a campaign stay shared, so the table's history, its handouts and its own art are not lost. A whisper stays readable by the other person in it: one you sent by the person you sent it to, and one sent to you by its sender. Character templates you published stay in the shared library for everyone to use, and token templates and custom creatures you made as a DM stay in their campaigns, all no longer linked to you. Once your account is gone you cannot edit or delete them: a published template can then be removed by an administrator or someone allowed to edit templates, and a token template or creature by the campaign's DM. Delete any you want gone before you delete your account. A personal file that a campaign still uses, such as a map picture you chose from your own library, stays on the server with no owner. When only one campaign uses or shares it, and you are in that campaign, it becomes that campaign's own file and the table goes on seeing it. When more than one campaign uses it, or a campaign you are not in, none of them can show it until an administrator moves it, so move it where you want it from your asset library before you delete your account, if your role there allows it.
+Your chat messages and the dice rolls you made stay in their campaigns, no longer linked to you. So do the files you uploaded into a campaign, and documents you shared into a campaign stay shared, so the table's history, its handouts and its own art are not lost. A whisper stays readable by the other person in it: one you sent by the person you sent it to, and one sent to you by its sender. Character templates you published stay in the shared library for everyone to use, and token templates and custom creatures you made as a GM stay in their campaigns, all no longer linked to you. Once your account is gone you cannot edit or delete them: a published template can then be removed by an administrator or someone allowed to edit templates, and a token template or creature by the campaign's GM. Delete any you want gone before you delete your account. A personal file that a campaign still uses, such as a map picture you chose from your own library, stays on the server with no owner. When only one campaign uses or shares it, and you are in that campaign, it becomes that campaign's own file and the table goes on seeing it. When more than one campaign uses it, or a campaign you are not in, none of them can show it until an administrator moves it, so move it where you want it from your asset library before you delete your account, if your role there allows it.
 
 Every other browser or device signed in to the account is signed out at the same moment.
 
-> **If you run a campaign,** whether you created it or were handed the DM seat, hand the seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as DM passes to them automatically.
+> **If you run a campaign,** whether you created it or were handed the GM seat, hand the seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as GM passes to them automatically.
 
 If you are the instance's only admin, the deletion is refused with a message saying so: an instance must always have an admin. Promote another user to admin from the Admin Panel first, then delete your account.
 
@@ -1021,6 +1095,6 @@ Use the **Forgot password?** link on the sign-in page if your instance sends ema
 
 ---
 
-*For DM-specific features like map management, atmosphere controls, and running combat, see the [DM Guide](DM_GUIDE.md).*
+*For GM-specific features like map management, atmosphere controls, and running combat, see the [GM Guide](GM_GUIDE.md).*
 
 *For a player-focused quick-start, see the [Player Guide](PLAYER_GUIDE.md).*

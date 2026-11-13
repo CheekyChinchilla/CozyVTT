@@ -1,7 +1,7 @@
 /**
  * A refused sheet names the check a union option failed.
  *
- * A D&D 5e sheet's `proficiencies` is an object, or a list of names on sheets
+ * A 5E sheet's `proficiencies` is an object, or a list of names on sheets
  * stored by an older version. A list over its limit was reported as "Invalid
  * input" once zod stopped reading an oversized list before its entries, which
  * its union took for the wrong kind of value. The option's own message is

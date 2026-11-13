@@ -33,7 +33,7 @@ function vampireShaped(scale = 1) {
     traits: entries([924, 70, 606, 261, 118, 604], scale),
     actions: entries([70, 173, 614, 808, 361], scale),
     legendaryActions: entries([72, 37, 34], scale),
-    creatureType: 'Medium undead (shapechanger)', alignment: 'lawful evil', gameSystem: 'DND_5E',
+    creatureType: 'Medium undead (shapechanger)', alignment: 'lawful evil', gameSystem: 'FIFTH_EDITION',
   };
 }
 

@@ -3,7 +3,7 @@
  * Session State Management
  *
  * Confirmation modal for ending a session.
- * Allows DM to choose whether to save game state and add session notes.
+ * Allows GM to choose whether to save game state and add session notes.
  * Shows session summary (duration, session number).
  */
 

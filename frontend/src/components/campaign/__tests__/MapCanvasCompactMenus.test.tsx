@@ -16,7 +16,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
     status: 'ACTIVE' as string,
     memberships: [] as Array<{ userId: string; role: string; user: { displayName: string } }>,
@@ -78,7 +78,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -172,7 +172,7 @@ const CHARACTERS = {
   alices: { id: 'char-alice', userId: 'alice', name: 'Brannoc' },
 };
 
-const goblin = (extra: Partial<Token> = {}) => token('tok-goblin', 'Goblin Scout', 0, 19, extra);
+const goblin = (extra: Partial<Token> = {}) => token('tok-goblin', 'Goblin', 0, 19, extra);
 /** A player's character on the map. */
 const hero = (characterId: string, controlledBy: string, extra: Partial<Token> = {}) =>
   token('tok-hero', 'Hero', 2, 19, { type: TokenType.PLAYER, characterId, controlledBy, ...extra });
@@ -226,9 +226,9 @@ beforeEach(() => {
     Promise.resolve({ token: { ...goblin(), ...body, id: 'tok-copy' } }));
   act(() => { useGameStore.getState().clearGameState(); });
   h.set({
-    userRole: 'DM',
+    userRole: 'GM',
     status: 'ACTIVE',
-    memberships: [MEMBERS.me('DM'), MEMBERS.alice],
+    memberships: [MEMBERS.me('GM'), MEMBERS.alice],
     characters: [CHARACTERS.mine, CHARACTERS.alices],
     maps: [{ id: 'map-a', name: 'Map A' }, { id: 'map-b', name: 'Map B' }, { id: 'map-c', name: 'Map C' }],
     currentMap: mapNamed('map-a'),
@@ -263,7 +263,7 @@ describe('the token menu on the compact layout', () => {
     show(goblin());
     rightClick(0, 19);
 
-    expect(sheetNamed('Goblin Scout')).toHaveAttribute('aria-modal', 'true');
+    expect(sheetNamed('Goblin')).toHaveAttribute('aria-modal', 'true');
     expect(openMenu()).toBeNull();
     expect(sheetLabels()).toEqual([
       'Rotate Left', 'Rotate Right', 'Roll...', 'Edit Token', 'Add to Initiative', 'Duplicate Token', 'Save as Template',
@@ -280,7 +280,7 @@ describe('the token menu on the compact layout', () => {
       finger.down(surface(), at(0, 19));
       act(() => { vi.advanceTimersByTime(600); });
       finger.up(surface(), at(0, 19));
-      expect(sheetNamed('Goblin Scout')).toBeInTheDocument();
+      expect(sheetNamed('Goblin')).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -290,7 +290,7 @@ describe('the token menu on the compact layout', () => {
     render(<MapCanvas />);
     show(goblin({ hp: { current: 5, max: 7, temp: 0 } }), hero('char-alice', 'alice'));
     rightClick(0, 19);
-    expect(within(sheetNamed('Goblin Scout')).getByText('5 / 7 HP')).toBeInTheDocument();
+    expect(within(sheetNamed('Goblin')).getByText('5 / 7 HP')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     rightClick(2, 19);
@@ -304,7 +304,7 @@ describe('the token menu on the compact layout', () => {
     await choose('Rotate Right');
 
     expect(h.api.updateToken).toHaveBeenCalledWith('campaign-1', 'map-a', 'tok-goblin', { rotation: 45 });
-    expect(sheetNamed('Goblin Scout')).toBeInTheDocument();
+    expect(sheetNamed('Goblin')).toBeInTheDocument();
   });
 
   it('closes for any other item, which runs', async () => {
@@ -312,11 +312,11 @@ describe('the token menu on the compact layout', () => {
     render(<MapCanvas onEditToken={onEditToken} />);
     show(goblin());
     rightClick(0, 19);
-    expect(sheetNamed('Goblin Scout')).toBeInTheDocument();
+    expect(sheetNamed('Goblin')).toBeInTheDocument();
     await choose('Edit Token');
 
     expect(onEditToken).toHaveBeenCalledWith(expect.objectContaining({ id: 'tok-goblin' }));
-    expect(screen.queryByRole('dialog', { name: 'Goblin Scout' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Goblin' })).toBeNull();
   });
 
   it('moves a token to another map from its second page', async () => {
@@ -324,11 +324,11 @@ describe('the token menu on the compact layout', () => {
     show(goblin());
     rightClick(0, 19);
     fireEvent.click(screen.getByRole('button', { name: 'Move to Map…' }));
-    expect(sheetLabels()).toEqual(['Back to Goblin Scout', 'Move to Map…', 'Map B', 'Map C']);
+    expect(sheetLabels()).toEqual(['Back to Goblin', 'Move to Map…', 'Map B', 'Map C']);
     await choose('Map C');
 
     expect(h.api.moveTokens).toHaveBeenCalledWith('campaign-1', 'map-a', ['tok-goblin'], 'map-c');
-    expect(screen.queryByRole('dialog', { name: 'Goblin Scout' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Goblin' })).toBeNull();
   });
 
   it('closes on Cancel and on its backdrop', () => {
@@ -336,20 +336,20 @@ describe('the token menu on the compact layout', () => {
     show(goblin());
     rightClick(0, 19);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByRole('dialog', { name: 'Goblin Scout' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Goblin' })).toBeNull();
 
     rightClick(0, 19);
     fireEvent.click(document.querySelector('[data-sheet-backdrop]') as HTMLElement);
-    expect(screen.queryByRole('dialog', { name: 'Goblin Scout' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Goblin' })).toBeNull();
   });
 
   it('closes when the map on screen changes', () => {
     render(<MapCanvas />);
     show(goblin());
     rightClick(0, 19);
-    expect(sheetNamed('Goblin Scout')).toBeInTheDocument();
+    expect(sheetNamed('Goblin')).toBeInTheDocument();
     act(() => { h.set({ currentMap: mapNamed('map-b') }); });
-    expect(screen.queryByRole('dialog', { name: 'Goblin Scout' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Goblin' })).toBeNull();
   });
 
   it("opens a creature's Roll... picker as a sheet at full height", async () => {
@@ -358,7 +358,7 @@ describe('the token menu on the compact layout', () => {
     rightClick(0, 19);
     await choose('Roll...');
 
-    const picker = sheetNamed('Roll for Goblin Scout');
+    const picker = sheetNamed('Roll for Goblin');
     expect(picker).toHaveAttribute('aria-modal', 'true');
     expect(within(picker).getByPlaceholderText('e.g. 2d6+3')).toBeInTheDocument();
   });
@@ -440,10 +440,10 @@ describe('a menu open as the layout switches to the desktop', () => {
     render(<Switchable><MapCanvasOnly /></Switchable>);
     show(goblin());
     rightClick(0, 19);
-    expect(sheetNamed('Goblin Scout')).toBeInTheDocument();
+    expect(sheetNamed('Goblin')).toBeInTheDocument();
 
     act(() => { switchLayout(false); });
-    expect(screen.queryByRole('dialog', { name: 'Goblin Scout' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Goblin' })).toBeNull();
     expect(openMenu()?.style.visibility).toBe('visible');
   });
 });

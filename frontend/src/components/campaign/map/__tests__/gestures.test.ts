@@ -409,7 +409,7 @@ describe("the browser's own long-press", () => {
   });
 });
 
-// Under a DM tool a press is the tool's for as long as it is held, so a DM
+// Under a GM tool a press is the tool's for as long as it is held, so a GM
 // who rests a finger on a wall's end before dragging it still drags it.
 describe('a press that may not long-press', () => {
   it('becomes a drag after any time held still', () => {
@@ -443,6 +443,63 @@ describe('a press that may not long-press', () => {
 
     expect(asked).toEqual([touch(1, 10, 10), touch(2, 100, 100)]);
     expect(labels()).toEqual(['tap', 'long-press']);
+  });
+});
+
+// Mapmaker's stamp shows where a tap would paint it while the finger is
+// still down, before the press is known to be a tap.
+describe('the press under way', () => {
+  it('is the finger as it landed while its gesture is not yet known, however it wobbles under the slop', () => {
+    const { r } = setup({ longPressAt: () => false });
+    expect(r.pressing()).toBeNull();
+    r.down(touch(1, 100, 100, 0));
+    r.move(touch(1, 104, 103, 10));
+    vi.advanceTimersByTime(900);
+
+    expect(r.pressing()).toEqual(touch(1, 100, 100, 0));
+  });
+
+  it('is gone once the press is a tap, a drag, a long-press or a pinch', () => {
+    const { r } = setup();
+    r.down(touch(1, 100, 100));
+    r.up(touch(1, 100, 100));
+    expect(r.pressing()).toBeNull();
+
+    r.down(touch(2, 100, 100));
+    r.move(touch(2, 150, 100));
+    expect(r.pressing()).toBeNull();
+    r.up(touch(2, 150, 100));
+
+    r.down(touch(3, 100, 100));
+    vi.advanceTimersByTime(LONG_PRESS_MS);
+    expect(r.pressing()).toBeNull();
+    r.up(touch(3, 100, 100));
+
+    r.down(touch(4, 100, 100));
+    r.down(touch(5, 200, 100));
+    expect(r.pressing()).toBeNull();
+  });
+
+  it('is gone when the browser takes the pointer, a pen lands, the browser holds the press, or the recogniser is reset', () => {
+    const { r } = setup();
+    r.down(touch(1, 100, 100));
+    r.cancel(touch(1, 100, 100));
+    expect(r.pressing()).toBeNull();
+
+    r.down(touch(2, 100, 100));
+    r.down(pen(300, 300));
+    expect(r.pressing()).toBeNull();
+    r.up(pen(300, 300));
+    r.up(touch(2, 100, 100));
+
+    r.down(touch(3, 100, 100));
+    r.hold(3);
+    expect(r.pressing()).toBeNull();
+    r.up(touch(3, 100, 100));
+
+    r.down(touch(4, 100, 100));
+    r.reset();
+    expect(r.pressing()).toBeNull();
   });
 });
 

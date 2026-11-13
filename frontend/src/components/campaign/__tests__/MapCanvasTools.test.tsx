@@ -1,6 +1,6 @@
 /**
  * What each map tool sends, and which tool a click goes to, driven through
- * MapCanvas: the DM's wall, light and fog tools, doors, the ruler and the AoE
+ * MapCanvas: the GM's wall, light and fog tools, doors, the ruler and the AoE
  * template, and the right button. These describe the current behaviour, so
  * moving the input handling into per-tool modules can be shown to change
  * nothing. A test marked "as it is" pins something known to be wrong; the fix
@@ -25,7 +25,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
     playerSpiritVisible: false as boolean,
   };
@@ -85,7 +85,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: h.state.playerSpiritVisible,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -248,7 +248,7 @@ beforeEach(() => {
   h.updateToken.mockReset().mockResolvedValue({});
   h.addToken.mockReset().mockResolvedValue({ token: token('tok-new', 'Aria', 2, 17) });
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: mapWith(), playerSpiritVisible: false });
+  h.set({ userRole: 'GM', currentMap: mapWith(), playerSpiritVisible: false });
 });
 
 describe('the wall draw tool', () => {
@@ -277,6 +277,24 @@ describe('the wall draw tool', () => {
     click(px(400, 400));
 
     expect(sentOf('wall:add')).toHaveLength(1);
+  });
+
+  // The third click of a quick three counted as one more second click, and
+  // ended a line already ended.
+  it('starts a new line at a quick third click on the corner a double-click ended on', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    click(px(100, 300));
+    click(px(200, 300));
+    click(px(200, 300));
+    click(px(200, 300));
+    click(px(400, 400));
+
+    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
+      expect.objectContaining({ x1: 100, y1: 300, x2: 200, y2: 300 }),
+      expect.objectContaining({ x1: 200, y1: 300, x2: 400, y2: 400 }),
+    ]);
   });
 
   // A pointer event's own click count is always 0; the page counts them.
@@ -393,6 +411,25 @@ describe('the polygon tool', () => {
 
     expect(lastWalls()).toEqual([
       WALL_A, WALL_B,
+      { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
+      { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
+      { x1: 700, y1: 700, x2: 500, y2: 500, type: 'wall' },
+    ]);
+  });
+
+  // A double-click on a shape of one or two corners closed it, and so threw
+  // it away, as Done, which waits for three, never does.
+  it('keeps a shape of under three corners through a double-click, adding no corner', () => {
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    click(px(500, 500));
+    click(px(700, 500));
+    click(px(700, 500));
+    click(px(700, 700));
+    click(px(700, 700));
+
+    expect(lastWalls().slice(2)).toEqual([
       { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
       { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
       { x1: 700, y1: 700, x2: 500, y2: 500, type: 'wall' },
@@ -896,7 +933,7 @@ describe('the fog box tools', () => {
 describe('doors with no tool up', () => {
   const door = seg('d1', 100, 100, 200, 100, 'door-closed');
 
-  it('open on a click for the DM', () => {
+  it('open on a click for the GM', () => {
     h.set({ currentMap: mapWith({ wallSegments: [door] }) });
     render(<MapCanvas />);
 
@@ -970,7 +1007,7 @@ describe('the ruler and the AoE template', () => {
     expect(rulerOn()).toBe(false);
   });
 
-  it("take the DM's click with the ruler up, so no token is picked up", () => {
+  it("take the GM's click with the ruler up, so no token is picked up", () => {
     render(<MapCanvas />);
     show(token('tok-goblin', 'Goblin', 0, 19));
     fireEvent.click(screen.getByTitle('Ruler — measure distance'));
@@ -1005,7 +1042,7 @@ describe('the ruler and the AoE template', () => {
 });
 
 describe('the right button', () => {
-  it('pans while a DM tool is up', () => {
+  it('pans while a GM tool is up', () => {
     render(<MapCanvas />);
     wallTool('Wall draw mode');
 
@@ -1100,7 +1137,7 @@ describe('switching tools', () => {
   });
 });
 
-describe("the DM's spirit token button", () => {
+describe("the GM's spirit token button", () => {
   it('says what a click will do', () => {
     render(<MapCanvas />);
 
@@ -1112,7 +1149,7 @@ describe("the DM's spirit token button", () => {
 
 describe('Preview Player View', () => {
   /** The preview's button, by the words it shows with the preview off or on. */
-  const previewButton = () => screen.queryByRole('button', { name: /^(Preview Player View|DM View)$/ });
+  const previewButton = () => screen.queryByRole('button', { name: /^(Preview Player View|GM View)$/ });
 
   // So a voice command for the words on the button finds it.
   it('is named by the words it shows, with the preview off and on', () => {
@@ -1121,7 +1158,7 @@ describe('Preview Player View', () => {
     show(token('tok-goblin', 'Goblin', 0, 19));
 
     fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
-    fireEvent.click(screen.getByRole('button', { name: 'DM View' }));
+    fireEvent.click(screen.getByRole('button', { name: 'GM View' }));
 
     expect(screen.getByRole('button', { name: 'Preview Player View' })).toBeInTheDocument();
   });
@@ -1131,24 +1168,24 @@ describe('Preview Player View', () => {
     render(<MapCanvas />);
     show(token('tok-goblin', 'Goblin', 0, 19));
     fireEvent.click(previewButton()!);
-    expect(previewButton()).toHaveTextContent('DM View');
+    expect(previewButton()).toHaveTextContent('GM View');
 
     fireEvent.click(screen.getByText('Fog of War'));
     fireEvent.click(screen.getByLabelText('Fog of war on this map'));
 
-    expect(previewButton()).toHaveTextContent('DM View');
+    expect(previewButton()).toHaveTextContent('GM View');
     fireEvent.click(previewButton()!);
     expect(previewButton()).toBeNull();
   });
 
-  it('still places a light, so the DM sees its effect as the player does', () => {
+  it('still places a light, so the GM sees its effect as the player does', () => {
     h.set({ currentMap: mapWith({ lightingEnabled: true }) });
     render(<MapCanvas />);
     show(token('tok-goblin', 'Goblin', 0, 19));
     fireEvent.click(screen.getByText('Lights'));
     fireEvent.click(screen.getByText('Place'));
     fireEvent.click(previewButton()!);
-    expect(previewButton()).toHaveTextContent('DM View');
+    expect(previewButton()).toHaveTextContent('GM View');
 
     click(px(400, 400));
 
@@ -1163,7 +1200,7 @@ describe('Preview Player View', () => {
     fireEvent.click(screen.getByText('Lights'));
     fireEvent.click(screen.getByText('Select'));
     fireEvent.click(previewButton()!);
-    expect(previewButton()).toHaveTextContent('DM View');
+    expect(previewButton()).toHaveTextContent('GM View');
 
     drag(px(255, 250), px(280, 280), px(300, 310));
 
@@ -1243,13 +1280,35 @@ describe("a player's right-click on a token", () => {
     expect(tokenMenu()).toBeNull();
   });
 
-  it('still opens the menu for the DM', () => {
+  it('still opens the menu for the GM', () => {
     render(<MapCanvas />);
     show(token('tok-goblin', 'Goblin', 0, 19));
 
     fireEvent.contextMenu(surface(), square(0, 19));
 
     expect(tokenMenu()).not.toBeNull();
+  });
+});
+
+// A spectator made a player again takes their token up at once. A spectator's
+// press on it, which takes nothing, drags the map, so the token is found
+// where the map now draws it.
+describe('a spectator made a player again', () => {
+  it('picks up their own token where the map draws it', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(token('tok-mine', 'Aldra', 5, 10, { type: TokenType.PLAYER, controlledBy: 'me' }));
+
+    act(() => h.set({ userRole: 'SPECTATOR' }));
+    drag(square(5, 10), px(275, 525), px(275, 625));
+    expect(sentOf('token.move.start')).toEqual([]);
+
+    act(() => h.set({ userRole: 'PLAYER' }));
+    // Where it stood on screen before the drag is now three squares above it.
+    click(square(5, 10));
+    expect(sentOf('token.move.start')).toEqual([]);
+    click(square(5, 7));
+    expect(sentOf('token.move.start')).toEqual([{ tokenId: 'tok-mine', mapId: 'map-a' }]);
   });
 });
 
@@ -1463,7 +1522,7 @@ describe('a click on a token beside a door', () => {
   });
 });
 
-describe("a player's door toggle during the DM's wall drag", () => {
+describe("a player's door toggle during the GM's wall drag", () => {
   const door = seg('d1', 500, 500, 600, 500, 'door-closed');
   const opened = { ...door, type: 'door-open' as const };
 
@@ -1481,7 +1540,7 @@ describe("a player's door toggle during the DM's wall drag", () => {
     expect(lastWalls()).toEqual([{ ...WALL_A, y1: 150, y2: 150 }, opened]);
   });
 
-  // The toggle arrived after the DM's last pointer move, and the DM let go
+  // The toggle arrived after the GM's last pointer move, and the GM let go
   // without moving again: the drop took the walls as drawn, where the toggle
   // had put the door back where it started.
   it('moves with the selection when it lands after the last move', () => {
@@ -1581,7 +1640,7 @@ describe('moving the pointer', () => {
 });
 
 // A refused Global Illumination change put the switch back and said nothing,
-// so the DM could not tell it had been refused, or why.
+// so the GM could not tell it had been refused, or why.
 describe('the Global Illumination switch', () => {
   it('says why a change was refused, and shows the switch as the map has it', async () => {
     h.set({ currentMap: mapWith({ lightingEnabled: true, globalIllumination: true }) });

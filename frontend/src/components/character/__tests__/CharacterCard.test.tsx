@@ -11,7 +11,7 @@ import CharacterCard from '../CharacterCard';
 import type { Character } from '@/types';
 
 const character = {
-  id: 'c1', userId: 'me', name: 'Aria', gameSystem: 'DND_5E', campaignId: 'camp', data: {},
+  id: 'c1', userId: 'me', name: 'Aria', gameSystem: 'FIFTH_EDITION', campaignId: 'camp', data: {},
   tokenImageUrl: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 } as unknown as Character;
 const noop = () => undefined;

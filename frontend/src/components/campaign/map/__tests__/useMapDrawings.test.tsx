@@ -122,7 +122,7 @@ describe('asking for a map’s drawings', () => {
     view.rerender({ mapId: 'map-a', joinedEpoch: 1, role: 'PLAYER', userId: 'me' });
     view.rerender({ mapId: 'map-a', joinedEpoch: 2, role: 'PLAYER', userId: 'me' });
     view.rerender({ mapId: 'map-b', joinedEpoch: 2, role: 'PLAYER', userId: 'me' });
-    view.rerender({ mapId: 'map-b', joinedEpoch: 2, role: 'DM', userId: 'me' });
+    view.rerender({ mapId: 'map-b', joinedEpoch: 2, role: 'GM', userId: 'me' });
 
     expect(fake.of('drawings:request')).toEqual([{ mapId: 'map-a' }, { mapId: 'map-a' }, { mapId: 'map-b' }, { mapId: 'map-b' }]);
   });
@@ -166,10 +166,10 @@ describe('what others draw and erase', () => {
 
   it('lets go of what a clear took: every drawing, or one player’s for everyone', () => {
     const fake = fakeSocket();
-    mount(fake, { role: 'DM', userId: 'dm' });
+    mount(fake, { role: 'GM', userId: 'dm' });
     fake.fire('drawings:state', {
       mapId: 'map-a',
-      drawings: [drawing({ id: 'mara1', authorId: 'mara' }), drawing({ id: 'mara-secret', authorId: 'mara', audience: 'DM' }), drawing({ id: 'tom1', authorId: 'tom' })],
+      drawings: [drawing({ id: 'mara1', authorId: 'mara' }), drawing({ id: 'mara-secret', authorId: 'mara', audience: 'GM' }), drawing({ id: 'tom1', authorId: 'tom' })],
     });
 
     fake.fire('drawings:cleared', { mapId: 'map-a', layer: 'MARKUP', authorId: 'mara' });
@@ -179,12 +179,12 @@ describe('what others draw and erase', () => {
     expect(ids()).toEqual([]);
   });
 
-  // A page whose member is no longer the DM keeps no drawing for the DM
+  // A page whose member is no longer the GM keeps no drawing for the GM
   // alone, whatever arrives after (the server sends the list again too).
-  it('drops every drawing for the DM alone as soon as its role is not the DM’s', () => {
+  it('drops every drawing for the GM alone as soon as its role is not the GM’s', () => {
     const fake = fakeSocket();
-    const view = mount(fake, { role: 'DM' });
-    fake.fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ id: 'secret', audience: 'DM' }), drawing({ id: 'open' })] });
+    const view = mount(fake, { role: 'GM' });
+    fake.fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ id: 'secret', audience: 'GM' }), drawing({ id: 'open' })] });
 
     view.rerender({ mapId: 'map-a', joinedEpoch: 1, role: 'PLAYER', userId: 'me' });
 
@@ -234,11 +234,11 @@ describe('this page’s own add', () => {
     ]);
   });
 
-  it('for the DM alone is shown as the DM’s, and a player’s as everyone’s', () => {
+  it('for the GM alone is shown as the GM’s, and a player’s as everyone’s', () => {
     const fake = fakeSocket();
     const view = mount(fake, { role: 'PLAYER' });
 
-    act(() => { view.result.current.add('map-a', { ...line, audience: 'DM' }); });
+    act(() => { view.result.current.add('map-a', { ...line, audience: 'GM' }); });
 
     expect(useGameStore.getState().drawings[0]).toMatchObject({ audience: 'ALL', authorId: 'me' });
   });
@@ -279,12 +279,12 @@ describe('this page’s own erase and clears', () => {
     expect(view.onRefused).toHaveBeenCalledWith('Too many clears');
   });
 
-  it('clears one player’s drawings for everyone for the DM, at once, and asks for the list again if refused', async () => {
+  it('clears one player’s drawings for everyone for the GM, at once, and asks for the list again if refused', async () => {
     const fake = fakeSocket();
-    const view = mount(fake, { role: 'DM', userId: 'dm' });
+    const view = mount(fake, { role: 'GM', userId: 'dm' });
     fake.fire('drawings:state', {
       mapId: 'map-a',
-      drawings: [drawing({ id: 'mara1', authorId: 'mara' }), drawing({ id: 'mara-seat', authorId: 'mara', audience: 'DM' }), drawing({ id: 'tom1', authorId: 'tom' })],
+      drawings: [drawing({ id: 'mara1', authorId: 'mara' }), drawing({ id: 'mara-seat', authorId: 'mara', audience: 'GM' }), drawing({ id: 'tom1', authorId: 'tom' })],
     });
 
     act(() => { view.result.current.clearMember('mara'); });
@@ -298,10 +298,10 @@ describe('this page’s own erase and clears', () => {
     expect(view.onRefused).toHaveBeenCalledWith('Too many clears');
   });
 
-  it('clears every drawing for the DM', () => {
+  it('clears every drawing for the GM', () => {
     const fake = fakeSocket();
-    const view = mount(fake, { role: 'DM', userId: 'dm' });
-    fake.fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ id: 'a' }), drawing({ id: 'b', audience: 'DM' })] });
+    const view = mount(fake, { role: 'GM', userId: 'dm' });
+    fake.fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ id: 'a' }), drawing({ id: 'b', audience: 'GM' })] });
 
     act(() => { view.result.current.clearAll(); });
 

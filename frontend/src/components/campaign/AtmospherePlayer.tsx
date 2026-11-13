@@ -79,14 +79,14 @@ export default function AtmospherePlayer() {
   const fadeSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false });
 
   // What the 'ended' listener needs, read at the moment the track finishes.
-  const endStateRef = useRef<{ isDM: boolean; vibeTrackId: string | null; volume: number }>({
-    isDM: false,
+  const endStateRef = useRef<{ isGM: boolean; vibeTrackId: string | null; volume: number }>({
+    isGM: false,
     vibeTrackId: null,
     volume: 0.5,
   });
   useEffect(() => {
     endStateRef.current = {
-      isDM: userRole === 'DM',
+      isGM: userRole === 'GM',
       vibeTrackId: currentVibeTrack(campaign?.vibeSettings, currentVibe),
       volume: activeAtmosphereAudio?.volume ?? 0.5,
     };
@@ -109,18 +109,18 @@ export default function AtmospherePlayer() {
   // A finished one-shot falls back to the vibe's track
   // ============================================
   //
-  // Only a non-looping track can end. The DM's client answers for the table:
+  // Only a non-looping track can end. The GM's client answers for the table:
   // it re-asserts the current vibe's track, or clears the finished one from
   // the stored state so a late joiner does not start it from the top. If the
-  // DM's browser is closed when the track ends, the table stays quiet until
+  // GM's browser is closed when the track ends, the table stays quiet until
   // they are back, which is the price of the server not hearing audio.
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !socket) return;
     const onEnded = () => {
-      const { isDM, vibeTrackId, volume } = endStateRef.current;
-      const target = trackEndTarget(isDM, vibeTrackId);
+      const { isGM, vibeTrackId, volume } = endStateRef.current;
+      const target = trackEndTarget(isGM, vibeTrackId);
       if (target) {
         socket.emitAtmosphereAudioSet({ assetId: target.assetId, volume, loop: true });
       }

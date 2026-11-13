@@ -1,7 +1,7 @@
 // ============================================
-// The banner over a map the DM is preparing
+// The banner over a map the GM is preparing
 //
-// While the DM has a map open to prepare on their own page (CampaignContext's
+// While the GM has a map open to prepare on their own page (CampaignContext's
 // viewedMap), this sits over the map and says which map is which: "Preparing
 // Crypt. The table is on Village." Back to the table shows the table's map
 // again; Bring everyone here moves the table to the map being prepared, as
@@ -35,11 +35,11 @@ import { dialogOpened, nextOpening } from '@/components/campaign/compact/sheetHi
 import { apiErrorMessage } from '@/utils/errors';
 import TokenTransferConfirmation from './TokenTransferConfirmation';
 
-/** Why preparing ended, as the DM is told. */
+/** Why preparing ended, as the GM is told. */
 export function preparingEndedMessage(ended: PreparingEnded): string {
   return ended.reason === 'deleted'
     ? `${ended.mapName} was deleted, so you are back on the table's map.`
-    : "You are no longer the DM, so you are back on the table's map.";
+    : "You are no longer the GM, so you are back on the table's map.";
 }
 
 /**
@@ -89,7 +89,7 @@ export default function PreparingBanner() {
     return () => entry.release();
   }, [compact, isPreparing]);
 
-  // Preparing ended from elsewhere: the map deleted, or the DM seat gone.
+  // Preparing ended from elsewhere: the map deleted, or the GM seat gone.
   useEffect(() => {
     if (!preparingEnded) return;
     showToast(preparingEndedMessage(preparingEnded), 'info');

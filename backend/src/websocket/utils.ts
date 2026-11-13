@@ -5,9 +5,10 @@ import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { jsonOrNull } from '../utils/prisma-json';
 import { canReadMap } from '../services/permissions';
-import { characterForReader } from '../utils/keeperNotes';
+import { characterForReader } from '../utils/gmNotes';
 import type { AuthenticatedFields } from './auth';
 import { emitNewestState } from './outgoingQueue';
+import { NOT_A_MEMBER_MESSAGE } from '../middleware/rbac';
 
 /** The events that carry a map's whole list of walls, lights or drawings. */
 const WHOLE_LIST_EVENTS: ReadonlySet<string> = new Set(['walls:replaced', 'lights:replaced', 'drawings:state']);
@@ -66,8 +67,8 @@ export function announceRosterChange(userId: string, campaignIds: string[], acti
 
 /**
  * `character.updated` to a campaign's room with the sheet in it, as each
- * member may read it: the Keeper's Notes go to the campaign's DM alone
- * (utils/keeperNotes.ts). `fields` are the rest of the payload, the same for
+ * member may read it: the GM's Notes go to the campaign's GM alone
+ * (utils/gmNotes.ts). `fields` are the rest of the payload, the same for
  * everyone.
  */
 export async function emitCharacterUpdated<C extends { gameSystem: GameSystem | null; data: Prisma.JsonValue }>(
@@ -77,8 +78,8 @@ export async function emitCharacterUpdated<C extends { gameSystem: GameSystem | 
 ): Promise<void> {
   const io = getSocketInstance();
   for (const s of await campaignSockets(io, campaignId)) {
-    const keeper = (s as unknown as AuthenticatedFields).role === 'DM';
-    s.emit('character.updated', { ...fields, character: characterForReader(character, keeper) });
+    const isGm = (s as unknown as AuthenticatedFields).role === 'GM';
+    s.emit('character.updated', { ...fields, character: characterForReader(character, isGm) });
   }
 }
 
@@ -141,8 +142,8 @@ export function stillInCampaign<T>(sockets: readonly T[], campaignId: string): T
 /**
  * Send one of a map's live edits (its walls, lights, fog, settings, pings,
  * the explored-memory reset) to everyone who may read that map
- * (canReadMap): the whole campaign while it is the map on screen, the DM's
- * sockets for any other. A prepared map's layout is the DM's until they
+ * (canReadMap): the whole campaign while it is the map on screen, the GM's
+ * sockets for any other. A prepared map's layout is the GM's until they
  * switch to it, on the live connection as on its fetch.
  * `exceptSocketId` leaves out the sender where the event is not echoed.
  * Best-effort: a failure is logged and goes no further.
@@ -177,7 +178,7 @@ export async function emitToMapReaders(
 /**
  * emitToMapReaders, with the event and its data decided per reader from
  * their role: what a player may be sent of a map's walls and lights differs
- * from what the DM is. `sendFor` returns null for a reader who is told
+ * from what the GM is. `sendFor` returns null for a reader who is told
  * nothing.
  */
 export async function emitToMapReadersAs(
@@ -250,14 +251,20 @@ export async function broadcastPresence(campaignId: string): Promise<void> {
 }
 
 /** Why a connection lost its campaign, as `campaign.access.revoked` says. */
-export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out';
+export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out' | 'not-member';
 
-/** Why a member's connections lost the campaign while the campaign stays: the DM removed them, or they left. */
+/** Why a member's connections lost the campaign while the campaign stays: the GM removed them, or they left. */
 export type MemberLeftReason = Extract<AccessRevokedReason, 'removed' | 'left'>;
+
+/** Why someone is not a member of a campaign that exists: removed, left, or no record of which (memberDepartures.ts). */
+export type NotAMemberReason = Extract<AccessRevokedReason, MemberLeftReason | 'not-member'>;
 
 /** What `campaign.access.revoked` carries. */
 export interface AccessRevoked {
-  /** The campaign the connection was in, or null when it had not joined one. */
+  /**
+   * The campaign the notice is about: the one the connection was in, or the
+   * one it asked to join; null when it had not joined one.
+   */
   campaignId: string | null;
   reason: AccessRevokedReason;
   /** A sentence for the person, shown as it is. */
@@ -267,15 +274,40 @@ export interface AccessRevoked {
 export const REMOVED_MESSAGE = 'You were removed from this campaign.';
 export const LEFT_MESSAGE = 'You left this campaign.';
 export const CAMPAIGN_DELETED_MESSAGE = 'This campaign was deleted.';
+/** A join refused because no campaign has that id: deleted, or never there. */
+export const NO_SUCH_CAMPAIGN_MESSAGE = 'This campaign does not exist. It may have been deleted.';
+export const NOT_MEMBER_MESSAGE = `${NOT_A_MEMBER_MESSAGE}.`;
+
+const NOT_A_MEMBER_MESSAGES: Record<NotAMemberReason, string> = {
+  removed: REMOVED_MESSAGE,
+  left: LEFT_MESSAGE,
+  'not-member': NOT_MEMBER_MESSAGE,
+};
 
 /**
  * campaign.access.revoked — the connection may no longer use its campaign,
- * and why: removed from it, left it, the campaign deleted, or the sign-in ended. A
+ * and why: removed from it, left it, the campaign deleted, the sign-in ended,
+ * or a join refused because the campaign is gone or the user is not in it. A
  * typed event, so the page can tell the person and stop, where a plain
  * `error` was only logged.
  */
 function tellAccessRevoked(socket: TellableSocket, revoked: AccessRevoked): void {
   socket.emit('campaign.access.revoked', revoked);
+}
+
+/**
+ * Tell a socket its join was refused because the campaign is gone
+ * (`campaign-deleted`) or the user is not a member of it (`removed` or
+ * `left` while that is recent, otherwise `not-member`). Says nothing about
+ * the campaign that the person did not send: someone who was never a member
+ * learns no more than that.
+ */
+export function tellJoinRefused(socket: TellableSocket, campaignId: string, reason: 'campaign-deleted' | NotAMemberReason): void {
+  tellAccessRevoked(socket, {
+    campaignId,
+    reason,
+    message: reason === 'campaign-deleted' ? NO_SUCH_CAMPAIGN_MESSAGE : NOT_A_MEMBER_MESSAGES[reason],
+  });
 }
 
 /** A server-side socket, a live one or one `fetchSockets()` handed back. */
@@ -403,7 +435,7 @@ export async function sendSystemMessage(
  * right place to read it from — a handler must never take a role off the wire —
  * but it means the value is a snapshot. When a role changes underneath a
  * connected socket the snapshot is simply wrong, and wrong in the dangerous
- * direction: a demoted DM keeps DM powers over that connection until they
+ * direction: a demoted GM keeps GM powers over that connection until they
  * happen to reload.
  *
  * REST has no equivalent problem because its middleware reads the membership per
@@ -455,14 +487,15 @@ export async function applyRoleToLiveSockets(
  * playing elsewhere in another tab is left alone. A token they are holding
  * goes back where it stands on everyone else's screen, since their own
  * put-down would now be refused. `reason` is what each connection is told:
- * the DM removed them, or they left.
+ * the GM removed them, they left, or (a join that found the membership gone
+ * with no record of why) only that they are not a member.
  *
  * @returns number of connections closed off
  */
 export async function clearCampaignFromLiveSockets(
   userId: string,
   campaignId: string,
-  reason: MemberLeftReason = 'removed'
+  reason: NotAMemberReason = 'removed'
 ): Promise<number> {
   const io = getSocketInstance();
   const sockets = await io.in(userId).fetchSockets();
@@ -477,7 +510,7 @@ export async function clearCampaignFromLiveSockets(
         authed.campaignId = undefined;
         authed.role = undefined;
       }
-      tellAccessRevoked(socket, { campaignId, reason, message: reason === 'left' ? LEFT_MESSAGE : REMOVED_MESSAGE });
+      tellAccessRevoked(socket, { campaignId, reason, message: NOT_A_MEMBER_MESSAGES[reason] });
       cleared += 1;
     }
   }

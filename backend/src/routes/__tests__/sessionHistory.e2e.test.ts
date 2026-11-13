@@ -1,7 +1,7 @@
 /**
  * Reading past sessions and their notes — End-to-End Tests
  *
- * The DM has always been able to write notes when ending a session, and the
+ * The GM has always been able to write notes when ending a session, and the
  * end-session dialog said so — "notes are saved with this session's record" —
  * but nothing ever read them back. They were written, stored, and invisible.
  *
@@ -42,12 +42,12 @@ interface SessionRow {
 }
 
 describe('session history', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let strangerId: string;
   let campaignId: string;
 
-  let dm: ReturnType<typeof request.agent>;
+  let gm: ReturnType<typeof request.agent>;
   let player: ReturnType<typeof request.agent>;
   let stranger: ReturnType<typeof request.agent>;
 
@@ -60,18 +60,18 @@ describe('session history', () => {
 
   beforeAll(async () => {
     const stamp = Date.now();
-    const dmEmail = `sh_dm_${stamp}@test.invalid`;
+    const gmEmail = `sh_dm_${stamp}@test.invalid`;
     const playerEmail = `sh_pl_${stamp}@test.invalid`;
     const strangerEmail = `sh_st_${stamp}@test.invalid`;
 
-    dmId = (await createTestUser({ email: dmEmail, isApproved: true })).id;
+    gmId = (await createTestUser({ email: gmEmail, isApproved: true })).id;
     playerId = (await createTestUser({ email: playerEmail, isApproved: true })).id;
     strangerId = (await createTestUser({ email: strangerEmail, isApproved: true })).id;
 
-    campaignId = (await createTestCampaign(dmId, { name: `Session History ${stamp}` })).id;
+    campaignId = (await createTestCampaign(gmId, { name: `Session History ${stamp}` })).id;
     await prisma.campaignMembership.createMany({
       data: [
-        { campaignId, userId: dmId, role: 'DM', characterIds: [] },
+        { campaignId, userId: gmId, role: 'GM', characterIds: [] },
         { campaignId, userId: playerId, role: 'PLAYER', characterIds: [] },
       ],
     });
@@ -106,7 +106,7 @@ describe('session history', () => {
       ],
     });
 
-    dm = await login(dmEmail);
+    gm = await login(gmEmail);
     player = await login(playerEmail);
     stranger = await login(strangerEmail);
   });
@@ -114,15 +114,15 @@ describe('session history', () => {
   afterAll(async () => {
     await prisma.session.deleteMany({ where: { campaignId } });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId, strangerId]);
+    await cleanupUsers([gmId, playerId, strangerId]);
     await prisma.$disconnect();
   });
 
   const list = async (agent: ReturnType<typeof request.agent>) =>
     agent.get(`/api/campaigns/${campaignId}/sessions`);
 
-  it('gives the DM every session', async () => {
-    const res = await list(dm);
+  it('gives the GM every session', async () => {
+    const res = await list(gm);
     expect(res.status).toBe(200);
     expect(res.body.sessions).toHaveLength(3);
   });
@@ -138,12 +138,12 @@ describe('session history', () => {
   });
 
   it('lists the most recent session first', async () => {
-    const res = await list(dm);
+    const res = await list(gm);
     expect((res.body.sessions as SessionRow[]).map((s) => s.sessionNumber)).toEqual([3, 2, 1]);
   });
 
   it('returns a session that was ended without notes', async () => {
-    const res = await list(dm);
+    const res = await list(gm);
     const third = (res.body.sessions as SessionRow[]).find((s) => s.sessionNumber === 3);
     expect(third).toBeDefined();
     expect(third?.notes).toBeNull();
@@ -151,7 +151,7 @@ describe('session history', () => {
 
   // Large, internal, and needed only for resuming — not for reading history.
   it('does not ship the saved game state', async () => {
-    const res = await list(dm);
+    const res = await list(gm);
     for (const session of res.body.sessions as SessionRow[]) {
       expect(session).not.toHaveProperty('savedState');
     }
@@ -170,7 +170,7 @@ describe('session history', () => {
    *
    * Sessions were being ended with notes long before anything displayed them,
    * so switching the history panel on published every recap ever written at
-   * once. A DM who had used that box as a private scratchpad needs a way to
+   * once. A GM who had used that box as a private scratchpad needs a way to
    * take it back, which is what this is for — not a general editing feature.
    */
   describe('editing a past session', () => {
@@ -188,16 +188,16 @@ describe('session history', () => {
           sessionNumber: 4,
           startedAt: new Date('2026-01-22T18:00:00Z'),
           endedAt: new Date('2026-01-22T21:00:00Z'),
-          notes: 'Something the DM would rather nobody had read.',
+          notes: 'Something the GM would rather nobody had read.',
         },
       });
       targetId = session.id;
 
-      // A second campaign, run by the same DM, to prove the route is scoped by
+      // A second campaign, run by the same GM, to prove the route is scoped by
       // campaign and not only by session id.
-      otherCampaignId = (await createTestCampaign(dmId, { name: `Elsewhere ${Date.now()}` })).id;
+      otherCampaignId = (await createTestCampaign(gmId, { name: `Elsewhere ${Date.now()}` })).id;
       await prisma.campaignMembership.create({
-        data: { campaignId: otherCampaignId, userId: dmId, role: 'DM', characterIds: [] },
+        data: { campaignId: otherCampaignId, userId: gmId, role: 'GM', characterIds: [] },
       });
       otherSessionId = (
         await prisma.session.create({
@@ -217,8 +217,8 @@ describe('session history', () => {
       await cleanupCampaigns([otherCampaignId]);
     });
 
-    it('lets the DM rewrite the notes', async () => {
-      const res = await editNotes(dm, targetId, 'A tidier account of the evening.');
+    it('lets the GM rewrite the notes', async () => {
+      const res = await editNotes(gm, targetId, 'A tidier account of the evening.');
       expect(res.status).toBe(200);
       expect(res.body.session.notes).toBe('A tidier account of the evening.');
 
@@ -227,14 +227,14 @@ describe('session history', () => {
     });
 
     it('clears the notes when sent an empty string', async () => {
-      expect((await editNotes(dm, targetId, '')).status).toBe(200);
+      expect((await editNotes(gm, targetId, '')).status).toBe(200);
       const stored = await prisma.session.findUnique({ where: { id: targetId } });
       expect(stored?.notes).toBeNull();
     });
 
     it('treats whitespace as clearing rather than storing blanks', async () => {
-      await editNotes(dm, targetId, 'something');
-      expect((await editNotes(dm, targetId, '   \n  ')).status).toBe(200);
+      await editNotes(gm, targetId, 'something');
+      expect((await editNotes(gm, targetId, '   \n  ')).status).toBe(200);
       const stored = await prisma.session.findUnique({ where: { id: targetId } });
       expect(stored?.notes).toBeNull();
     });
@@ -256,27 +256,27 @@ describe('session history', () => {
     });
 
     it('refuses notes longer than the limit', async () => {
-      const res = await editNotes(dm, targetId, 'x'.repeat(2001));
+      const res = await editNotes(gm, targetId, 'x'.repeat(2001));
       expect(res.status).toBe(400);
       expect(res.body.message).toMatch(/2000/);
     });
 
     it('accepts notes exactly at the limit', async () => {
-      expect((await editNotes(dm, targetId, 'x'.repeat(2000))).status).toBe(200);
+      expect((await editNotes(gm, targetId, 'x'.repeat(2000))).status).toBe(200);
     });
 
     it('refuses a body with no notes field at all', async () => {
-      const res = await dm.put(`/api/campaigns/${campaignId}/sessions/${targetId}/notes`).send({});
+      const res = await gm.put(`/api/campaigns/${campaignId}/sessions/${targetId}/notes`).send({});
       expect(res.status).toBe(400);
     });
 
     /**
-     * The DM of this campaign is also the DM of the other one, so this is not
+     * The GM of this campaign is also the GM of the other one, so this is not
      * about authorisation — it is about the route refusing to act on a session
      * that is not this campaign's, which a bare `update` by id would have done.
      */
     it('will not edit a session belonging to another campaign', async () => {
-      const res = await editNotes(dm, otherSessionId, 'Reached across campaigns.');
+      const res = await editNotes(gm, otherSessionId, 'Reached across campaigns.');
       expect(res.status).toBe(404);
 
       const stored = await prisma.session.findUnique({ where: { id: otherSessionId } });
@@ -284,7 +284,7 @@ describe('session history', () => {
     });
 
     it('answers 404 for a session that does not exist', async () => {
-      const res = await editNotes(dm, '00000000-0000-0000-0000-000000000000', 'nothing');
+      const res = await editNotes(gm, '00000000-0000-0000-0000-000000000000', 'nothing');
       expect(res.status).toBe(404);
     });
   });

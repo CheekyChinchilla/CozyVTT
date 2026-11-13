@@ -32,7 +32,7 @@ import {
 const app = createTestApp();
 
 describe('creating a character with a campaign preselected', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let outsiderId: string;
   let campaignId: string;
@@ -47,19 +47,19 @@ describe('creating a character with a campaign preselected', () => {
 
   beforeAll(async () => {
     const stamp = Date.now();
-    const dm = await createTestUser({ email: `cca_dm_${stamp}@test.invalid`, isApproved: true });
+    const gm = await createTestUser({ email: `cca_dm_${stamp}@test.invalid`, isApproved: true });
     const player = await createTestUser({ email: `cca_pl_${stamp}@test.invalid`, isApproved: true });
     const outsider = await createTestUser({ email: `cca_out_${stamp}@test.invalid`, isApproved: true });
-    dmId = dm.id;
+    gmId = gm.id;
     playerId = player.id;
     outsiderId = outsider.id;
 
-    const campaign = await createTestCampaign(dmId, { gameSystem: null });
+    const campaign = await createTestCampaign(gmId, { gameSystem: null });
     campaignId = campaign.id;
 
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+        { userId: gmId, campaignId, role: 'GM', characterIds: [] },
         { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       ],
     });
@@ -70,7 +70,7 @@ describe('creating a character with a campaign preselected', () => {
 
   afterAll(async () => {
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId, outsiderId]);
+    await cleanupUsers([gmId, playerId, outsiderId]);
     await prisma.$disconnect();
   });
 

@@ -77,7 +77,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
       }
 
       // SECURITY: Save ALL rolls to database (including secret rolls for audit)
-      // Secret rolls are marked but still saved for DM oversight and dispute resolution
+      // Secret rolls are marked but still saved for GM oversight and dispute resolution
       const diceRoll = await prisma.diceRoll.create({
         data: {
           campaignId: socket.campaignId,
@@ -128,16 +128,16 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         // Secret roll - send to roller (always)
         socket.emit('dice.rolled', rollData);
 
-        // SECURITY: Also send to DM(s) for audit/oversight
-        // Follows Spirit Layer pattern: DMs see everything, players see filtered
+        // SECURITY: Also send to GM(s) for audit/oversight
+        // Follows Spirit Layer pattern: GMs see everything, players see filtered
         for (const s of await campaignSockets(io, socket.campaignId)) {
           const authedSocket = s as unknown as AuthenticatedSocket;
-          // Send to DMs only (excluding the original roller if they're DM)
-          if (authedSocket.role === 'DM' && authedSocket.userId !== socket.userId) {
+          // Send to GMs only (excluding the original roller if they're GM)
+          if (authedSocket.role === 'GM' && authedSocket.userId !== socket.userId) {
             s.emit('dice.rolled.secret', {
               ...rollData,
               originalRoller: socket.userId,
-              isAuditView: true, // Flag so DM UI can style differently
+              isAuditView: true, // Flag so GM UI can style differently
             });
           }
         }
@@ -155,7 +155,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
   });
 
   /**
-   * DICE.CLEAR_HISTORY - DM clears dice roll history (DM-only).
+   * DICE.CLEAR_HISTORY - GM clears dice roll history (GM-only).
    */
   socket.on('dice.clearHistory', async (ackArg?: unknown) => {
     const ack = ackFrom(ackArg);
@@ -168,12 +168,12 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
       if (!withinCeiling(socket, 'dice.clearHistory', ack)) return;
 
       // Who is running the game, not who owns the campaign. These are separate
-      // facts — `Campaign.ownerId` never moves, while the DM seat can — and they
+      // facts — `Campaign.ownerId` never moves, while the GM seat can — and they
       // only coincide in a campaign whose creator still runs it. Reading
-      // ownership here refused the actual DM after a handover and let the former
-      // DM, now a player, keep clearing the panel for everyone.
-      if (socket.role !== 'DM') {
-        refuse('Only the DM can clear roll history');
+      // ownership here refused the actual GM after a handover and let the former
+      // GM, now a player, keep clearing the panel for everyone.
+      if (socket.role !== 'GM') {
+        refuse('Only the GM can clear roll history');
         return;
       }
 
@@ -189,7 +189,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         data: { rollHistoryClearedAt: new Date() },
       });
 
-      // Broadcast to all campaign members (including DM)
+      // Broadcast to all campaign members (including GM)
       io.to(socket.campaignId).emit('dice.historyCleared');
       ack?.({ ok: true });
 

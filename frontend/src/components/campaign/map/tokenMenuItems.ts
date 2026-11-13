@@ -10,7 +10,7 @@
 
 import { CampaignRole, TokenLayer, TokenType, type Token } from '@/types';
 import type { MenuAction, MenuItem } from '@/components/ui/menu';
-import { dmTokenControls } from '@/utils/dmTokenMenu';
+import { gmTokenControls } from '@/utils/gmTokenMenu';
 import { ROTATION_STEP } from '@/utils/tokenRotation';
 
 /** What the menu's items do, each given the token the menu is open on. */
@@ -22,7 +22,7 @@ export interface TokenMenuActions {
   grantTemporaryHp: (token: Token) => void;
   /** Turns the token by `step` degrees, clockwise when positive. */
   rotate: (token: Token, step: number) => void;
-  /** The DM's rolls for a creature with no character. */
+  /** The GM's rolls for a creature with no character. */
   rollCreature: (token: Token) => void;
   edit: (token: Token) => void;
   addToInitiative: (token: Token, mapId: string) => void;
@@ -50,11 +50,11 @@ export interface TokenMenuView {
   mayRoll: boolean;
   /**
    * The viewer may grant temporary hit points here (utils/temporaryHp): to
-   * the token's character, or the DM to a creature's token.
+   * the token's character, or the GM to a creature's token.
    */
   mayGrantTemporaryHp: boolean;
   /**
-   * The viewer may turn the token, by the move rule: the DM any token at any
+   * The viewer may turn the token, by the move rule: the GM any token at any
    * time, a player a token they control while the session is live.
    */
   mayRotate: boolean;
@@ -105,18 +105,18 @@ export function tokenMenuItems(token: Token, ctx: TokenMenuContext): MenuItem[] 
     );
   }
 
-  if (ctx.role !== CampaignRole.DM) return items;
+  if (ctx.role !== CampaignRole.GM) return items;
 
   const type = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-  const controls = dmTokenControls(type);
+  const controls = gmTokenControls(type);
 
   // A creature's own rolls. The `characterId` check is what keeps a token
-  // typed NPC and bound to a character (a companion, or a PC the DM re-typed)
+  // typed NPC and bound to a character (a companion, or a PC the GM re-typed)
   // from offering Roll... twice: it rolls from the sheet, above.
   if (type === TokenType.NPC && !token.characterId) {
     items.push(command('roll-creature', 'Roll...', () => act.rollCreature(token)));
   }
-  // A creature's own hit points, which only the DM changes.
+  // A creature's own hit points, which only the GM changes.
   if (!token.characterId && ctx.mayGrantTemporaryHp) {
     items.push(command('temporary-hp', 'Temporary HP...', () => act.grantTemporaryHp(token)));
   }

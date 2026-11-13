@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
 import { AuthenticatedRequest, NOT_A_MEMBER_MESSAGE } from '../middleware/rbac';
-import { campaignMember, campaignDM } from '../middleware/compose';
+import { campaignMember, campaignGM } from '../middleware/compose';
 import { downloadOnly } from '../middleware/downloadOnly';
 import { refuseNulCharacters } from '../middleware/nulCharacter';
 import { oneCampaignArchiveAtATime, whileHoldingArchiveSlot } from '../middleware/campaignArchiveLimits';
@@ -22,7 +22,7 @@ import { canReadAssetById, canReferenceAsset, isMapPicture, isTokenPicture, canC
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE, MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES, TOO_MANY_WALLS_MESSAGE, TOO_MANY_LIGHTS_MESSAGE } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES, TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE } from '../validators/tokens';
 import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
-import type { WallSegment, FogState, LightSource } from '../types/walls';
+import type { WallSegment, FogState, LightSource, SkippedWall, WallsAdded } from '../types/walls';
 import { parseUVTT } from '../services/uvttParser';
 import { buildUVTT } from '../services/uvttExporter';
 import { fileTypeFromBuffer } from 'file-type';
@@ -180,7 +180,7 @@ function usable<T>(schema: { safeParse: (value: unknown) => { success: true; dat
 
 /**
  * Tell those who may read a map of a change to it (emitToMapReaders): the
- * whole campaign for the map on screen, the DM for a prepared one. The write
+ * whole campaign for the map on screen, the GM for a prepared one. The write
  * has already happened, so a failure to tell anyone is logged and the
  * request still succeeds.
  */
@@ -194,7 +194,7 @@ async function tellMapReaders(campaignId: string, mapId: string, event: string, 
 
 /**
  * tellMapReaders, with what each reader is told decided from their role
- * (emitToMapReadersAs): a locked door and a light that is off are the DM's.
+ * (emitToMapReadersAs): a locked door and a light that is off are the GM's.
  */
 async function tellMapReadersAs(
   campaignId: string,
@@ -297,9 +297,9 @@ async function resendInitiativeFor(campaignId: string, tokenId: string): Promise
 /**
  * POST /api/campaigns/:campaignId/maps
  * Create a new map for the campaign
- * Requires: DM role
+ * Requires: GM role
  */
-router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const { name, imageUrl, width, height, gridSize, spiritLayerUrl, feetPerSquare, diagonalRule, drawnBackground } = req.body;
@@ -394,7 +394,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
         spiritLayerUrl: normalizedSpiritLayerUrl,
         tokens: [], // Initialize empty tokens array
         annotations: [], // Initialize empty annotations array
-        // New maps start with manual fog off and lights that matter; the DM
+        // New maps start with manual fog off and lights that matter; the GM
         // turns either on when a map needs it. The columns default to on so
         // maps from before the flags existed keep the behaviour they had.
         fogEnabled: false,
@@ -423,19 +423,19 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
     const { campaignId } = req.params;
 
     // A player is sent the map the campaign is showing and nothing else; the
-    // rest are the DM's until they switch to them (canReadMap).
+    // rest are the GM's until they switch to them (canReadMap).
     const role = req.campaignMembership!.role;
-    const currentMapId = role === 'DM'
+    const currentMapId = role === 'GM'
       ? null
       : (await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }))?.currentMapId ?? '';
 
     const maps = await prisma.map.findMany({
-      where: role === 'DM' ? { campaignId } : { campaignId, id: currentMapId ?? '' },
+      where: role === 'GM' ? { campaignId } : { campaignId, id: currentMapId ?? '' },
       select: {
         ...MAP_SELECT_SENT_TO_EVERYONE,
-        // The DM's alone, for Edit Map; a player is sent it with the map,
+        // The GM's alone, for Edit Map; a player is sent it with the map,
         // when the spirit layer is theirs to see (filterMapData).
-        spiritLayerUrl: role === 'DM',
+        spiritLayerUrl: role === 'GM',
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -456,11 +456,11 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
  *
  * Creates a new map from the embedded image and wall data.
  * The UVTT format is exported by Dungeondraft, DunGen, Dungeon Alchemist, etc.
- * Requires: DM role
+ * Requires: GM role
  */
 router.post(
   '/import-uvtt',
-  campaignDM,
+  campaignGM,
   // Writes a file to disk exactly as an upload does, so it shares the ceiling.
   uploadLimiter,
   oneUvttImportAtATime,
@@ -564,7 +564,7 @@ async function importUvttFile(req: AuthenticatedRequest, res: Response, signal: 
             : `This file does not say how many squares its map is (resolution.map_size). ${limit}`,
         });
       }
-      // Geometry outside the picture is kept, once the DM agrees below, but
+      // Geometry outside the picture is kept, once the GM agrees below, but
       // not so far out that the map editor would refuse it. Refused before
       // asking, since no answer would make it importable.
       const extent = { width: parsed.mapWidth, height: parsed.mapHeight, gridSize: gridSizePx };
@@ -577,12 +577,12 @@ async function importUvttFile(req: AuthenticatedRequest, res: Response, signal: 
         });
       }
 
-      // ── Anything for the DM to decide before this becomes a map ──────────
+      // ── Anything for the GM to decide before this becomes a map ──────────
       // Two things can need an answer. Some exporters crop the picture to part
       // of the map and write out the geometry for all of it, which imports as
       // bare areas with walls that cannot even block sight, since sight stops
       // at the map's edges. And a file may carry walls for its furniture, which
-      // block sight like any other but are the DM's call.
+      // block sight like any other but are the GM's call.
       //
       // Asked before anything is written, so declining leaves nothing behind.
       const { walls, doors, lights } = parsed.outOfBounds;
@@ -720,7 +720,7 @@ async function importUvttFile(req: AuthenticatedRequest, res: Response, signal: 
             wallSegments: toJson(parsed.wallSegments),
             lights: toJson(parsed.lightSources),
             // Only when the file brings lights of its own. Walls alone used to
-            // turn this on, which handed the DM a map that was black for every
+            // turn this on, which handed the GM a map that was black for every
             // player until they found the setting: walls block sight, and with
             // nothing lighting the room there is nothing to see.
             lightingEnabled: parsed.lightSources.length > 0,
@@ -769,11 +769,11 @@ async function importUvttFile(req: AuthenticatedRequest, res: Response, signal: 
  * GET /api/campaigns/:campaignId/maps/:id/export-uvtt
  * Export a map as a Universal VTT (.uvtt) file download.
  * Includes the map image, wall segments, portals, and light sources.
- * Requires: DM role
+ * Requires: GM role
  */
 router.get(
   '/:id/export-uvtt',
-  campaignDM,
+  campaignGM,
   downloadOnly,
   // The picture is read whole and encoded in memory, so one at a time for
   // each user, as campaign archives are.
@@ -871,9 +871,9 @@ router.get(
  * Requires: Campaign membership
  *
  * Spirit Layer tokens filtered server-side
- * - DM always sees all tokens on both layers
+ * - GM always sees all tokens on both layers
  * - Players see spirit tokens only when spiritLayerEnabled is true
- * - Hidden tokens (visible: false) only visible to DM
+ * - Hidden tokens (visible: false) only visible to GM
  * - Spirit layer URL hidden from non-privileged users
  */
 router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
@@ -920,8 +920,8 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
     }
 
     // A player may fetch only the map the campaign is showing; a prepared map
-    // is the DM's until they switch to it, and answers as if it were not here.
-    if (membership.role !== 'DM') {
+    // is the GM's until they switch to it, and answers as if it were not here.
+    if (membership.role !== 'GM') {
       const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
       if (!canReadMap(membership.role, map.id, campaign?.currentMapId)) {
         return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
@@ -987,9 +987,9 @@ const MAP_EDIT_LOCKED_READ = {
 /**
  * PUT /api/campaigns/:campaignId/maps/:id
  * Update a map
- * Requires: DM role
+ * Requires: GM role
  */
-router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
     const { name, width, height, gridSize, imageUrl, spiritLayerUrl, feetPerSquare, diagonalRule, lightingEnabled, fogEnabled, globalIllumination, explorationEnabled } = req.body;
@@ -1080,7 +1080,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
           message: 'Invalid map imageUrl',
         });
       }
-      // A picture the DM may read, as on create (canReferenceAsset)
+      // A picture the GM may read, as on create (canReferenceAsset)
       if (!(await canReferenceAsset(normalizedImageUrl, req.session.userId!, existingMap.imageUrl, campaignId))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
       }
@@ -1189,7 +1189,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     // Open pages hold the walls and lights they loaded, and would go on
     // drawing them where they were, and send them back with their next bulk
     // edit. They are told as a bulk replace is, with no operation id, so the
-    // DM's own page takes them too.
+    // GM's own page takes them too.
     if (moved) {
       await tellMapReadersAs(campaignId, id, 'walls:replaced', (role) => wallsReplacedSentTo(role, id, moved.wallsBefore, moved.walls));
       await tellMapReadersAs(campaignId, id, 'lights:replaced', (role) => lightsReplacedSentTo(role, id, moved.lightsBefore, moved.lights));
@@ -1240,10 +1240,10 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
 /**
  * DELETE /api/campaigns/:campaignId/maps/:id
  * Delete a map
- * Requires: DM role
+ * Requires: GM role
  * Cannot delete if it's the current map
  */
-router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
 
@@ -1289,8 +1289,8 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
       await resendInitiative(campaignId, { evenWhenEmpty: true });
     }
 
-    // A page of the DM's may be preparing it. It was never the table's map,
-    // so this reaches the DM's sockets alone.
+    // A page of the GM's may be preparing it. It was never the table's map,
+    // so this reaches the GM's sockets alone.
     await tellMapReaders(campaignId, id, 'map.deleted', { mapId: id });
 
     return res.status(200).json({
@@ -1308,9 +1308,9 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
 /**
  * PUT /api/campaigns/:campaignId/maps/:id/set-current
  * Set a map as the current map for the campaign
- * Requires: DM role
+ * Requires: GM role
  */
-router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id/set-current', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
 
@@ -1360,7 +1360,7 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
     currentMapChanged(campaignId);
 
     // Every page goes onto the new map, each member's as they may see it,
-    // whoever asked: the DM's page, another tab or a script.
+    // whoever asked: the GM's page, another tab or a script.
     try {
       await broadcastMapData(getSocketInstance(), campaignId, map);
     } catch (err) {
@@ -1390,14 +1390,14 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
 // Every route here that changes a map's tokens sends the map again to the
 // table, as each member may see it, when it is the map the campaign is
 // showing (resendSoonIfCurrent, a moment later), and the initiative order as
-// before: the same `map.changed` the DM's `map.change` sends. The web app used to follow each
+// before: the same `map.changed` the GM's `map.change` sends. The web app used to follow each
 // call with that emit itself, so a change from a script, a second tab or a
 // player's edit to their own token reached nobody.
 
 /**
  * POST /api/campaigns/:campaignId/maps/:id/tokens
  * Add a new token to the map
- * Requires: DM role
+ * Requires: GM role
  *
  * Token Schema:
  * {
@@ -1415,7 +1415,7 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
  *   metadata: object
  * }
  */
-router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/tokens', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id: mapId } = req.params;
     const tokenData = req.body;
@@ -1496,7 +1496,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     const normalizedTokenImageUrl = shapes.value.imageUrl
       ? normalizeAssetUrl(shapes.value.imageUrl, 'tokens')
       : null;
-    // Art the DM may read: a token's art counts as the campaign using it.
+    // Art the GM may read: a token's art counts as the campaign using it.
     if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
@@ -1505,7 +1505,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
     }
 
-    // Control can only be given to a player of this campaign: the DM needs no
+    // Control can only be given to a player of this campaign: the GM needs no
     // naming, and a spectator controls nothing. A token bound to a character
     // is controlled by that character's owner, while they are a player,
     // unless the request names someone else. The controller is who the map is
@@ -1517,7 +1517,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     const characterId = shapes.value.characterId ?? null;
     // Absent means "the character's owner, while a player"; an explicit null
     // means nobody. The two used to read the same, so a character's token the
-    // DM had taken control of came back to its owner whenever it was copied.
+    // GM had taken control of came back to its owner whenever it was copied.
     const controllerGiven = shapes.value.controlledBy !== undefined;
     let controlledBy: string | null = shapes.value.controlledBy ?? null;
     if (controlledBy && !(await canHoldTokens(campaignId, controlledBy))) {
@@ -1563,7 +1563,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       notes: shapes.value.notes ?? '',
       initiative: shapes.value.initiative ?? null,
       // Darkvision in squares; 0 = none. Decides what the server sends this
-      // token's owner, so it is set here and by the DM, never by a player.
+      // token's owner, so it is set here and by the GM, never by a player.
       sightRadius: shapes.value.sightRadius ?? 0,
       displayMode: displayMode,
       statBlock: shapes.value.statBlock ?? null,
@@ -1621,9 +1621,9 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
 /**
  * PUT /api/campaigns/:campaignId/maps/:id/tokens/:tokenId
  * Update an existing token on the map
- * Requires: DM role OR player controlling the token
+ * Requires: GM role OR player controlling the token
  *
- * DM can update any token
+ * GM can update any token
  * Players can only update tokens where controlledBy matches their userId
  */
 router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
@@ -1692,9 +1692,9 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
 
     const existingToken = tokensArray[tokenIndex];
 
-    // The same rule the socket move handlers apply: the DM, or a player (never
+    // The same rule the socket move handlers apply: the GM, or a player (never
     // a spectator) whom the token names as its controller.
-    const isDM = membership.role === 'DM';
+    const isGM = membership.role === 'GM';
     if (!canControlToken(membership.role, existingToken.controlledBy, userId)) {
       return res.status(403).json({
         error: 'Forbidden',
@@ -1710,18 +1710,18 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       });
     }
     // And the same session rule the socket move events apply: a player's
-    // move, or turn, waits while the session is paused or ended. The DM sets
+    // move, or turn, waits while the session is paused or ended. The GM sets
     // the scene whenever they like. Conditions stay open to a player.
     if ((updates.position !== undefined || updates.rotation !== undefined) && !canMoveTokensNow(membership.role, map.campaign.status)) {
       return res.status(403).json({ error: 'Forbidden', message: PAUSED_MOVE_REFUSAL });
     }
 
-    // Validate layer if being updated (DM only)
+    // Validate layer if being updated (GM only)
     if (updates.layer !== undefined) {
-      if (!isDM) {
+      if (!isGM) {
         return res.status(403).json({
           error: 'Forbidden',
-          message: 'Only DM can change token layer',
+          message: 'Only the GM can change token layer',
         });
       }
 
@@ -1745,20 +1745,20 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     }
 
     // Players may only update position, rotation, and conditions on tokens they control
-    // All stat fields (hp, notes, showHpBar, type, disposition, initiative) require DM role
-    if (!isDM) {
+    // All stat fields (hp, notes, showHpBar, type, disposition, initiative) require GM role
+    if (!isGM) {
       // `metadata` is here because nothing reads it structurally and nothing
       // player-facing writes it: leaving it open gave every campaign member a
       // write-only channel into the map's JSON that served no purpose. The
       // create route, which is the only place the app sends metadata at all, is
-      // DM-only already.
+      // GM-only already.
       // `size` and `sightRadius` are here because both decide what the server
       // sends this player: a token always sees half its own footprint, so a
       // player who could enlarge their token would enlarge their sight.
       const restrictedFields = ['hp', 'notes', 'showHpBar', 'type', 'disposition', 'initiative', 'visible', 'name', 'imageUrl', 'layer', 'controlledBy', 'displayMode', 'statBlock', 'creatureTemplateId', 'metadata', 'sightRadius', 'size', 'obscured'];
       for (const field of restrictedFields) {
         if (updates[field] !== undefined) {
-          return res.status(403).json({ error: 'Forbidden', message: `Only DM can update token field: ${field}` });
+          return res.status(403).json({ error: 'Forbidden', message: `Only the GM can update token field: ${field}` });
         }
       }
     }
@@ -1771,7 +1771,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       return res.status(400).json({ error: 'Validation Error', message: shapes.message });
     }
 
-    // Control can only be handed to a player of this campaign: the DM needs
+    // Control can only be handed to a player of this campaign: the GM needs
     // no naming, and a spectator controls nothing.
     if (shapes.value.controlledBy && !(await canHoldTokens(campaignId, shapes.value.controlledBy))) {
       return res.status(400).json({
@@ -1780,7 +1780,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       });
     }
 
-    // New art the DM may read; the art already on the token may stay.
+    // New art the GM may read; the art already on the token may stay.
     const nextImageUrl = updates.imageUrl === undefined
       ? undefined
       : shapes.value.imageUrl ? (normalizeAssetUrl(shapes.value.imageUrl, 'tokens') || existingToken.imageUrl) : '';
@@ -1887,7 +1887,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     const spiritVisible = await getSpiritVisibility(campaignId, userId);
     return res.status(200).json({
       message: 'Token updated successfully',
-      token: isDM ? updatedToken : (filterTokensByRole([updatedToken], membership.role, spiritVisible, userId)[0] ?? null),
+      token: isGM ? updatedToken : (filterTokensByRole([updatedToken], membership.role, spiritVisible, userId)[0] ?? null),
       map: filterMapData(updatedMap, membership.role, spiritVisible, userId),
     });
   } catch (error) {
@@ -1902,14 +1902,14 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
 /**
  * POST /api/campaigns/:campaignId/maps/:id/tokens/move
  * Move tokens to another map of the campaign, in one step
- * Requires: DM role
+ * Requires: GM role
  *
  * Each token travels as it is stored, under its own id, clamped onto the
  * target map. A copy and a delete per token used to race (tokens lost or
  * doubled), gave the token a new id (a combatant dropped out of the order)
  * and rebuilt it through the create route's defaults.
  */
-router.post('/:id/tokens/move', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/tokens/move', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id: sourceId } = req.params;
     const parsed = MoveTokensSchema.safeParse(req.body);
@@ -1973,7 +1973,7 @@ router.post('/:id/tokens/move', campaignDM, async (req: AuthenticatedRequest, re
     }
 
     // Whichever of the two maps the table is on is sent again, as each
-    // member may see it; the other is the DM's alone until they switch.
+    // member may see it; the other is the GM's alone until they switch.
     try {
       const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
       const io = getSocketInstance();
@@ -1998,9 +1998,9 @@ router.post('/:id/tokens/move', campaignDM, async (req: AuthenticatedRequest, re
 /**
  * DELETE /api/campaigns/:campaignId/maps/:id/tokens/:tokenId
  * Remove a token from the map
- * Requires: DM role
+ * Requires: GM role
  */
-router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id/tokens/:tokenId', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id: mapId, tokenId } = req.params;
 
@@ -2066,13 +2066,13 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
 });
 
 // ============================================================
-// WALL SEGMENT ENDPOINTS// All write endpoints require DM role.
+// WALL SEGMENT ENDPOINTS// All write endpoints require GM role.
 // ============================================================
 
 /**
  * Helper: verify map belongs to campaign and return it, or send error response.
  * Returns null if a response was already sent. Another campaign's map, and a
- * prepared map to anyone but the DM, are answered exactly as an id that names
+ * prepared map to anyone but the GM, are answered exactly as an id that names
  * nothing, so the answer cannot confirm that a map exists.
  */
 async function findMapInCampaign(
@@ -2090,8 +2090,8 @@ async function findMapInCampaign(
     res.status(404).json({ error: 'Not Found', message: 'Map not found' });
     return null;
   }
-  // A prepared map is the DM's alone; to anyone else it is not here.
-  if (role !== 'DM') {
+  // A prepared map is the GM's alone; to anyone else it is not here.
+  if (role !== 'GM') {
     const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
     if (!canReadMap(role, map.id, campaign?.currentMapId)) {
       res.status(404).json({ error: 'Not Found', message: 'Map not found' });
@@ -2127,7 +2127,7 @@ router.get('/:id/walls', campaignMember, async (req: AuthenticatedRequest, res: 
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
-    // A locked door goes to anyone but the DM as a closed one.
+    // A locked door goes to anyone but the GM as a closed one.
     return res.status(200).json({ segments: wallsSentTo(req.campaignMembership!.role, map.wallSegments) });
   } catch (error) {
     logger.error('Error fetching wall segments', { err: error });
@@ -2138,7 +2138,7 @@ router.get('/:id/walls', campaignMember, async (req: AuthenticatedRequest, res: 
 /**
  * GET /api/campaigns/:campaignId/maps/:id/drawings
  * The map's drawings as the caller may be sent them, in drawing order: the
- * DM every one, anyone else those for everyone (all roles). A map the caller
+ * GM every one, anyone else those for everyone (all roles). A map the caller
  * may not read is answered as one that is not there.
  */
 router.get('/:id/drawings', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
@@ -2156,10 +2156,10 @@ router.get('/:id/drawings', campaignMember, async (req: AuthenticatedRequest, re
 
 /**
  * PUT /api/campaigns/:campaignId/maps/:id/walls
- * Replace the entire wall segments array (DM only).
+ * Replace the entire wall segments array (GM only).
  * Body: { segments: WallSegment[] }
  */
-router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id/walls', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
@@ -2195,10 +2195,10 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
 
 /**
  * POST /api/campaigns/:campaignId/maps/:id/walls
- * Add a single wall segment (DM only).
+ * Add a single wall segment (GM only).
  * Body: WallSegment (id generated server-side if missing)
  */
-router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/walls', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
@@ -2243,10 +2243,95 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
 });
 
 /**
- * DELETE /api/campaigns/:campaignId/maps/:id/walls/:sid
- * Remove a wall segment by id (DM only).
+ * POST /api/campaigns/:campaignId/maps/:id/walls/batch
+ * Add many wall segments at once (GM only), as Mapmaker's Save adds the walls
+ * of the rooms painted. Body: { segments: WallSegment[] }, each id generated
+ * server-side if missing, at most MAX_WALL_SEGMENTS of them.
+ *
+ * Under one lock, each wall is judged in order as POST judges one, against
+ * the map as it is then with the walls added before it: one too far outside
+ * the map, past the map's cap, or with an id the map holds is skipped, and
+ * the rest are added. The answer is 200 with both lists even when nothing
+ * was added, since each refusal is about the map as it stands (which another
+ * device may have changed), not about the request. A body that is not a list
+ * of walls, or holds more than a map can, is refused whole.
  */
-router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/walls/batch', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId, id } = req.params;
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
+    if (!map) return;
+
+    const body: unknown = req.body.segments;
+    if (!Array.isArray(body)) {
+      return res.status(400).json({ error: 'Validation Error', message: 'segments must be a list of wall segments' });
+    }
+    const list: unknown[] = body;
+    if (list.length > MAX_WALL_SEGMENTS) {
+      return res.status(400).json({ error: 'Validation Error', message: TOO_MANY_WALLS_MESSAGE });
+    }
+    const segments: WallSegment[] = [];
+    for (const [index, item] of list.entries()) {
+      const withId: unknown = item !== null && typeof item === 'object' && !Array.isArray(item)
+        ? { ...item, id: ('id' in item && item.id) || randomUUID() }
+        : item;
+      const parsed = WallSegmentSchema.safeParse(withId);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Validation Error', message: `Wall ${index}: ${parsed.error.issues[0]?.message ?? 'Invalid segment'}` });
+      }
+      segments.push(parsed.data);
+    }
+
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<{ before: WallSegment[]; after: WallSegment[]; added: WallSegment[]; skipped: SkippedWall[] }>> => {
+      const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, wallSegments: true } });
+      if (!fresh) return MAP_GONE;
+      const before = (Array.isArray(fresh.wallSegments) ? fresh.wallSegments : []) as unknown as WallSegment[];
+      const after = [...before];
+      const ids = new Set(before.map((w) => w.id));
+      const added: WallSegment[] = [];
+      const skipped: SkippedWall[] = [];
+      segments.forEach((segment, index) => {
+        // The order POST checks in, so a wall gets the answer it would alone.
+        if (wallOutsideMap([segment], fresh)) skipped.push({ index, reason: WALL_OUTSIDE_MAP_MESSAGE });
+        else if (after.length >= MAX_WALL_SEGMENTS) skipped.push({ index, reason: TOO_MANY_WALLS_MESSAGE });
+        else if (ids.has(segment.id)) skipped.push({ index, reason: DUPLICATE_WALL_ID_MESSAGE });
+        else {
+          after.push(segment);
+          ids.add(segment.id);
+          added.push(segment);
+        }
+      });
+      if (added.length > 0) await tx.map.update({ where: { id }, data: { wallSegments: toJson(after) } });
+      return { done: { before, after, added, skipped } };
+    });
+    if (!('done' in outcome)) return sendRefusal(res, outcome);
+
+    const { before, after, added, skipped } = outcome.done;
+    if (added.length > 0) {
+      // One event for the whole batch, the one a replaced list sends.
+      // TODO(play): this whole list is sent after the lock is released, as
+      // every wall write's event is, so a door toggle or another device's add
+      // committed in between can reach a page first and then be overwritten
+      // there by this older list until a reload. Per-wall adds did not depend
+      // on order; a full list does. Right: build and send the event under the
+      // lock, or give the stored list a version a page can compare and refuse
+      // an older list by.
+      await tellMapReadersAs(campaignId, id, 'walls:replaced', (role) => wallsReplacedSentTo(role, id, before, after));
+      resendSightAfterChange(getSocketInstance(), campaignId, id);
+    }
+    const answer: WallsAdded = { added, skipped, total: after.length };
+    return res.status(200).json(answer);
+  } catch (error) {
+    logger.error('Error adding wall segments', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to add wall segments' });
+  }
+});
+
+/**
+ * DELETE /api/campaigns/:campaignId/maps/:id/walls/:sid
+ * Remove a wall segment by id (GM only).
+ */
+router.delete('/:id/walls/:sid', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, sid } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
@@ -2276,10 +2361,10 @@ router.delete('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, r
 
 /**
  * PATCH /api/campaigns/:campaignId/maps/:id/walls/:sid
- * Update a single wall segment's type (DM only) — e.g., toggle door open/closed.
+ * Update a single wall segment's type (GM only) — e.g., toggle door open/closed.
  * Body: { type: WallType }
  */
-router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.patch('/:id/walls/:sid', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, sid } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
@@ -2332,7 +2417,7 @@ router.get('/:id/lights', campaignMember, async (req: AuthenticatedRequest, res:
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
-    // A light that is off goes to the DM alone.
+    // A light that is off goes to the GM alone.
     return res.status(200).json({ lights: lightsSentTo(req.campaignMembership!.role, map.lights) });
   } catch (error) {
     logger.error('Error fetching light sources:', error);
@@ -2342,10 +2427,10 @@ router.get('/:id/lights', campaignMember, async (req: AuthenticatedRequest, res:
 
 /**
  * PUT /api/campaigns/:campaignId/maps/:id/lights
- * Replace the entire light sources array (DM only).
+ * Replace the entire light sources array (GM only).
  * Body: { lights: LightSource[] }
  */
-router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id/lights', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
@@ -2380,10 +2465,10 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
 
 /**
  * POST /api/campaigns/:campaignId/maps/:id/lights
- * Add a single light source (DM only).
+ * Add a single light source (GM only).
  * Body: LightSource (id generated server-side if missing)
  */
-router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/lights', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
@@ -2415,10 +2500,10 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    // A light that is off goes to the DM alone, and players are not sent the
+    // A light that is off goes to the GM alone, and players are not sent the
     // map again for it.
     await tellMapReadersAs(campaignId, id, 'light:added', (role) =>
-      role === 'DM' || lightReachesPlayers(added) ? { event: 'light:added', data: { mapId: id, light: added } } : null
+      role === 'GM' || lightReachesPlayers(added) ? { event: 'light:added', data: { mapId: id, light: added } } : null
     );
     if (lightReachesPlayers(added)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(201).json({ light: added, total: outcome.done });
@@ -2430,10 +2515,10 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
 
 /**
  * PATCH /api/campaigns/:campaignId/maps/:id/lights/:lightId
- * Update a single light source (DM only).
+ * Update a single light source (GM only).
  * Body: Partial<LightSource> (at least one field required)
  */
-router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.patch('/:id/lights/:lightId', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, lightId } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
@@ -2475,7 +2560,7 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    // Anyone but the DM has only the lights that are on, so a light that
+    // Anyone but the GM has only the lights that are on, so a light that
     // stays off is neither sent to them nor followed by the map.
     const after = outcome.done;
     const was = before ?? after;
@@ -2490,9 +2575,9 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
 
 /**
  * DELETE /api/campaigns/:campaignId/maps/:id/lights/:lightId
- * Remove a light source by id (DM only).
+ * Remove a light source by id (GM only).
  */
-router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id/lights/:lightId', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, lightId } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
@@ -2511,7 +2596,7 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    // A light that was off was the DM's alone, so its going is too.
+    // A light that was off was the GM's alone, so its going is too.
     const removed = outcome.done;
     await tellMapReadersAs(campaignId, id, 'light:removed', (role) => lightRemovalSentTo(role, id, lightId, removed));
     if (lightReachesPlayers(removed)) resendSightAfterChange(getSocketInstance(), campaignId, id);
@@ -2527,9 +2612,9 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
 
 /**
  * GET /api/campaigns/:campaignId/maps/:id/fog
- * Return full FogState for this map (DM only).
+ * Return full FogState for this map (GM only).
  */
-router.get('/:id/fog', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:id/fog', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
@@ -2548,11 +2633,11 @@ router.get('/:id/fog', campaignDM, async (req: AuthenticatedRequest, res: Respon
 
 /**
  * POST /api/campaigns/:campaignId/maps/:id/fog/operation
- * Apply a FogOperation to the fog state (DM only).
+ * Apply a FogOperation to the fog state (GM only).
  * Body: FogOperation
  * Returns the updated FogState.
  */
-router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/fog/operation', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
@@ -2597,10 +2682,10 @@ router.post('/:id/fog/operation', campaignDM, async (req: AuthenticatedRequest, 
 
 /**
  * PUT /api/campaigns/:campaignId/maps/:id/lighting
- * Toggle dynamic lighting enabled/disabled (DM only).
+ * Toggle dynamic lighting enabled/disabled (GM only).
  * Body: { enabled: boolean }
  */
-router.put('/:id/lighting', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id/lighting', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);

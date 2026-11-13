@@ -36,7 +36,7 @@ type Locked = { refused: string } | { done: true };
 
 export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * light:add — DM places a single light source. Sent with an
+   * light:add — GM places a single light source. Sent with an
    * acknowledgement, it is answered once, `{ ok: true }` or
    * `{ ok: false, error }`, as wall:add is.
    */
@@ -49,8 +49,8 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         ack?.({ ok: false, error: TOO_MANY_MAP_EDITS_MESSAGE });
         return;
       }
-      if (socket.role !== 'DM') {
-        refuse('Only DMs can add light sources');
+      if (socket.role !== 'GM') {
+        refuse('Only GMs can add light sources');
         return;
       }
 
@@ -83,10 +83,10 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
       }
       ack?.({ ok: true });
 
-      // A light that is off goes to the DM alone, and players are not sent
+      // A light that is off goes to the GM alone, and players are not sent
       // the map again for it.
       await emitToMapReadersAs(io, campaignId, mapId, 'light:added', (role) =>
-        role === 'DM' || lightReachesPlayers(added) ? { event: 'light:added', data: { mapId, light: added, ...echoedOpId(data) } } : null
+        role === 'GM' || lightReachesPlayers(added) ? { event: 'light:added', data: { mapId, light: added, ...echoedOpId(data) } } : null
       );
       if (lightReachesPlayers(added)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
@@ -96,14 +96,14 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
   });
 
   /**
-   * light:remove — DM removes a light source by id.
+   * light:remove — GM removes a light source by id.
    */
   socket.on('light:remove', async (data: { mapId: string; lightId: string; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can remove light sources' });
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only GMs can remove light sources' });
         return;
       }
 
@@ -125,7 +125,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // A light that was off was the DM's alone, so its going is too.
+      // A light that was off was the GM's alone, so its going is too.
       const removed = outcome.done;
       await emitToMapReadersAs(io, campaignId, mapId, 'light:removed', (role) =>
         lightRemovalSentTo(role, mapId, lightId, removed, echoedOpId(data))
@@ -138,14 +138,14 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
   });
 
   /**
-   * light:update — DM updates a light source (position, radius, color, enabled, etc.).
+   * light:update — GM updates a light source (position, radius, color, enabled, etc.).
    */
   socket.on('light:update', async (data: { mapId: string; light: unknown; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can update light sources' });
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only GMs can update light sources' });
         return;
       }
 
@@ -181,7 +181,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Anyone but the DM has only the lights that are on: one turned on
+      // Anyone but the GM has only the lights that are on: one turned on
       // appears for them, one turned off goes, and one that stays off is
       // neither sent nor followed by the map.
       const before = outcome.done;
@@ -196,14 +196,14 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
   });
 
   /**
-   * lights:replace — DM bulk-replaces all light sources.
+   * lights:replace — GM bulk-replaces all light sources.
    */
   socket.on('lights:replace', async (data: { mapId: string; lights: unknown; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can replace light sources' });
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only GMs can replace light sources' });
         return;
       }
 
@@ -260,11 +260,11 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         select: { campaignId: true, lights: true, campaign: { select: { currentMapId: true } } },
       });
       if (!map || map.campaignId !== socket.campaignId) return;
-      // A prepared map is the DM's alone; a player is answered only about
+      // A prepared map is the GM's alone; a player is answered only about
       // the map the campaign is showing.
       if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
 
-      // A light that is off goes to the DM alone.
+      // A light that is off goes to the GM alone.
       emitNewestState(socket, 'lights:replaced', { mapId, lights: lightsSentTo(socket.role, map.lights) }, mapId);
     } catch (error) {
       logger.error('lights:request failed', { err: error });

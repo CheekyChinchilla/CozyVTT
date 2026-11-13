@@ -1,6 +1,6 @@
 // ============================================
 // TokenRoster
-// DM-only compact list of tokens on the current map
+// GM-only compact list of tokens on the current map
 // Grouped by type (Player / NPC / Object)
 // Actions: Edit (NPC/Object), Duplicate, Remove
 // ============================================
@@ -97,7 +97,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
       useGameStore.getState().addToken(result.token, mapId);
     } catch (err) {
       // A copy is a new token, so an older one whose fields predate validation
-      // is refused: say which, so the DM can fix it in Edit Token.
+      // is refused: say which, so the GM can fix it in Edit Token.
       showToast(apiErrorMessage(err) || 'Failed to duplicate the token', 'error');
     } finally {
       setIsDuplicating(false);

@@ -45,12 +45,12 @@ function uvttWithImage(image: Buffer): Buffer {
   );
 }
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const importUvtt = (file: Buffer, name: string) =>
-  dm.post(`/api/campaigns/${campaignId}/maps/import-uvtt`).attach('file', file, `${name}.uvtt`).field('name', name);
+  gm.post(`/api/campaigns/${campaignId}/maps/import-uvtt`).attach('file', file, `${name}.uvtt`).field('name', name);
 
 /** Every file under the uploads folder, as paths relative to it. */
 function filesOnDisk(): string[] {
@@ -68,25 +68,25 @@ function filesOnDisk(): string[] {
 
 beforeAll(async () => {
   const stamp = Date.now();
-  const user = await createTestUser({ email: `uvtt-limits-${stamp}@test.cozyvtt.local`, displayName: 'UVTT Limits DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `UVTT limits ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  const user = await createTestUser({ email: `uvtt-limits-${stamp}@test.cozyvtt.local`, displayName: 'UVTT Limits GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `UVTT limits ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 });
 
 beforeEach(async () => {
   await prisma.map.deleteMany({ where: { campaignId } });
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
 });
 
 describe('a UVTT whose picture is over the limits', () => {
@@ -103,7 +103,7 @@ describe('a UVTT whose picture is over the limits', () => {
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: 'Validation Error', message: `The picture inside this file cannot be used as a map. ${problem}` });
     expect(await prisma.map.count({ where: { campaignId } })).toBe(0);
-    expect(await prisma.asset.count({ where: { uploadedById: dmId } })).toBe(0);
+    expect(await prisma.asset.count({ where: { uploadedById: gmId } })).toBe(0);
     expect(filesOnDisk()).toEqual(files);
   });
 });

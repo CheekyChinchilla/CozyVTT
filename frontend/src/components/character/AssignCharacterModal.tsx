@@ -10,7 +10,7 @@ import api from '@/services/api';
 import GameSystemBadge from '@/components/common/GameSystemBadge';
 import { Button, Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
-import { gameSystemName } from '@/constants/game-systems';
+import { gameSystemName, playedGameSystem } from '@/constants/game-systems';
 import { systemsCompatible } from '@/utils/gameSystemCompatibility';
 
 interface AssignCharacterModalProps {
@@ -87,7 +87,8 @@ export default function AssignCharacterModal({
   // Filter compatible campaigns — game systems must match exactly:
   // flexible character → only flexible (null) campaigns
   // typed character → only campaigns with the same game system
-  const compatibleCampaigns = campaigns.filter((campaign) => systemsCompatible(character.gameSystem, campaign.gameSystem));
+  // A campaign of a system CozyVTT no longer supports takes characters as one with none.
+  const compatibleCampaigns = campaigns.filter((campaign) => systemsCompatible(character.gameSystem, playedGameSystem(campaign.gameSystem)));
 
   // Check if selected campaign is compatible
   const selectedCampaign = compatibleCampaigns.find((c) => c.id === selectedCampaignId);

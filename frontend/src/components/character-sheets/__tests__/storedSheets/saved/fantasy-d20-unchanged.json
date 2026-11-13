@@ -1,0 +1,469 @@
+{
+  "themeColor": "#4b6c2a",
+  "characterName": "characterName 6002",
+  "class": "class 6003",
+  "level": 5,
+  "ancestry": "ancestry 6005",
+  "heritage": "heritage 6006",
+  "attributes": {
+    "strength": {
+      "score": 8,
+      "modifier": -1
+    },
+    "dexterity": {
+      "score": 10,
+      "modifier": 0
+    },
+    "constitution": {
+      "score": 12,
+      "modifier": 1
+    },
+    "intelligence": {
+      "score": 14,
+      "modifier": 2
+    },
+    "wisdom": {
+      "score": 16,
+      "modifier": 3
+    },
+    "charisma": {
+      "score": 18,
+      "modifier": 4
+    }
+  },
+  "playerName": "playerName 6019",
+  "background": "background 6020",
+  "alignment": "alignment 6021",
+  "deity": "deity 6022",
+  "experiencePoints": 17,
+  "heroPoints": 0,
+  "savingThrows": {
+    "fortitude": {
+      "proficiencyRank": "untrained",
+      "itemBonus": 18,
+      "bonus": 19
+    },
+    "reflex": {
+      "proficiencyRank": "master",
+      "itemBonus": 21,
+      "bonus": 32
+    },
+    "will": {
+      "proficiencyRank": "trained",
+      "itemBonus": 24,
+      "bonus": 34
+    }
+  },
+  "perception": {
+    "proficiencyRank": "legendary",
+    "itemBonus": 27,
+    "bonus": 43,
+    "senses": [
+      "senses 6037"
+    ]
+  },
+  "skills": {
+    "acrobatics": {
+      "attribute": "attribute 6038",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -34,
+      "itemBonus": -28,
+      "bonus": -49
+    },
+    "arcana": {
+      "attribute": "attribute 6043",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -39,
+      "itemBonus": -23,
+      "bonus": -49
+    },
+    "athletics": {
+      "attribute": "attribute 6048",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -44,
+      "itemBonus": -18,
+      "bonus": -49
+    },
+    "crafting": {
+      "attribute": "attribute 6053",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -49,
+      "itemBonus": -13,
+      "bonus": -49
+    },
+    "deception": {
+      "attribute": "attribute 6058",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -54,
+      "itemBonus": -8,
+      "bonus": -49
+    },
+    "diplomacy": {
+      "attribute": "attribute 6063",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -59,
+      "itemBonus": -3,
+      "bonus": -49
+    },
+    "intimidation": {
+      "attribute": "attribute 6068",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -64,
+      "itemBonus": 2,
+      "bonus": -49
+    },
+    "medicine": {
+      "attribute": "attribute 6073",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -69,
+      "itemBonus": 7,
+      "bonus": -49
+    },
+    "nature": {
+      "attribute": "attribute 6078",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -74,
+      "itemBonus": 12,
+      "bonus": -49
+    },
+    "occultism": {
+      "attribute": "attribute 6083",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -79,
+      "itemBonus": 17,
+      "bonus": -49
+    },
+    "performance": {
+      "attribute": "attribute 6088",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -84,
+      "itemBonus": 22,
+      "bonus": -49
+    },
+    "religion": {
+      "attribute": "attribute 6093",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -89,
+      "itemBonus": 27,
+      "bonus": -49
+    },
+    "society": {
+      "attribute": "attribute 6098",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -94,
+      "itemBonus": -29,
+      "bonus": -110
+    },
+    "stealth": {
+      "attribute": "attribute 6103",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -99,
+      "itemBonus": -24,
+      "bonus": -110
+    },
+    "survival": {
+      "attribute": "attribute 6108",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -104,
+      "itemBonus": -19,
+      "bonus": -110
+    },
+    "thievery": {
+      "attribute": "attribute 6113",
+      "proficiencyRank": "legendary",
+      "armorPenalty": -109,
+      "itemBonus": -14,
+      "bonus": -110
+    }
+  },
+  "loreSkills": [
+    {
+      "name": "name 6118",
+      "attribute": "attribute 6119",
+      "proficiencyRank": "untrained",
+      "itemBonus": -9,
+      "bonus": -9
+    }
+  ],
+  "armorClass": {
+    "total": 19,
+    "proficiencyRank": "legendary",
+    "capDex": 119,
+    "itemBonus": -4,
+    "armorPenalty": 121
+  },
+  "classDC": {
+    "total": 10,
+    "keyAttribute": "keyAttribute 6129",
+    "proficiencyRank": "untrained"
+  },
+  "initiative": {
+    "usedStat": "usedStat 6131",
+    "bonus": 43
+  },
+  "speed": {
+    "land": 127,
+    "other": [
+      "other 6134"
+    ]
+  },
+  "hp": {
+    "maximum": 790,
+    "ancestryHp": 130,
+    "classHpPerLevel": 131,
+    "current": 132,
+    "temporary": 133,
+    "resistances": [
+      "resistances 6140"
+    ],
+    "immunities": [
+      "immunities 6141"
+    ],
+    "weaknesses": [
+      "weaknesses 6142"
+    ]
+  },
+  "conditions": [
+    "conditions 6143"
+  ],
+  "deathAndDying": {
+    "dying": 138,
+    "wounded": 139,
+    "doomed": 140
+  },
+  "proficiencies": {
+    "weapons": {
+      "simple": "expert",
+      "martial": "master",
+      "advanced": "legendary",
+      "unarmed": "untrained"
+    },
+    "armor": {
+      "unarmored": "trained",
+      "light": "expert",
+      "medium": "master",
+      "heavy": "legendary"
+    }
+  },
+  "strikes": [
+    {
+      "name": "name 6155",
+      "type": "melee",
+      "attackBonus": 151,
+      "damageRoll": "damageRoll 6158",
+      "damageType": "damageType 6159",
+      "attributeModifier": "attributeModifier 6160",
+      "proficiencyRank": "trained",
+      "itemBonus": -29,
+      "traits": [
+        "traits 6163"
+      ],
+      "range": 158,
+      "savingThrow": "savingThrow 6165",
+      "notes": "notes 6166"
+    }
+  ],
+  "currency": {
+    "cp": 161,
+    "sp": 162,
+    "gp": 163,
+    "pp": 164
+  },
+  "inventory": [
+    {
+      "name": "name 6171",
+      "quantity": 166,
+      "bulk": 167,
+      "equippable": true,
+      "equipped": false,
+      "requiresAttunement": true,
+      "attuned": false,
+      "invested": true,
+      "value": 168,
+      "notes": "notes 6175"
+    }
+  ],
+  "bulk": {
+    "current": 27722,
+    "encumbered": 4,
+    "maximum": 9
+  },
+  "languages": [
+    "languages 6179"
+  ],
+  "feats": {
+    "ancestryAndHeritage": [
+      {
+        "level": 1,
+        "name": "name 6181",
+        "description": "description 6183\n\nnotes 6182"
+      }
+    ],
+    "class": [
+      {
+        "level": 5,
+        "name": "name 6185",
+        "description": "description 6187\n\nnotes 6186"
+      }
+    ],
+    "skill": [
+      {
+        "level": 9,
+        "name": "name 6189",
+        "description": "description 6191\n\nnotes 6190"
+      }
+    ],
+    "general": [
+      {
+        "level": 13,
+        "name": "name 6193",
+        "description": "description 6195\n\nnotes 6194"
+      }
+    ],
+    "bonus": [
+      {
+        "level": 17,
+        "name": "name 6197",
+        "description": "description 6199\n\nnotes 6198"
+      }
+    ]
+  },
+  "classFeatures": [
+    {
+      "name": "classFeatures 6200",
+      "description": ""
+    },
+    {
+      "name": "name 6201",
+      "description": "description 6202"
+    }
+  ],
+  "spellcasting": {
+    "tradition": "tradition 6203",
+    "type": "type 6204",
+    "keyAttribute": "keyAttribute 6205",
+    "spellAttackBonus": {
+      "proficiencyRank": "trained",
+      "itemBonus": 16,
+      "bonus": 23
+    },
+    "spellDC": {
+      "proficiencyRank": "trained",
+      "itemBonus": 19,
+      "dc": 36
+    },
+    "cantrips": [
+      {
+        "rank": 3,
+        "name": "name 6213",
+        "prepared": false
+      }
+    ],
+    "slots": {
+      "1": {
+        "total": 20,
+        "expended": 19
+      },
+      "2": {
+        "total": 1,
+        "expended": 0
+      },
+      "3": {
+        "total": 3,
+        "expended": 2
+      },
+      "4": {
+        "total": 5,
+        "expended": 4
+      },
+      "5": {
+        "total": 7,
+        "expended": 6
+      },
+      "6": {
+        "total": 9,
+        "expended": 8
+      },
+      "7": {
+        "total": 11,
+        "expended": 10
+      },
+      "8": {
+        "total": 13,
+        "expended": 12
+      },
+      "9": {
+        "total": 15,
+        "expended": 14
+      },
+      "10": {
+        "total": 17,
+        "expended": 16
+      }
+    },
+    "spells": [
+      {
+        "rank": 5,
+        "name": "name 6235",
+        "prepared": true,
+        "ritual": false,
+        "heightened": true
+      }
+    ],
+    "focusSpells": {
+      "focusPoints": {
+        "total": 0,
+        "current": 0
+      },
+      "spells": [
+        {
+          "rank": 9,
+          "name": "name 6239",
+          "prepared": false,
+          "ritual": true,
+          "heightened": false
+        }
+      ]
+    },
+    "innateSpells": [
+      {
+        "rank": 1,
+        "name": "name 6241",
+        "tradition": "tradition 6242",
+        "frequency": "frequency 6243",
+        "notes": "notes 6244"
+      }
+    ],
+    "rituals": [
+      {
+        "name": "rituals 6245",
+        "rank": 1
+      },
+      {
+        "name": "name 6246",
+        "rank": 8
+      }
+    ]
+  },
+  "appearance": {
+    "age": "age 6248",
+    "height": "height 6249",
+    "weight": "weight 6250",
+    "eyes": "eyes 6251",
+    "skin": "skin 6252",
+    "hair": "hair 6253"
+  },
+  "personality": {
+    "traits": "traits 6254",
+    "ideals": "ideals 6255",
+    "bonds": "bonds 6256",
+    "flaws": "flaws 6257"
+  },
+  "backstory": "backstory 6258",
+  "alliesAndOrganizations": {
+    "name": "name 6259",
+    "description": "description 6260"
+  },
+  "notes": "notes 6261",
+  "treasure": "treasure 6262"
+}

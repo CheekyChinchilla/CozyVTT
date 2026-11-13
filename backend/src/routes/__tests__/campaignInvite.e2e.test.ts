@@ -7,7 +7,7 @@
  *
  * The contract worth pinning: **the invitation is created either way**. It is
  * what the player actually acts on — it appears on their dashboard — so an
- * instance with no mail server, or a DM who would rather tell their player in
+ * instance with no mail server, or a GM who would rather tell their player in
  * person, must still be able to invite. That is what separates this route from
  * the admin invite endpoints, which refuse outright when SMTP is missing.
  *
@@ -42,10 +42,10 @@ const mockSendEmail = sendCampaignInvitationEmail as jest.MockedFunction<
 const app = createTestApp();
 
 describe('POST /api/campaigns/:campaignId/invite', () => {
-  let dmId: string;
+  let gmId: string;
   let inviteeId: string;
   let campaignId: string;
-  let dmAgent: ReturnType<typeof request.agent>;
+  let gmAgent: ReturnType<typeof request.agent>;
 
   const savedEnv = {
     host: process.env.SMTP_HOST,
@@ -67,15 +67,15 @@ describe('POST /api/campaigns/:campaignId/invite', () => {
 
   beforeAll(async () => {
     const stamp = Date.now();
-    const dm = await createTestUser({ email: `inv_dm_${stamp}@test.invalid`, isApproved: true });
+    const gm = await createTestUser({ email: `inv_dm_${stamp}@test.invalid`, isApproved: true });
     const invitee = await createTestUser({ email: `inv_to_${stamp}@test.invalid`, isApproved: true });
-    dmId = dm.id;
+    gmId = gm.id;
     inviteeId = invitee.id;
 
-    const campaign = await createTestCampaign(dmId, { name: `Invite Opt-In ${stamp}` });
+    const campaign = await createTestCampaign(gmId, { name: `Invite Opt-In ${stamp}` });
     campaignId = campaign.id;
     await prisma.campaignMembership.create({
-      data: { campaignId, userId: dmId, role: 'DM', characterIds: [] },
+      data: { campaignId, userId: gmId, role: 'GM', characterIds: [] },
     });
 
     const agent = request.agent(app);
@@ -83,7 +83,7 @@ describe('POST /api/campaigns/:campaignId/invite', () => {
       .post('/api/auth/login')
       .send({ email: `inv_dm_${stamp}@test.invalid`, password: TEST_PASSWORD });
     expect(res.status).toBe(200);
-    dmAgent = agent;
+    gmAgent = agent;
   });
 
   afterEach(async () => {
@@ -96,14 +96,14 @@ describe('POST /api/campaigns/:campaignId/invite', () => {
     process.env.SMTP_USER = savedEnv.user;
     process.env.SMTP_PASS = savedEnv.pass;
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, inviteeId]);
+    await cleanupUsers([gmId, inviteeId]);
     await prisma.$disconnect();
   });
 
   it('creates the invitation and sends no email by default', async () => {
     withSmtp(true);
 
-    const res = await dmAgent.post(`/api/campaigns/${campaignId}/invite`).send({ userId: inviteeId });
+    const res = await gmAgent.post(`/api/campaigns/${campaignId}/invite`).send({ userId: inviteeId });
 
     expect(res.status).toBe(201);
     expect(res.body.emailSent).toBe(false);
@@ -113,10 +113,10 @@ describe('POST /api/campaigns/:campaignId/invite', () => {
     expect(invitation?.status).toBe('PENDING');
   });
 
-  it('sends the email when the DM asks for it', async () => {
+  it('sends the email when the GM asks for it', async () => {
     withSmtp(true);
 
-    const res = await dmAgent
+    const res = await gmAgent
       .post(`/api/campaigns/${campaignId}/invite`)
       .send({ userId: inviteeId, sendEmail: true });
 
@@ -128,7 +128,7 @@ describe('POST /api/campaigns/:campaignId/invite', () => {
   it('still creates the invitation when email is requested but SMTP is unconfigured', async () => {
     withSmtp(false);
 
-    const res = await dmAgent
+    const res = await gmAgent
       .post(`/api/campaigns/${campaignId}/invite`)
       .send({ userId: inviteeId, sendEmail: true });
 
@@ -144,7 +144,7 @@ describe('POST /api/campaigns/:campaignId/invite', () => {
     withSmtp(true);
     mockSendEmail.mockRejectedValueOnce(new Error('smtp exploded'));
 
-    const res = await dmAgent
+    const res = await gmAgent
       .post(`/api/campaigns/${campaignId}/invite`)
       .send({ userId: inviteeId, sendEmail: true });
 
@@ -158,7 +158,7 @@ describe('POST /api/campaigns/:campaignId/invite', () => {
   it('treats a non-true sendEmail as no email', async () => {
     withSmtp(true);
 
-    const res = await dmAgent
+    const res = await gmAgent
       .post(`/api/campaigns/${campaignId}/invite`)
       .send({ userId: inviteeId, sendEmail: 'yes' });
 
@@ -170,15 +170,15 @@ describe('POST /api/campaigns/:campaignId/invite', () => {
 
 /**
  * Each invitation email goes out from the instance's own mail account, with a
- * campaign name and description the DM wrote, and any user can be a DM of a
- * campaign of their own. So one DM may have the instance send at most 20 of
+ * campaign name and description the GM wrote, and any user can be a GM of a
+ * campaign of their own. So one GM may have the instance send at most 20 of
  * them an hour; invitations without an email are not counted.
  */
-describe('emailed invitations per DM', () => {
+describe('emailed invitations per GM', () => {
   const stamp = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
-  let dmId: string;
+  let gmId: string;
   let campaignId: string;
-  let dmAgent: ReturnType<typeof request.agent>;
+  let gmAgent: ReturnType<typeof request.agent>;
   const invitees: string[] = [];
   const saved = { host: process.env.SMTP_HOST, user: process.env.SMTP_USER, pass: process.env.SMTP_PASS };
 
@@ -186,18 +186,18 @@ describe('emailed invitations per DM', () => {
     process.env.SMTP_HOST = 'smtp.test.invalid';
     process.env.SMTP_USER = 'test';
     process.env.SMTP_PASS = 'test';
-    const dm = await createTestUser({ email: `inv_limit_dm_${stamp}@test.invalid` });
-    dmId = dm.id;
-    campaignId = (await createTestCampaign(dmId, { name: `Invite Limit ${stamp}` })).id;
-    await prisma.campaignMembership.create({ data: { campaignId, userId: dmId, role: 'DM', characterIds: [] } });
+    const gm = await createTestUser({ email: `inv_limit_dm_${stamp}@test.invalid` });
+    gmId = gm.id;
+    campaignId = (await createTestCampaign(gmId, { name: `Invite Limit ${stamp}` })).id;
+    await prisma.campaignMembership.create({ data: { campaignId, userId: gmId, role: 'GM', characterIds: [] } });
     for (let i = 0; i < 23; i += 1) {
       const user = await prisma.user.create({
         data: { email: `inv_limit_to_${i}_${stamp}@test.invalid`, passwordHash: 'not-used', displayName: `Invitee ${i}` },
       });
       invitees.push(user.id);
     }
-    dmAgent = request.agent(app);
-    const res = await dmAgent.post('/api/auth/login').send({ email: dm.email, password: TEST_PASSWORD });
+    gmAgent = request.agent(app);
+    const res = await gmAgent.post('/api/auth/login').send({ email: gm.email, password: TEST_PASSWORD });
     expect(res.status).toBe(200);
   });
 
@@ -206,12 +206,12 @@ describe('emailed invitations per DM', () => {
     process.env.SMTP_USER = saved.user;
     process.env.SMTP_PASS = saved.pass;
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, ...invitees]);
+    await cleanupUsers([gmId, ...invitees]);
   });
 
   it('refuses the 21st emailed invitation in an hour, and still sends invitations without email', async () => {
     const invite = (userId: string, sendEmail: boolean) =>
-      dmAgent.post(`/api/campaigns/${campaignId}/invite`).send({ userId, sendEmail });
+      gmAgent.post(`/api/campaigns/${campaignId}/invite`).send({ userId, sendEmail });
 
     // A refused invitation (already invited) sends nothing and is not counted.
     expect((await invite(invitees[0], true)).status).toBe(201);

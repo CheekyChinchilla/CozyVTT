@@ -43,10 +43,10 @@ afterAll(async () => {
 
 // A deep copy: the template's nested objects are shared, and one case below
 // corrupts a nested field.
-const blank = (): Record<string, unknown> => JSON.parse(JSON.stringify(getBlankTemplate(GameSystem.DND_5E).data));
+const blank = (): Record<string, unknown> => JSON.parse(JSON.stringify(getBlankTemplate(GameSystem.FIFTH_EDITION).data));
 
 async function createCharacter(): Promise<string> {
-  const res = await owner.post('/api/characters').send({ name: 'Checked', gameSystem: 'DND_5E', data: blank() });
+  const res = await owner.post('/api/characters').send({ name: 'Checked', gameSystem: 'FIFTH_EDITION', data: blank() });
   expect(res.status).toBe(201);
   return res.body.character.id;
 }

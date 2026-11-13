@@ -25,7 +25,7 @@ export function rollLabels(
 }
 
 /**
- * "as Goblin boss, for Scimitar attack", or the half a saved roll has, or ''
+ * "as Hobgoblin, for Longsword attack", or the half a saved roll has, or ''
  * for one with neither.
  */
 export function savedRollDetail(macro: Pick<DiceMacro, 'characterName' | 'purpose'>): string {

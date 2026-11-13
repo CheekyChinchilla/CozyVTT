@@ -5,7 +5,7 @@
 
 import api from './api';
 import type { CampaignMap, CreateMapRequest, UpdateMapRequest, Token, CreateTokenRequest } from '@/types';
-import type { WallSegment } from '@/types/walls';
+import type { WallSegment, WallsAdded } from '@/types/walls';
 
 class MapService {
   /**
@@ -25,7 +25,7 @@ class MapService {
   }
 
   /**
-   * Create a new map (DM only)
+   * Create a new map (GM only)
    */
   async createMap(campaignId: string, data: CreateMapRequest): Promise<CampaignMap> {
     const response = await api.createMap(campaignId, data);
@@ -33,7 +33,7 @@ class MapService {
   }
 
   /**
-   * Update map properties (DM only)
+   * Update map properties (GM only)
    */
   async updateMap(campaignId: string, mapId: string, data: UpdateMapRequest): Promise<CampaignMap> {
     const response = await api.updateMap(campaignId, mapId, data);
@@ -41,12 +41,12 @@ class MapService {
   }
 
   /**
-   * Add one wall to a map (DM only), as Paint's Room does when its painting
-   * is saved; the wall tool adds walls over the live connection.
+   * Add many walls to a map in one request (GM only), as Mapmaker's Room
+   * does when its painting is saved; the wall tool adds walls over the live
+   * connection. Walls the map refuses are skipped and listed.
    */
-  async addWall(campaignId: string, mapId: string, segment: Omit<WallSegment, 'id'>): Promise<WallSegment> {
-    const response = await api.addWall(campaignId, mapId, segment);
-    return response.segment;
+  async addWalls(campaignId: string, mapId: string, segments: Array<Omit<WallSegment, 'id'>>): Promise<WallsAdded> {
+    return api.addWalls(campaignId, mapId, segments);
   }
 
   /**
@@ -63,21 +63,21 @@ class MapService {
   }
 
   /**
-   * Delete a map (DM only) — cannot delete the active/current map
+   * Delete a map (GM only) — cannot delete the active/current map
    */
   async deleteMap(campaignId: string, mapId: string): Promise<void> {
     await api.deleteMap(campaignId, mapId);
   }
 
   /**
-   * Set a map as the current/active map for the campaign (DM only)
+   * Set a map as the current/active map for the campaign (GM only)
    */
   async setCurrentMap(campaignId: string, mapId: string): Promise<void> {
     await api.setCurrentMap(campaignId, mapId);
   }
 
   /**
-   * Add a token to a map (DM only)
+   * Add a token to a map (GM only)
    */
   async addToken(campaignId: string, mapId: string, data: CreateTokenRequest): Promise<Token> {
     const response = await api.addToken(campaignId, mapId, data);
@@ -85,7 +85,7 @@ class MapService {
   }
 
   /**
-   * Remove a token from a map (DM only)
+   * Remove a token from a map (GM only)
    */
   async deleteToken(campaignId: string, mapId: string, tokenId: string): Promise<void> {
     await api.deleteToken(campaignId, mapId, tokenId);

@@ -6,7 +6,7 @@ import logger from './logger';
  * A check and the write it allows, made as one step.
  *
  * Some rules are about rows other than the one being written: an instance
- * keeps at least one administrator, a campaign has one DM. A request that
+ * keeps at least one administrator, a campaign has one GM. A request that
  * reads the other rows, decides, and then writes can be overtaken by another
  * request doing the same, and each write is allowed by a read the other
  * makes untrue: two administrators each removing their own role both see the

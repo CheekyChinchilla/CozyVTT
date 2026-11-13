@@ -86,7 +86,7 @@ describe('Documents page delete', () => {
         data: {
           code: 'ASSET_IN_USE',
           message: 'in use',
-          usage: [{ kind: 'campaignSetting', name: 'Lost Mine', campaignId: 'c1', campaignName: 'Lost Mine', count: 1 }],
+          usage: [{ kind: 'campaignSetting', name: 'The Hollow Crown', campaignId: 'c1', campaignName: 'The Hollow Crown', count: 1 }],
           omitted: 0,
         },
       },
@@ -96,7 +96,7 @@ describe('Documents page delete', () => {
     await userEvent.click(within(await screen.findByRole('dialog', { name: 'Delete document' })).getByRole('button', { name: 'Delete' }));
 
     const warning = await screen.findByRole('dialog', { name: 'Asset is in use' });
-    expect(warning).toHaveTextContent('Ambient sound of the campaign "Lost Mine"');
+    expect(warning).toHaveTextContent('Ambient sound of the campaign "The Hollow Crown"');
     expect(showToast).not.toHaveBeenCalled();
 
     await userEvent.click(within(warning).getByRole('button', { name: 'Delete anyway' }));

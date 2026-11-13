@@ -32,7 +32,7 @@ Two checks, run from the repository root:
 ```bash
 python3 scripts/spec-coverage.py       # HTTP routes
 python3 scripts/websocket-events.py --check   # Socket.io events
-python3 -m unittest discover -s scripts/tests # their tests, the nginx and coverage scripts', and no other company's product named in a tracked file
+python3 -m unittest discover -s scripts/tests # their tests, the nginx and coverage scripts', no other company's product named in a tracked file, every game system under its CozyVTT name, every guide calling the game master the GM, every guide describing CozyVTT as self-hosted, and every Markdown link finding its file and heading
 ```
 
 The first covers `API_DOCUMENTATION.yaml`, which must be complete in both
@@ -79,17 +79,17 @@ body. The first row that matches decides the cell:
 
 | The handler, or a function it calls | Reads |
 |---|---|
-| Turns every non-DM away: an `if` among its own statements (inside a `try` counts; a nested block, an `else` or a callback does not) whose branch ends in a bare `return;`, and whose condition is `socket.role !== 'DM'` alone or as one side of an *or*, or whose refusal says "Only the DM" | DM only |
-| Calls `canToggleDoor` | DM; a player may toggle an unlocked door (adding which ones: "on a lit map, one their tokens see" when it also calls `.seesPoint(`, "under manual fog, one beside a square revealed to them" when it also calls `doorBesideRevealedFog`) |
-| Calls `canControlToken` | DM, or the token's player (adding "while the session is live" when it also calls `canMoveTokensNow`, and "once the DM has put it in the order", "before the fight starts" and "once each time it joins the order" when it tests `existingIndex === -1`, reads `state.active` and calls `playerHasRolled`) |
-| Calls `canDraw` | DM, or a player while **Players may draw** is on and the session is live |
-| Calls `canEraseDrawing` | DM, or the drawing's player |
-| Tests `character.userId !== socket.userId` | DM, or the character's owner (adding "never a spectator" when it also tests `socket.role === 'SPECTATOR'`) |
-| Calls `canRollDice` | DM and players |
+| Turns every non-GM away: an `if` among its own statements (inside a `try` counts; a nested block, an `else` or a callback does not) whose branch ends in a bare `return;`, and whose condition is `socket.role !== 'GM'` alone or as one side of an *or*, or whose refusal says "Only the GM" | GM only |
+| Calls `canToggleDoor` | GM; a player may toggle an unlocked door (adding which ones: "on a lit map, one their tokens see" when it also calls `.seesPoint(`, "under manual fog, one beside a square revealed to them" when it also calls `doorBesideRevealedFog`) |
+| Calls `canControlToken` | GM, or the token's player (adding "while the session is live" when it also calls `canMoveTokensNow`, and "once the GM has put it in the order", "before the fight starts" and "once each time it joins the order" when it tests `existingIndex === -1`, reads `state.active` and calls `playerHasRolled`) |
+| Calls `canDraw` | GM, or a player while **Players may draw** is on and the session is live |
+| Calls `canEraseDrawing` | GM, or the drawing's player |
+| Tests `character.userId !== socket.userId` | GM, or the character's owner (adding "never a spectator" when it also tests `socket.role === 'SPECTATOR'`) |
+| Calls `canRollDice` | GM and players |
 | None of these | Any member |
 
-`socket.role !== 'DM' && …` refuses only some non-DMs, as the character-owner
-test does, so it does not read as DM only. A rule written inline instead of
+`socket.role !== 'GM' && …` refuses only some non-GMs, as the character-owner
+test does, so it does not read as GM only. A rule written inline instead of
 through the shared predicates in `services/permissions.ts` is not seen, which
 is one more reason to use them; the line above the table says the handler is
 authoritative.
@@ -122,14 +122,14 @@ backend test suite rather than by these scripts:
 states for an event differs from the one the server applies (`SOCKET_CEILINGS`
 in `backend/src/websocket/shared.ts`). Change the two together.
 
-The events the table marks **DM only** are tested from it, too:
-`backend/src/websocket/__tests__/dmOnlyEvents.integration.test.ts` sends each
+The events the table marks **GM only** are tested from it, too:
+`backend/src/websocket/__tests__/gmOnlyEvents.integration.test.ts` sends each
 of them as a player and as a spectator and expects a refusal, no broadcast
-and nothing stored. It then sends each payload as the DM and expects the
+and nothing stored. It then sends each payload as the GM and expects the
 table to hear it, so a refusal cannot be a payload the server would turn
-down from anyone. It fails when the table has a DM-only event it has no
-payload for, so an event the handlers make the DM's alone needs two lines
-there: its payload, and the event a player hears when the DM sends it.
+down from anyone. It fails when the table has a GM-only event it has no
+payload for, so an event the handlers make the GM's alone needs two lines
+there: its payload, and the event a player hears when the GM sends it.
 
 `backend/src/__tests__/documentedFacts.test.ts` reads these files too: every
 route the YAML's prose names in backticks, such as `` `GET /api/campaigns` ``,

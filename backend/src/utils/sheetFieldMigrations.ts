@@ -119,13 +119,13 @@ function absorbTextEntries(
 }
 
 /**
- * D&D 5e. Fold the template-era fields into the ones the sheet reads.
+ * 5E. Fold the template-era fields into the ones the sheet reads.
  *
  * `featuresAndTraits` is normalised even when there is nothing to merge, so a
  * sheet ends up holding named entries rather than a mix of shapes across the
  * instance.
  */
-export function migrateDnD5e(sheet: Sheet, notes: string[]): Sheet {
+export function migrateFifthEdition(sheet: Sheet, notes: string[]): Sheet {
   const next: Sheet = { ...sheet };
 
   const features = collectSheetFeatures(sheet);
@@ -273,18 +273,18 @@ function attackAsStrike(attack: Sheet): Sheet {
   return strike;
 }
 
-/** Where the top-level copies of nested Pathfinder 2e lists belong. */
-const PF2E_NESTED_LISTS = {
+/** Where the top-level copies of nested Fantasy d20 lists belong. */
+const FANTASY_D20_NESTED_LISTS = {
   senses: ['perception', 'senses'],
   resistances: ['hp', 'resistances'],
   immunities: ['hp', 'immunities'],
 } as const;
 
 /**
- * Pathfinder 2e. `attacks` are strikes; `specialAbilities` are class features;
+ * Fantasy d20. `attacks` are strikes; `specialAbilities` are class features;
  * top-level senses, resistances and immunities belong in the nested lists.
  */
-export function migratePathfinder2e(sheet: Sheet, notes: string[]): Sheet {
+export function migrateFantasyD20(sheet: Sheet, notes: string[]): Sheet {
   const next: Sheet = { ...sheet };
 
   // Attacks are added after the player's strikes, skipping any a strike of the
@@ -353,7 +353,7 @@ export function migratePathfinder2e(sheet: Sheet, notes: string[]): Sheet {
   // Top-level copies of lists that live inside `perception` and `hp`. The
   // nested ones are what the sheet reads; anything only the top-level copy
   // holds is added to them first.
-  for (const [stray, [parentKey, listKey]] of Object.entries(PF2E_NESTED_LISTS)) {
+  for (const [stray, [parentKey, listKey]] of Object.entries(FANTASY_D20_NESTED_LISTS)) {
     if (!(stray in next)) continue;
     const raw = sheet[stray];
     const items = isBlank(raw) ? [] : Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : null;
@@ -389,8 +389,8 @@ export function migratePathfinder2e(sheet: Sheet, notes: string[]): Sheet {
   return next;
 }
 
-/** Call of Cthulhu 7e. `player` is the schema's `playerName`. */
-export function migrateCallOfCthulhu(sheet: Sheet, notes: string[]): Sheet {
+/** Horror d100. `player` is the schema's `playerName`. */
+export function migrateHorrorD100(sheet: Sheet, notes: string[]): Sheet {
   const next: Sheet = { ...sheet };
   if ('player' in next) {
     const player = legacyText(sheet.player);
@@ -417,14 +417,14 @@ export function migrateCallOfCthulhu(sheet: Sheet, notes: string[]): Sheet {
  */
 function hasLegacyFields(gameSystem: string, sheet: Sheet): boolean {
   switch (gameSystem) {
-    case 'DND_5E':
+    case 'FIFTH_EDITION':
       return (
         ['features', 'languages', 'personalityTraits', 'ideals', 'bonds', 'flaws', 'allies'].some((key) => key in sheet) ||
         Array.isArray(sheet.proficiencies)
       );
-    case 'PATHFINDER_2E':
+    case 'FANTASY_D20':
       return ['attacks', 'specialAbilities', 'senses', 'resistances', 'immunities'].some((key) => key in sheet);
-    case 'CALL_OF_CTHULHU_7E':
+    case 'HORROR_D100':
       return 'player' in sheet;
     default:
       return false;
@@ -441,12 +441,12 @@ export function migrateLegacySheetFields(gameSystem: string | null | undefined, 
   if (!gameSystem || !isSheet(data) || !hasLegacyFields(gameSystem, data)) return data;
   const notes: string[] = [];
   switch (gameSystem) {
-    case 'DND_5E':
-      return migrateDnD5e(data, notes);
-    case 'PATHFINDER_2E':
-      return migratePathfinder2e(data, notes);
-    case 'CALL_OF_CTHULHU_7E':
-      return migrateCallOfCthulhu(data, notes);
+    case 'FIFTH_EDITION':
+      return migrateFifthEdition(data, notes);
+    case 'FANTASY_D20':
+      return migrateFantasyD20(data, notes);
+    case 'HORROR_D100':
+      return migrateHorrorD100(data, notes);
     default:
       return data;
   }

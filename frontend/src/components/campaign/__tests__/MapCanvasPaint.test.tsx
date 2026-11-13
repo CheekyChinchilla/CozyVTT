@@ -1,8 +1,8 @@
 /**
- * Paint, through MapCanvas: the DM painting the picture of a map drawn in
+ * Paint, through MapCanvas: the GM painting the picture of a map drawn in
  * CozyVTT, or of a map with no picture.
  *
- * Paint is offered only to the DM, on a map whose picture is a campaign map
+ * Paint is offered only to the GM, on a map whose picture is a campaign map
  * picture tagged DRAWN_MAP_TAG, or which has no picture; never on an uploaded
  * one. While it is on it owns the map: every press is a stroke, and the
  * keys the other tools take are its own, so no token is picked up, turned
@@ -41,7 +41,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
     isPreparing: false,
   };
@@ -77,7 +77,7 @@ const h = vi.hoisted(() => {
     campaign: { id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, characters: [], status: 'ACTIVE', playersMayDraw: true, memberships: [], maps: [] as Array<{ id: string; name?: string; imageUrl?: string }> },
     updateMap: vi.fn(),
     getMap: vi.fn(),
-    addWall: vi.fn(),
+    addWalls: vi.fn(),
     /** The draft store Paint is given; a fresh one each test. */
     drafts: { store: null as unknown },
     /** This tab, as drafts tell tabs apart, and the other tabs open now (null: the browser cannot tell). */
@@ -115,7 +115,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign: h.campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -161,7 +161,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 
 vi.mock('@/services/map.service', () => ({
-  default: { updateMap: h.updateMap, getMaps: vi.fn().mockResolvedValue([]), getMap: h.getMap, addWall: h.addWall },
+  default: { updateMap: h.updateMap, getMaps: vi.fn().mockResolvedValue([]), getMap: h.getMap, addWalls: h.addWalls },
 }));
 
 vi.mock('@/services/api', () => {
@@ -179,6 +179,7 @@ vi.mock('@/services/api', () => {
 import MapCanvas from '../MapCanvas';
 import { useGameStore } from '@/stores/gameStore';
 import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
+import { MAP_LIMITS, TOO_MANY_WALLS_MESSAGE } from '@/constants/mapLimits';
 
 const { recorded, take } = recordDrawing();
 
@@ -234,6 +235,14 @@ function pictureCanvas(): HTMLCanvasElement | undefined {
 }
 const callsOn = (canvas: HTMLCanvasElement | undefined): Call[] => (canvas ? recorded.get(canvas) ?? [] : []);
 const strokesOn = (canvas: HTMLCanvasElement | undefined) => callsOn(canvas).filter((c) => c.method === 'stroke' || c.method === 'arc');
+
+/**
+ * A dialog takes Esc once its focus trap is armed, which is when it has moved focus inside. The dialog can be on
+ * screen a moment before that, and a key pressed in the gap is lost.
+ */
+async function untilTrapped(dialog: () => HTMLElement | null) {
+  await waitFor(() => expect(dialog()).toContainElement(document.activeElement as HTMLElement));
+}
 
 function press(key: string, opts: { shiftKey?: boolean; ctrlKey?: boolean } = {}) {
   const map = theMap();
@@ -303,14 +312,15 @@ beforeEach(() => {
   });
   h.campaign.maps = [{ id: 'map-a' }, { id: 'map-b' }];
   h.getMap.mockReset().mockImplementation(() => Promise.resolve(h.state.currentMap));
-  h.addWall.mockReset().mockImplementation((_campaignId: string, _mapId: string, wall: object) => Promise.resolve({ id: 'wall', ...wall }));
+  h.addWalls.mockReset().mockImplementation((_campaignId: string, _mapId: string, walls: object[]) =>
+    Promise.resolve({ added: walls.map((wall, i) => ({ id: `wall-${i}`, ...wall })), skipped: [], total: walls.length }));
   h.updateMap.mockReset().mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) =>
     Promise.resolve({ ...(h.state.currentMap as object), id: mapId, imageUrl: storedAs(data.imageUrl) }));
   act(() => {
     useGameStore.getState().clearGameState();
     usePaintStore.setState({ mapId: null, unsaved: false, openOnMapId: null });
   });
-  h.set({ userRole: 'DM', isPreparing: false });
+  h.set({ userRole: 'GM', isPreparing: false });
   // The picture's PNG, for Save.
   Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
     configurable: true, writable: true, value(done: BlobCallback) { done(new Blob(['picture'], { type: 'image/png' })); },
@@ -321,7 +331,7 @@ afterEach(() => {
 });
 
 describe('where Paint is offered', () => {
-  it('on a drawn map, to the DM', async () => {
+  it('on a drawn map, to the GM', async () => {
     await showMap();
     expect(await screen.findByRole('button', { name: 'Mapmaker' })).toBeInTheDocument();
   });
@@ -785,7 +795,8 @@ describe('lines, rectangles and ellipses', () => {
 describe('a room', () => {
   const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
   const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: tool }));
-  const wallsAdded = () => h.addWall.mock.calls.map(([, , wall]) => wall as object);
+  /** The walls Save sent, every call's in order. */
+  const wallsAdded = () => h.addWalls.mock.calls.flatMap(([, , walls]) => walls as object[]);
   /** The four walls of the room 50,50 to 150,100, as Save adds them. */
   const fourWalls = [
     { x1: 50, y1: 50, x2: 150, y2: 50, type: 'wall' },
@@ -802,10 +813,11 @@ describe('a room', () => {
     expect(callsOfPicture('rect')[callsOfPicture('rect').length - 1]?.args).toEqual([50, 50, 100, 50]);
     expect(callsOfPicture('fill')).toHaveLength(1);
     expect(callsOfPicture('stroke')).toHaveLength(1);
-    expect(h.addWall).not.toHaveBeenCalled();
+    expect(h.addWalls).not.toHaveBeenCalled();
     await pressSave();
     await waitFor(() => expect(wallsAdded()).toEqual(fourWalls));
-    expect(h.addWall.mock.calls.every(([campaignId, mapId]) => campaignId === 'campaign-1' && mapId === 'map-a')).toBe(true);
+    expect(h.addWalls).toHaveBeenCalledTimes(1);
+    expect(h.addWalls).toHaveBeenCalledWith('campaign-1', 'map-a', fourWalls);
   });
 
   it('is chosen by M, and paints nothing with no width or no height', async () => {
@@ -826,7 +838,7 @@ describe('a room', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
     await pressSave();
     await waitFor(() => expect(h.updateMap).toHaveBeenCalled());
-    expect(h.addWall).not.toHaveBeenCalled();
+    expect(h.addWalls).not.toHaveBeenCalled();
 
     drag({ clientX: 52, clientY: 52 }, { clientX: 148, clientY: 98 });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
@@ -843,20 +855,69 @@ describe('a room', () => {
     drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
     drag({ clientX: 150, clientY: 50 }, { clientX: 250, clientY: 100 });
     await pressSave();
-    await waitFor(() => expect(h.addWall).toHaveBeenCalledTimes(6));
+    await waitFor(() => expect(h.addWalls).toHaveBeenCalledTimes(1));
+    expect(wallsAdded()).toHaveLength(6);
     const keys = wallsAdded().map((w) => JSON.stringify(w));
     expect(new Set(keys).size).toBe(6);
     expect(keys).not.toContain(JSON.stringify(fourWalls[0]));
   });
 
-  it('says how many walls were not added when the map refuses one, the picture saved', async () => {
+  it('says how many walls the map skipped and why, the picture saved', async () => {
     await showMap();
     await paintOn();
     choose('Room');
     drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
-    h.addWall.mockResolvedValueOnce({}).mockRejectedValueOnce(Object.assign(new Error('400'), { response: { status: 400, data: { message: 'Maximum 5000 wall segments per map' } } }));
+    h.addWalls.mockResolvedValueOnce({
+      added: [{ id: 'wall-0', ...fourWalls[0] }],
+      skipped: [1, 2, 3].map((index) => ({ index, reason: TOO_MANY_WALLS_MESSAGE })),
+      total: MAP_LIMITS.maxWallSegments,
+    });
     await pressSave();
-    expect(await screen.findByText('The picture was saved, but 3 of the 4 walls of your rooms were not added to the map: Maximum 5000 wall segments per map. Draw them with the wall tool.')).toBeInTheDocument();
+    expect(await screen.findByText(`The picture was saved, but 3 of the 4 walls of your rooms were not added to the map: ${TOO_MANY_WALLS_MESSAGE}. Remove walls the map no longer needs, then draw them with the wall tool.`)).toBeInTheDocument();
+    expect(h.addWalls).toHaveBeenCalledTimes(1);
+    expect(h.updateMap).toHaveBeenCalled();
+  });
+
+  it('gives each different reason once when walls are skipped for more than one', async () => {
+    await showMap();
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    const outside = 'A wall reaches too far outside the map. Walls can extend up to 500 squares past its edges.';
+    h.addWalls.mockResolvedValueOnce({
+      added: [],
+      skipped: [{ index: 0, reason: outside }, { index: 1, reason: outside }, { index: 2, reason: TOO_MANY_WALLS_MESSAGE }, { index: 3, reason: TOO_MANY_WALLS_MESSAGE }],
+      total: MAP_LIMITS.maxWallSegments,
+    });
+    await pressSave();
+    expect(await screen.findByText(`The picture was saved, but the 4 walls of your rooms were not added to the map: ${outside} ${TOO_MANY_WALLS_MESSAGE}. Remove walls the map no longer needs, then draw them with the wall tool.`)).toBeInTheDocument();
+  });
+
+  // The wall tool refuses a full map's walls too, so only a map with room
+  // left is told to draw them.
+  it('tells a map with room left to draw the skipped walls with the wall tool', async () => {
+    await showMap();
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    const outside = 'A wall reaches too far outside the map. Walls can extend up to 500 squares past its edges.';
+    h.addWalls.mockResolvedValueOnce({
+      added: [{ id: 'wall-0', ...fourWalls[0] }, { id: 'wall-1', ...fourWalls[1] }],
+      skipped: [{ index: 2, reason: outside }, { index: 3, reason: outside }],
+      total: 2,
+    });
+    await pressSave();
+    expect(await screen.findByText(`The picture was saved, but 2 of the 4 walls of your rooms were not added to the map: ${outside} Draw them with the wall tool.`)).toBeInTheDocument();
+  });
+
+  it('says none of the walls were added when the request for them fails, the picture saved', async () => {
+    await showMap();
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    h.addWalls.mockRejectedValueOnce(Object.assign(new Error('404'), { response: { status: 404, data: { message: 'Map not found' } } }));
+    await pressSave();
+    expect(await screen.findByText('The picture was saved, but the 4 walls of your rooms were not added to the map: Map not found. Draw them with the wall tool.')).toBeInTheDocument();
     expect(h.updateMap).toHaveBeenCalled();
   });
 
@@ -872,15 +933,39 @@ describe('a room', () => {
     await waitFor(() => expect(wallsAdded()).toEqual(larger));
   });
 
+  it("adds its walls at the map's size as the save found it, when Edit Map on another device changes it while the picture uploads", async () => {
+    // The room's top side is a wall the map has already.
+    const map = mapWith({ wallSegments: [{ id: 'w1', x1: 150, y1: 50, x2: 50, y2: 50, type: 'wall' }] });
+    await showMap(map);
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    let finishUpload: () => void = () => undefined;
+    h.replaceDrawnPicture.mockImplementationOnce((id: string) => new Promise((resolve) => {
+      finishUpload = () => resolve({ message: 'Picture saved', asset: { id, type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: [DRAWN_MAP_TAG] }, imageUrl: `/api/assets/maps/${id}?v=1` });
+    }));
+    await pressSave();
+    await waitFor(() => expect(h.replaceDrawnPicture).toHaveBeenCalledTimes(1));
+    // Meanwhile Edit Map on another device makes the map 30 squares each way,
+    // and the server scales its walls with it; this page has not heard yet.
+    const resized = { ...map, width: 30, height: 30, wallSegments: [{ id: 'w1', x1: 225, y1: 75, x2: 75, y2: 75, type: 'wall' }] };
+    h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) =>
+      Promise.resolve({ ...resized, id: mapId, imageUrl: storedAs(data.imageUrl) }));
+    await act(async () => { finishUpload(); });
+    await waitFor(() => expect(h.addWalls).toHaveBeenCalledTimes(1));
+    const larger = fourWalls.slice(1).map((w) => ({ ...w, x1: w.x1 * 1.5, y1: w.y1 * 1.5, x2: w.x2 * 1.5, y2: w.y2 * 1.5 }));
+    expect(wallsAdded()).toEqual(larger);
+  });
+
   it('holds a reload while its walls are added, and says it saved once they are', async () => {
     await showMap();
     await paintOn();
     choose('Room');
     drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
     let addFirst: () => void = () => undefined;
-    h.addWall.mockImplementationOnce(() => new Promise((resolve) => { addFirst = () => resolve({}); }));
+    h.addWalls.mockImplementationOnce((_c: string, _m: string, walls: object[]) => new Promise((resolve) => { addFirst = () => resolve({ added: walls, skipped: [], total: walls.length }); }));
     await pressSave();
-    await waitFor(() => expect(h.addWall).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(h.addWalls).toHaveBeenCalledTimes(1));
     const reload = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(reload);
     expect(reload.defaultPrevented).toBe(true);
@@ -1235,6 +1320,47 @@ describe('a stamp', () => {
     expect(callsOfPicture('translate').map((c) => c.args)).toEqual([[325, 275]]);
   });
 
+  it('on a touch screen, shows the stamp where a finger is held before it lifts, and paints it there once as it lifts', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Chest' }));
+    take(input());
+    const finger = contact('touch', 1);
+
+    finger.down(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    expect(previewAt()).toContainEqual([125, 275]);
+    expect(callsOfPicture('translate')).toEqual([]);
+
+    finger.up(input(), { clientX: 130, clientY: 260 });
+    expect(callsOfPicture('translate').map((c) => c.args)).toEqual([[125, 275]]);
+    take(input());
+    await nextFrame();
+    expect(previewAt()).toEqual([]);
+  });
+
+  it('on a touch screen, takes away the stamp a finger is holding when a second finger lands, and paints nothing', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Chest' }));
+    take(input());
+    const first = contact('touch', 1);
+    const second = contact('touch', 2, false);
+
+    first.down(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    expect(previewAt()).toContainEqual([125, 275]);
+    second.down(input(), { clientX: 400, clientY: 400 });
+    take(input());
+    await nextFrame();
+    expect(previewAt()).toEqual([]);
+    second.up(input(), { clientX: 400, clientY: 400 });
+    first.up(input(), { clientX: 130, clientY: 260 });
+    expect(callsOfPicture('translate')).toEqual([]);
+  });
+
   it('leaves a curve a finger was bending straight and waiting when a second finger lands', async () => {
     await showMap();
     await paintOn();
@@ -1353,6 +1479,69 @@ describe('polygons and curves', () => {
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 100 });
     press('Enter');
     expect(callsOfPicture('quadraticCurveTo')[0]?.args).toEqual([200, 100, 300, 100]);
+  });
+
+  const done = () => fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
+
+  it('closes a polygon of three corners or more, and paints a curve not bent, when Done puts Mapmaker away, as Enter does', async () => {
+    await showMap();
+    await paintOn();
+    choose('Polygon');
+    click(100, 100);
+    click(200, 100);
+    click(150, 200);
+    done();
+    expect(corners()).toEqual(expect.arrayContaining([[100, 100], [200, 100], [150, 200]]));
+    expect(callsOfPicture('closePath')).toHaveLength(1);
+
+    await paintOn();
+    choose('Curve');
+    drag({ clientX: 100, clientY: 300 }, { clientX: 300, clientY: 300 });
+    done();
+    expect(callsOfPicture('quadraticCurveTo')[0]?.args).toEqual([200, 300, 300, 300]);
+  });
+
+  it('keeps a polygon of fewer than three corners when Done puts Mapmaker away, unseen and leaving Esc alone, to go on with when it is opened again', async () => {
+    await showMap();
+    await paintOn();
+    choose('Polygon');
+    click(130, 370);
+    click(270, 370);
+    take(input());
+    done();
+    await nextFrame();
+    expect(take(input()).filter((c) => c.method === 'lineTo').map((c) => c.args)).not.toContainEqual([270, 370]);
+    expect(callsOfPicture('closePath')).toHaveLength(0);
+    // Nothing painted: Mapmaker lets go of its picture once the map's own is back.
+    pictures[1].load();
+    await pictures[1].decoded();
+    expect(pictureCanvas()).toBeUndefined();
+    press('Escape');
+
+    await paintOn();
+    click(200, 450);
+    press('Enter');
+    expect(corners()).toEqual(expect.arrayContaining([[130, 370], [270, 370], [200, 450]]));
+    expect(callsOfPicture('closePath')).toHaveLength(1);
+  });
+
+  it('lets go of a polygon Done kept once another map is shown', async () => {
+    const first = mapWith();
+    await showMap(first);
+    await paintOn();
+    choose('Polygon');
+    click(130, 370);
+    click(270, 370);
+    done();
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    act(() => { h.set({ currentMap: first }); });
+    pictures[pictures.length - 1].load();
+    await pictures[pictures.length - 1].decoded();
+
+    await paintOn();
+    click(200, 450);
+    press('Enter');
+    expect(callsOfPicture('closePath')).toHaveLength(0);
   });
 });
 
@@ -1835,7 +2024,7 @@ describe('Paint owns the map', () => {
     expect(menus()).toHaveLength(0);
   });
 
-  it('puts itself away when a DM tool is armed from the stack', async () => {
+  it('puts itself away when a GM tool is armed from the stack', async () => {
     await showMap();
     await paintOn();
     fireEvent.click(screen.getByText('Walls'));
@@ -1860,7 +2049,7 @@ describe('Paint owns the map', () => {
 /**
  * Painting the map the table is on, while the players play. They are sent
  * nothing until Save, and the map sent again meanwhile (a token moved, the
- * DM's own save coming back) leaves the paint and the stroke under way as
+ * GM's own save coming back) leaves the paint and the stroke under way as
  * they are.
  */
 describe('on the table\'s map', () => {
@@ -1872,7 +2061,7 @@ describe('on the table\'s map', () => {
     });
   };
 
-  it('sends the table nothing while the DM paints, fills and undoes', async () => {
+  it('sends the table nothing while the GM paints, fills and undoes', async () => {
     await showMap();
     await paintOn();
     h.sent.length = 0;
@@ -2028,7 +2217,7 @@ describe('drafts', () => {
   }
   const putBack = () => callsOn(pictureCanvas()).filter((c) => c.method === 'putImageData').map((c) => c.args.slice(1, 3));
 
-  it("keeps a saved room's walls in the draft while they are being added, should the DM paint meanwhile", async () => {
+  it("keeps a saved room's walls in the draft while they are being added, should the GM paint meanwhile", async () => {
     await showMap();
     await paintOn();
     const panel = () => within(screen.getByRole('region', { name: 'Mapmaker' }));
@@ -2039,11 +2228,11 @@ describe('drafts', () => {
       act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
       await settle();
       let addFirst: () => void = () => undefined;
-      h.addWall.mockImplementationOnce(() => new Promise((resolve) => { addFirst = () => resolve({}); }));
+      h.addWalls.mockImplementationOnce((_c: string, _m: string, walls: object[]) => new Promise((resolve) => { addFirst = () => resolve({ added: walls, skipped: [], total: walls.length }); }));
       await pressSave();
-      for (let i = 0; i < 20 && h.addWall.mock.calls.length === 0; i += 1) await settle();
-      expect(h.addWall).toHaveBeenCalledTimes(1);
-      // The DM paints while the walls go in, and that painting is drafted.
+      for (let i = 0; i < 20 && h.addWalls.mock.calls.length === 0; i += 1) await settle();
+      expect(h.addWalls).toHaveBeenCalledTimes(1);
+      // The GM paints while the walls go in, and that painting is drafted.
       const writes = drafts().writes.length;
       fireEvent.click(panel().getByRole('button', { name: 'Brush' }));
       drag({ clientX: 300, clientY: 300 }, { clientX: 400, clientY: 320 });
@@ -2083,8 +2272,8 @@ describe('drafts', () => {
     await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true'));
     await pressSave();
-    await waitFor(() => expect(h.addWall).toHaveBeenCalledTimes(2));
-    expect(h.addWall.mock.calls.map(([, , wall]) => wall)).toEqual([
+    await waitFor(() => expect(h.addWalls).toHaveBeenCalledTimes(1));
+    expect(h.addWalls.mock.calls[0]?.[2]).toEqual([
       { x1: 0, y1: 0, x2: 100, y2: 0, type: 'wall' },
       { x1: 100, y1: 0, x2: 100, y2: 50, type: 'wall' },
     ]);
@@ -2118,6 +2307,56 @@ describe('drafts', () => {
       Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
     }
     expect(drafts().writes.map((w) => w.tiles)).toEqual([['0,0', '1,0']]);
+  });
+
+  /** Choose a tool in the Mapmaker panel. */
+  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: tool }));
+  /** Where a drawImage onto the picture put its pixels: x, y, width, height. */
+  const drawnAt = () => callsOn(pictureCanvas()).filter((c) => c.method === 'drawImage').map((c) => c.args.slice(-4));
+
+  it('puts a moved selection down as the page is hidden, so the draft written then holds it, though it was the only change', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    drag({ clientX: 150, clientY: 120 }, { clientX: 450, clientY: 420 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    // Where the box was, and where it went.
+    expect(drafts().writes.map((w) => w.tiles)).toEqual([['0,0', '1,1']]);
+    expect([...drafts().kept.get(key)!.keys()]).toEqual(['0,0', '1,1']);
+    expect(drawnAt()).toContainEqual([400, 400, 100, 50]);
+  });
+
+  it('puts a paste down as the page is hidden, so the draft written then holds it', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 300, clientY: 100 }, { clientX: 400, clientY: 150 });
+    press('c', { ctrlKey: true });
+    press('Escape');
+    fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: 'Paste' }));
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    try {
+      act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+      await settle();
+    } finally {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    }
+    expect(drafts().writes.map((w) => w.tiles)).toEqual([['1,0']]);
+    // A square right and down from where it was copied.
+    expect(drawnAt()).toContainEqual([350, 150, 100, 50]);
+  });
+
+  it('leaves a box chosen and not moved where it is as the page is hidden', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    expect(drafts().writes).toEqual([]);
+    expect(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: 'Copy' })).toBeEnabled();
   });
 
   it('writes what is not saved as another map is shown', async () => {
@@ -2517,7 +2756,7 @@ describe('drafts', () => {
     });
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     painted = 1;
-    // The picture takes its time to send; the DM paints on meanwhile.
+    // The picture takes its time to send; the GM paints on meanwhile.
     let uploaded = () => undefined as void;
     h.replaceDrawnPicture.mockImplementationOnce((id: string) => new Promise((resolve) => {
       uploaded = () => resolve({ message: 'Picture saved', asset: { id, type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: [DRAWN_MAP_TAG] }, imageUrl: `/api/assets/maps/${id}?v=1` });
@@ -2584,7 +2823,7 @@ describe('drafts', () => {
     expect(usePaintStore.getState().unsaved).toBe(true);
   });
 
-  it('of a map no longer in the campaign, deleted from another device, is dropped as the DM opens the campaign', async () => {
+  it('of a map no longer in the campaign, deleted from another device, is dropped as the GM opens the campaign', async () => {
     const header = (mapId: string, userId = 'me') => ({ key: draftKey(userId, 'campaign-1', mapId, 'closed-tab'), userId, campaignId: 'campaign-1', mapId, tabId: 'closed-tab', baseUrl: '', width: 10, height: 10, savedAt: 0 });
     await drafts().put(header('map-gone'), [], true);
     await drafts().put(header('map-b'), [], true);
@@ -2594,7 +2833,7 @@ describe('drafts', () => {
     expect([...drafts().headers.values()].map((d) => `${d.userId} ${d.mapId}`).sort()).toEqual(['me map-b', 'someone-else map-gone']);
   });
 
-  it('is offered to no one but the DM', async () => {
+  it('is offered to no one but the GM', async () => {
     h.set({ userRole: 'PLAYER' });
     keepDraft('');
     await showMap();
@@ -2751,6 +2990,7 @@ describe('paint not saved, asked about before it is left', () => {
     await painted();
     const answer = askAbout('open-other');
     await waitFor(() => expect(question()).toBeInTheDocument());
+    await untilTrapped(question);
     await act(async () => { fireEvent.keyDown(question()!, { key: 'Escape' }); });
     await waitFor(() => expect(answer.value).toBe(false));
     expect(usePaintStore.getState().unsaved).toBe(true);
@@ -2883,6 +3123,7 @@ describe('the question before Save', () => {
   ])('sends nothing on %s, and the paint stays to be saved', async (_how, cancel) => {
     await paintedOn();
     await act(async () => { fireEvent.click(panelSave()); });
+    await untilTrapped(asked);
     await act(async () => { cancel(); });
     await waitFor(() => expect(asked()).toBeNull());
     expect(h.replaceDrawnPicture).not.toHaveBeenCalled();
@@ -3007,7 +3248,7 @@ describe('paint not saved, the page left after answering', () => {
 
 /**
  * Paint not saved on a map that leaves the screen without asking: the map
- * deleted from elsewhere, or the viewer no longer the DM. The painting is
+ * deleted from elsewhere, or the viewer no longer the GM. The painting is
  * kept as a draft and offered as a picture to download, never let go of
  * unsaid.
  */
@@ -3069,13 +3310,13 @@ describe('paint not saved, its map gone without asking', () => {
     expect(reload()).toBe(false);
   });
 
-  it('says why when the viewer is no longer the DM, and Discard drops it and its draft', async () => {
+  it('says why when the viewer is no longer the GM, and Discard drops it and its draft', async () => {
     await showMap();
     await paintOn();
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     act(() => { h.set({ userRole: 'PLAYER' }); });
     await waitFor(() => expect(offer()).toBeInTheDocument());
-    expect(within(offer()!).getByText(/You are no longer the DM, so your painting of Map A cannot be saved/)).toBeInTheDocument();
+    expect(within(offer()!).getByText(/You are no longer the GM, so your painting of Map A cannot be saved/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Mapmaker' })).toBeNull();
     await act(async () => { fireEvent.click(within(offer()!).getByRole('button', { name: 'Discard my painting' })); });
     await waitFor(() => expect(offer()).toBeNull());

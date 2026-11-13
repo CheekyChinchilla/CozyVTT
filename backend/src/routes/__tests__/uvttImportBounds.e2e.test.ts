@@ -69,16 +69,16 @@ const CROPPED = uvttFile([square(2, 2), square(20, 2)]);
 /** Tidy walls, plus a table's worth of object walls. */
 const WITH_FURNITURE = uvttFile([square(2, 2)], [square(4, 4)]);
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const importUvtt = (
   file: Buffer,
   name: string,
   opts: { confirm?: boolean; includeObjectWalls?: boolean } = {}
 ) => {
-  const req = dm
+  const req = gm
     .post(`/api/campaigns/${campaignId}/maps/import-uvtt`)
     .attach('file', file, `${name}.uvtt`)
     .field('name', name);
@@ -95,22 +95,22 @@ beforeAll(async () => {
   const stamp = Date.now();
   const user = await createTestUser({
     email: `uvtt-dm-${stamp}@test.cozyvtt.local`,
-    displayName: 'UVTT DM',
+    displayName: 'UVTT GM',
   });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `UVTT ${stamp}` })).id;
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `UVTT ${stamp}` })).id;
   await prisma.campaignMembership.create({
-    data: { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+    data: { userId: gmId, campaignId, role: 'GM', characterIds: [] },
   });
-  dm = request.agent(app);
-  const login = await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD });
+  gm = request.agent(app);
+  const login = await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD });
   expect(login.status).toBe(200);
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
@@ -168,7 +168,7 @@ describe('a UVTT carrying walls for its furniture', () => {
     expect(await mapCount()).toBe(0);
   });
 
-  it('leaves them out when the DM says no', async () => {
+  it('leaves them out when the GM says no', async () => {
     const res = await importUvtt(WITH_FURNITURE, 'furniture', {
       confirm: true,
       includeObjectWalls: false,
@@ -177,7 +177,7 @@ describe('a UVTT carrying walls for its furniture', () => {
     expect(res.body.totalSegments).toBe(4);
   });
 
-  it('brings them in when the DM says yes', async () => {
+  it('brings them in when the GM says yes', async () => {
     const res = await importUvtt(WITH_FURNITURE, 'furniture', {
       confirm: true,
       includeObjectWalls: true,
@@ -209,7 +209,7 @@ describe('a UVTT with more walls than a map can hold', () => {
 describe('whether dynamic lighting comes on', () => {
   it('stays off for a file with walls but no lights', async () => {
     // Walls alone used to switch it on, which left players looking at a black
-    // map lit only by their own token until the DM worked out why.
+    // map lit only by their own token until the GM worked out why.
     const res = await importUvtt(TIDY, 'walls-only', { confirm: true });
     expect(res.status).toBe(201);
     expect(res.body.map.lightingEnabled).toBe(false);
@@ -233,7 +233,7 @@ describe('whether dynamic lighting comes on', () => {
 });
 
 describe('who may import', () => {
-  it('refuses someone who is not the DM of this campaign', async () => {
+  it('refuses someone who is not the GM of this campaign', async () => {
     const stranger = await createTestUser({
       email: `uvtt-stranger-${Date.now()}@test.cozyvtt.local`,
       displayName: 'UVTT Stranger',

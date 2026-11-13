@@ -124,7 +124,7 @@ export async function findUses(assetId: string, db: Prisma.TransactionClient = p
         select: { name: true, campaignId: true, imageUrl: true, campaign: { select: { name: true } } },
       }),
       // The track a campaign is playing, and the tracks its time-of-day
-      // periods play when the DM switches to them, inside its vibe settings.
+      // periods play when the GM switches to them, inside its vibe settings.
       db.campaign.findMany({
         where: {
           OR: [
@@ -216,7 +216,7 @@ export interface AssetUsageView {
  * uploader and its campaign's members and naming it, the ones whose writer
  * can read the asset now (canReadAsset, once for each writer). That holds
  * every handout the handout grant counts for the asset's campaign, since
- * they are its current DM's, who reads every asset of it; and the DM's own
+ * they are its current GM's, who reads every asset of it; and the GM's own
  * notes; and a player's note naming a picture they are shown. A stranger's
  * document, or a player's note naming a map picture their table has left,
  * shows nothing, and does not count.
@@ -303,11 +303,11 @@ export async function assetUsageFor(
 ): Promise<AssetUsageView> {
   let runs = new Set<string>();
   if (!viewer.isAdmin) {
-    const dmOf = await prisma.campaignMembership.findMany({
-      where: { userId: viewer.userId, role: 'DM' },
+    const gmOf = await prisma.campaignMembership.findMany({
+      where: { userId: viewer.userId, role: 'GM' },
       select: { campaignId: true },
     });
-    runs = new Set(dmOf.map((m) => m.campaignId));
+    runs = new Set(gmOf.map((m) => m.campaignId));
   }
   // What the documents from before name is read first, a few at a time:
   // the caller's own, then those of the campaigns they run, then any other.

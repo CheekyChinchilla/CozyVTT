@@ -1,3 +1,6 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
 /**
  * aoeGeometry.ts
  * Grid snapping for area-of-effect templates.
@@ -121,10 +124,10 @@ export function squareExitPoint(centre: Pt, gridSize: number, angleRad: number):
 // placement was not part of the reported misalignment.
 
 /**
- * How a game system draws a cone. D&D 5e: a cone's width at any point along
+ * How a game system draws a cone. 5E: a cone's width at any point along
  * its length equals that point's distance from where it starts, so it is a
  * triangle whose far edge, at its full length, is as wide as it is long.
- * Pathfinder 2e: a quarter circle, a 90 degree sector of its length.
+ * Fantasy d20: a quarter circle, a 90 degree sector of its length.
  * Both checked against the systems' rulebooks.
  */
 export type ConeRule = 'width-equals-distance' | 'quarter-circle';

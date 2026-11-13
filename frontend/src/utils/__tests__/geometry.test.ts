@@ -22,7 +22,7 @@ describe('calcGridDistance', () => {
     expect(calcGridDistance(3, 5, 5, 'flat')).toBe(25);
   });
 
-  it('alternating rule: every second diagonal costs double (PF2e 5/10)', () => {
+  it('alternating rule: every second diagonal costs double (Fantasy d20 5/10)', () => {
     // 1 diagonal = 5ft, 2 diagonals = 15ft, 3 = 20ft, 4 = 30ft
     expect(calcGridDistance(1, 1, 5, 'alternating')).toBe(5);
     expect(calcGridDistance(2, 2, 5, 'alternating')).toBe(15);

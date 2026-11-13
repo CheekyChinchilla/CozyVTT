@@ -67,24 +67,24 @@ function missingFields(shown: unknown, actual: unknown, at = ''): string[] {
 }
 
 describe('the worked examples in docs/API_REFERENCE.md', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let campaignId: string;
   let assetId: string;
-  let dm: ReturnType<typeof request.agent>;
+  let gm: ReturnType<typeof request.agent>;
   let email: string;
 
   beforeAll(async () => {
-    const dmUser = await createTestUser({ displayName: 'Reference DM' });
-    dmId = dmUser.id;
-    email = dmUser.email;
+    const gmUser = await createTestUser({ displayName: 'Reference GM' });
+    gmId = gmUser.id;
+    email = gmUser.email;
     const player = await createTestUser({ displayName: 'Reference Player' });
     playerId = player.id;
-    const campaign = await createTestCampaign(dmId, { name: 'Reference Table', gameSystem: 'DND_5E' });
+    const campaign = await createTestCampaign(gmId, { name: 'Reference Table', gameSystem: 'FIFTH_EDITION' });
     campaignId = campaign.id;
-    await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
     const character = await prisma.character.create({
-      data: { userId: playerId, campaignId, name: 'Reference Hero', gameSystem: 'DND_5E', data: { hp: { current: 24, maximum: 31, temporary: 0 } } },
+      data: { userId: playerId, campaignId, name: 'Reference Hero', gameSystem: 'FIFTH_EDITION', data: { hp: { current: 24, maximum: 31, temporary: 0 } } },
     });
     await prisma.campaignMembership.create({ data: { userId: playerId, campaignId, role: 'PLAYER', characterIds: [character.id] } });
     assetId = (
@@ -98,18 +98,18 @@ describe('the worked examples in docs/API_REFERENCE.md', () => {
           filePath: `tokens/reference-${Math.random().toString(36).slice(2)}.png`,
           type: AssetType.TOKEN,
           scope: AssetScope.USER,
-          uploadedById: dmId,
+          uploadedById: gmId,
         },
       })
     ).id;
-    dm = request.agent(app);
+    gm = request.agent(app);
   });
 
   afterAll(async () => {
     try {
       await prisma.asset.deleteMany({ where: { id: assetId } });
       await cleanupCampaigns([campaignId]);
-      await cleanupUsers([dmId, playerId]);
+      await cleanupUsers([gmId, playerId]);
     } finally {
       await prisma.$disconnect();
     }
@@ -125,31 +125,31 @@ describe('the worked examples in docs/API_REFERENCE.md', () => {
   });
 
   it('shows what signing in answers', async () => {
-    const res = await dm.post('/api/auth/login').send({ email, password: TEST_PASSWORD });
+    const res = await gm.post('/api/auth/login').send({ email, password: TEST_PASSWORD });
 
     expect(res.status).toBe(200);
     expect(missingFields(exampleUnder('### `POST /api/auth/login`', '**Response (success):**'), res.body)).toEqual([]);
   });
 
   it('shows GET /api/auth/me', async () => {
-    const res = await dm.get('/api/auth/me');
+    const res = await gm.get('/api/auth/me');
 
     expect(res.status).toBe(200);
     expect(missingFields(exampleUnder('### `GET /api/auth/me`'), res.body)).toEqual([]);
   });
 
   it('shows GET /api/campaigns', async () => {
-    const res = await dm.get('/api/campaigns');
+    const res = await gm.get('/api/campaigns');
 
     expect(res.status).toBe(200);
     expect(missingFields(exampleUnder('### `GET /api/campaigns`'), res.body)).toEqual([]);
   });
 
   it('shows the roster GET /api/campaigns/:id/characters sends', async () => {
-    const res = await dm.get(`/api/campaigns/${campaignId}/characters`);
+    const res = await gm.get(`/api/campaigns/${campaignId}/characters`);
 
     expect(res.status).toBe(200);
-    // The DM has no character; the guide's entry is a player's, so compare that one.
+    // The GM has no character; the guide's entry is a player's, so compare that one.
     const roster = [...res.body.roster].sort(
       (a: { characters: unknown[] }, b: { characters: unknown[] }) => b.characters.length - a.characters.length
     );
@@ -157,7 +157,7 @@ describe('the worked examples in docs/API_REFERENCE.md', () => {
   });
 
   it('shows GET /api/assets', async () => {
-    const res = await dm.get('/api/assets');
+    const res = await gm.get('/api/assets');
 
     expect(res.status).toBe(200);
     expect(res.body.assets.some((asset: { id: string }) => asset.id === assetId)).toBe(true);

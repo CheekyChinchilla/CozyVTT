@@ -8,7 +8,7 @@
  * on the right. jsdom evaluates no media query, so the classes are what is
  * checked.
  *
- * A combatant's menu opened by a right-click only, and the DM's drag to
+ * A combatant's menu opened by a right-click only, and the GM's drag to
  * reorder began anywhere on the row, which on an iPad starts the system's
  * own drag at about the time a long-press would open the menu. On a touch
  * screen a long-press on the row now opens the menu a right-click opens, and
@@ -25,7 +25,7 @@ import { useGameStore } from '@/stores/gameStore';
 import type { CombatantEntry, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 
-const seat = vi.hoisted(() => ({ role: 'DM' }));
+const seat = vi.hoisted(() => ({ role: 'GM' }));
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({ userRole: seat.role, currentMap: { id: 'map-a' }, viewedMap: { id: 'map-a' } }),
 }));
@@ -54,7 +54,7 @@ const ogreToken: Token = { ...goblinToken, id: 'ogre', name: 'Ogre' };
 const ogre: CombatantEntry = { ...goblin, tokenId: 'ogre', name: 'Ogre', initiative: 3 };
 
 beforeEach(() => {
-  seat.role = 'DM';
+  seat.role = 'GM';
   emitInitiativeReorder.mockReset();
   useGameStore.getState().setTokens([goblinToken, ogreToken]);
   useGameStore.getState().setCombatState({ active: false, round: 0, currentTokenId: null, combatants: [goblin] });
@@ -238,7 +238,7 @@ describe("a combatant's row, pressed and held by a finger", () => {
   });
 });
 
-describe("the DM's drag to reorder", () => {
+describe("the GM's drag to reorder", () => {
   afterEach(() => { vi.unstubAllGlobals(); });
 
   it('starts anywhere on the row with a mouse, as before', () => {
@@ -341,11 +341,17 @@ describe('Up and Down on a touch screen', () => {
       .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
   });
 
-  it('are not there with a mouse, nor for a player', () => {
-    const { unmount } = render(<InitiativeTracker />);
-    expect(screen.queryByRole('button', { name: 'Move Ogre down' })).toBeNull();
-    unmount();
+  // With a mouse they wait for the keyboard; on a touch screen they always show.
+  it('show all the time, beside the die', () => {
+    onATouchScreen();
+    render(<InitiativeTracker />);
 
+    const down = screen.getByRole('button', { name: 'Move Ogre down' });
+    expect(down.parentElement).toBe(screen.getByRole('button', { name: 'Roll initiative for Ogre' }).parentElement);
+    expect(classesOf(down.parentElement)).not.toContain('opacity-0');
+  });
+
+  it('are not there for a player', () => {
     onATouchScreen();
     seat.role = 'PLAYER';
     render(<InitiativeTracker />);

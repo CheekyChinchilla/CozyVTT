@@ -1,13 +1,13 @@
 /**
  * Who may draw on a map, erase a drawing, and be sent one.
  *
- * The DM draws and erases anything at any time. A player draws while the
+ * The GM draws and erases anything at any time. A player draws while the
  * campaign's Players may draw is on, except while the session is paused or
  * has ended, which is the rule a player's token moves already follow; they
  * erase their own drawings only, at any time. A spectator does neither, not
- * even with a drawing of their own from before a demotion, and a former DM
- * may not erase the drawings for the DM alone they wrote while in the seat.
- * A drawing for the DM alone is sent to the DM alone. The rules are one file in each package,
+ * even with a drawing of their own from before a demotion, and a former GM
+ * may not erase the drawings for the GM alone they wrote while in the seat.
+ * A drawing for the GM alone is sent to the GM alone. The rules are one file in each package,
  * so the draw tool offers what the server takes.
  */
 
@@ -21,8 +21,8 @@ const STATUSES = ['PREPARATION', 'ACTIVE', 'PAUSED', 'INACTIVE', 'COMPLETED', 'A
 const live = (status: string) => status !== 'PAUSED' && status !== 'INACTIVE';
 
 describe('canDraw', () => {
-  it.each(STATUSES)('lets the DM draw while the campaign is %s, with players kept from drawing', (status) => {
-    expect(canDraw('DM', { status, playersMayDraw: false })).toBe(true);
+  it.each(STATUSES)('lets the GM draw while the campaign is %s, with players kept from drawing', (status) => {
+    expect(canDraw('GM', { status, playersMayDraw: false })).toBe(true);
   });
 
   it.each(STATUSES)('lets a player draw while the campaign is %s only when the session lets them move', (status) => {
@@ -53,9 +53,9 @@ describe('drawRefusal', () => {
 });
 
 describe('canDrawOnLayer', () => {
-  it('gives the ground layer to the DM alone, and the markup layer to anyone', () => {
-    expect(canDrawOnLayer('DM', 'GROUND')).toBe(true);
-    expect(canDrawOnLayer('DM', 'MARKUP')).toBe(true);
+  it('gives the ground layer to the GM alone, and the markup layer to anyone', () => {
+    expect(canDrawOnLayer('GM', 'GROUND')).toBe(true);
+    expect(canDrawOnLayer('GM', 'MARKUP')).toBe(true);
     expect(canDrawOnLayer('PLAYER', 'GROUND')).toBe(false);
     expect(canDrawOnLayer('PLAYER', 'MARKUP')).toBe(true);
   });
@@ -65,10 +65,10 @@ describe('canEraseDrawing', () => {
   const mine = { authorId: 'me', audience: 'ALL' };
   const theirs = { authorId: 'them', audience: 'ALL' };
   const orphan = { authorId: null, audience: 'ALL' };
-  const mineForTheDm = { authorId: 'me', audience: 'DM' };
+  const mineForTheGm = { authorId: 'me', audience: 'GM' };
 
-  it('lets the DM erase any drawing, one whose author is gone and one for the DM alone included', () => {
-    for (const drawing of [mine, theirs, orphan, mineForTheDm]) expect(canEraseDrawing('DM', 'me', drawing)).toBe(true);
+  it('lets the GM erase any drawing, one whose author is gone and one for the GM alone included', () => {
+    for (const drawing of [mine, theirs, orphan, mineForTheGm]) expect(canEraseDrawing('GM', 'me', drawing)).toBe(true);
   });
 
   it('lets a player erase their own drawings and no one else\'s', () => {
@@ -78,16 +78,16 @@ describe('canEraseDrawing', () => {
     expect(canEraseDrawing('PLAYER', undefined, orphan)).toBe(false);
   });
 
-  // A DM's notes for themselves go with the seat. One who has handed it
+  // A GM's notes for themselves go with the seat. One who has handed it
   // over, or had it taken, is a player who wrote drawings they are no longer
   // sent, and may not erase them.
-  it('lets a player erase none of their own drawings that are for the DM alone', () => {
-    expect(canEraseDrawing('PLAYER', 'me', mineForTheDm)).toBe(false);
+  it('lets a player erase none of their own drawings that are for the GM alone', () => {
+    expect(canEraseDrawing('PLAYER', 'me', mineForTheGm)).toBe(false);
   });
 
   it('erases only what drawingSentTo sends, for every role', () => {
-    for (const role of ['DM', 'PLAYER', 'SPECTATOR', undefined]) {
-      for (const drawing of [mine, theirs, orphan, mineForTheDm]) {
+    for (const role of ['GM', 'PLAYER', 'SPECTATOR', undefined]) {
+      for (const drawing of [mine, theirs, orphan, mineForTheGm]) {
         if (canEraseDrawing(role, 'me', drawing)) expect(drawingSentTo(role, drawing)).toBe(true);
       }
     }
@@ -104,12 +104,12 @@ describe('canEraseDrawing', () => {
 });
 
 describe('drawingSentTo', () => {
-  it('sends the DM every drawing and anyone else those for everyone', () => {
-    expect(drawingSentTo('DM', { audience: 'DM' })).toBe(true);
-    expect(drawingSentTo('DM', { audience: 'ALL' })).toBe(true);
+  it('sends the GM every drawing and anyone else those for everyone', () => {
+    expect(drawingSentTo('GM', { audience: 'GM' })).toBe(true);
+    expect(drawingSentTo('GM', { audience: 'ALL' })).toBe(true);
     for (const role of ['PLAYER', 'SPECTATOR', undefined]) {
       expect(drawingSentTo(role, { audience: 'ALL' })).toBe(true);
-      expect(drawingSentTo(role, { audience: 'DM' })).toBe(false);
+      expect(drawingSentTo(role, { audience: 'GM' })).toBe(false);
     }
   });
 });

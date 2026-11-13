@@ -12,7 +12,7 @@ import { DEFAULT_DRAW_SETTINGS } from '../map/tools/useDrawTool';
 
 function panel(extra: Partial<DrawControlsProps> = {}) {
   const props: DrawControlsProps = {
-    kind: 'pen', onKindChange: vi.fn(), settings: DEFAULT_DRAW_SETTINGS, onSettingsChange: vi.fn(), isDM: false,
+    kind: 'pen', onKindChange: vi.fn(), settings: DEFAULT_DRAW_SETTINGS, onSettingsChange: vi.fn(), isGM: false,
     polygonCorners: 0, onPolygonDone: vi.fn(), onPolygonCancel: vi.fn(), clearable: 2, onClear: vi.fn(), onClose: vi.fn(),
     members: [], onClearMember: vi.fn(),
     ...extra,
@@ -66,7 +66,7 @@ describe('the drawing tools', () => {
 
 describe('who is offered what', () => {
   it('gives a player Clear mine, at once, and no Only I can see this', () => {
-    const props = panel({ isDM: false });
+    const props = panel({ isGM: false });
 
     expect(screen.queryByRole('checkbox', { name: 'Only I can see this' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Clear mine' }));
@@ -79,16 +79,16 @@ describe('who is offered what', () => {
   });
 
   // The laser pointer goes to everyone, so a box ticked for a secret note
-  // must not seem to keep it to the DM.
-  it('offers the DM no Only I can see this under the laser pointer, and says everyone sees it', () => {
-    panel({ isDM: true, kind: 'laser', settings: { ...DEFAULT_DRAW_SETTINGS, dmOnly: true } });
+  // must not seem to keep it to the GM.
+  it('offers the GM no Only I can see this under the laser pointer, and says everyone sees it', () => {
+    panel({ isGM: true, kind: 'laser', settings: { ...DEFAULT_DRAW_SETTINGS, gmOnly: true } });
 
     expect(screen.queryByRole('checkbox', { name: 'Only I can see this' })).not.toBeInTheDocument();
     expect(screen.getByText('Everyone sees the laser pointer.')).toBeInTheDocument();
   });
 
-  it('gives the DM Only I can see this, and Clear drawings, which asks first and says how many', () => {
-    const props = panel({ isDM: true, clearable: 3 });
+  it('gives the GM Only I can see this, and Clear drawings, which asks first and says how many', () => {
+    const props = panel({ isGM: true, clearable: 3 });
 
     expect(screen.getByRole('checkbox', { name: 'Only I can see this' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Clear drawings' }));
@@ -100,19 +100,19 @@ describe('who is offered what', () => {
   });
 });
 
-// The DM tidies up after one player without losing anyone else's work.
+// The GM tidies up after one player without losing anyone else's work.
 describe('clearing one player’s drawings', () => {
   const members = [{ authorId: 'mara', name: 'Mara', count: 3 }, { authorId: 'tom', name: 'Tom', count: 1 }];
 
-  it('lists each player with drawings on the map and how many, for the DM', () => {
-    panel({ isDM: true, members });
+  it('lists each player with drawings on the map and how many, for the GM', () => {
+    panel({ isGM: true, members });
 
     expect(screen.getByRole('button', { name: "Clear Mara's drawings (3)" })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: "Clear Tom's drawings (1)" })).toBeInTheDocument();
   });
 
   it('asks first, naming the player and how many, and clears only theirs', () => {
-    const props = panel({ isDM: true, members });
+    const props = panel({ isGM: true, members });
 
     fireEvent.click(screen.getByRole('button', { name: "Clear Mara's drawings (3)" }));
     expect(props.onClearMember).not.toHaveBeenCalled();
@@ -126,17 +126,17 @@ describe('clearing one player’s drawings', () => {
   });
 
   it('is not offered to a player', () => {
-    panel({ isDM: false, members });
+    panel({ isGM: false, members });
 
     expect(screen.queryByRole('button', { name: /Clear Mara/ })).not.toBeInTheDocument();
   });
 });
 
 describe('the panel’s fit', () => {
-  // It sits in the DM's 200-pixel tool stack, a player's corner and, on a
+  // It sits in the GM's 200-pixel tool stack, a player's corner and, on a
   // phone, a sheet: it takes the width it is given and wraps its rows.
   it('takes its holder’s width and wraps its rows of buttons', () => {
-    panel({ isDM: true });
+    panel({ isGM: true });
 
     const section = screen.getByRole('region', { name: 'Drawing tools' });
     expect(classes(section)).toContain('w-full');
@@ -146,7 +146,7 @@ describe('the panel’s fit', () => {
   });
 
   it('sizes every control for a finger', () => {
-    panel({ isDM: true, kind: 'rect' });
+    panel({ isGM: true, kind: 'rect' });
 
     for (const button of screen.getAllByRole('button')) expect(classes(button)).toContain('touch-target');
     for (const box of screen.getAllByRole('checkbox')) expect(classes(box.closest('label')!)).toContain('touch-target');

@@ -6,7 +6,7 @@
  * "Longsword". It now goes out with its name as the roll's purpose, or with a
  * purpose of its own when it has one.
  *
- * A saved roll can also keep a character, for a DM who saves a creature's
+ * A saved roll can also keep a character, for a GM who saves a creature's
  * attack: it is rolled as that character while the Character box is empty,
  * and the box wins when it has something in it.
  */
@@ -49,7 +49,7 @@ vi.mock('@/services/dice.service', () => ({ getDiceRolls: vi.fn().mockResolvedVa
 vi.mock('@/services/api', () => {
   const client = { listDiceMacros: vi.fn().mockResolvedValue({ macros: [
     { id: 'm1', userId: 'me', campaignId: 'campaign-1', name: 'Longsword', expression: '1d20+5', characterName: null, purpose: null, createdAt: '', updatedAt: '' },
-    { id: 'm2', userId: 'me', campaignId: 'campaign-1', name: 'Goblin', expression: '1d20+4', characterName: 'Goblin boss', purpose: 'Scimitar attack', createdAt: '', updatedAt: '' },
+    { id: 'm2', userId: 'me', campaignId: 'campaign-1', name: 'Goblin', expression: '1d20+4', characterName: 'Hobgoblin', purpose: 'Longsword attack', createdAt: '', updatedAt: '' },
   ] }) };
   return { api: client, default: client };
 });
@@ -99,7 +99,7 @@ it('rolls a saved roll as its own character, for its own purpose, while the Char
   fireEvent.click(await screen.findByRole('button', { name: 'Goblin' }));
 
   await waitFor(() => expect(rollDice).toHaveBeenCalledTimes(1));
-  expect(rollDice.mock.calls[0][0]).toMatchObject({ expression: '1d20+4', characterName: 'Goblin boss', purpose: 'Scimitar attack' });
+  expect(rollDice.mock.calls[0][0]).toMatchObject({ expression: '1d20+4', characterName: 'Hobgoblin', purpose: 'Longsword attack' });
 });
 
 it('rolls a saved roll as the character in the Character box when it has one', async () => {
@@ -108,7 +108,7 @@ it('rolls a saved roll as the character in the Character box when it has one', a
   fireEvent.click(await screen.findByRole('button', { name: 'Goblin' }));
 
   await waitFor(() => expect(rollDice).toHaveBeenCalledTimes(1));
-  expect(rollDice.mock.calls[0][0]).toMatchObject({ characterName: 'Grik', purpose: 'Scimitar attack' });
+  expect(rollDice.mock.calls[0][0]).toMatchObject({ characterName: 'Grik', purpose: 'Longsword attack' });
 });
 
 it('takes a Character box of only spaces as empty', async () => {
@@ -117,7 +117,7 @@ it('takes a Character box of only spaces as empty', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Goblin' }));
 
   await waitFor(() => expect(rollDice).toHaveBeenCalledTimes(1));
-  expect(rollDice.mock.calls[0][0]).toMatchObject({ characterName: 'Goblin boss' });
+  expect(rollDice.mock.calls[0][0]).toMatchObject({ characterName: 'Hobgoblin' });
 });
 
 it('sends no character for a saved roll without one while the box is empty', async () => {
@@ -144,6 +144,6 @@ it('rolls a saved roll made while the session is paused as its own character, fo
   fireEvent.click(await screen.findByRole('button', { name: 'Goblin' }));
 
   expect(rollDice).not.toHaveBeenCalled();
-  expect(await screen.findByText(/Goblin boss/)).toBeTruthy();
-  expect(screen.getByText(/Scimitar attack/)).toBeTruthy();
+  expect(await screen.findByText(/Hobgoblin/)).toBeTruthy();
+  expect(screen.getByText(/Longsword attack/)).toBeTruthy();
 });

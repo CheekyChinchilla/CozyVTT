@@ -3,7 +3,7 @@
  * to another token, does not bring the old one back.
  *
  * The editor saves a stat block once typing pauses, and straight away when it
- * closes, so the answer usually arrives after the DM has closed it or opened
+ * closes, so the answer usually arrives after the GM has closed it or opened
  * another token. The page set the edited token as the one being edited on
  * every answer, so the editor opened again on its own, or jumped back to the
  * token before.
@@ -34,7 +34,7 @@ vi.mock('react-resizable-panels', () => {
     usePanelRef: () => ({ current: null }),
   };
 });
-vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm', displayName: 'DM' } }) }));
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm', displayName: 'GM' } }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
   CampaignProvider: ({ children }: { children?: unknown }) => <>{children as never}</>,
   useCampaign: () => ({
@@ -44,7 +44,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
     viewedMap: { id: view.mapId, name: 'Map', tokens: [] },
     loading: false,
     error: null,
-    userRole: 'DM',
+    userRole: 'GM',
     updateCampaignStatus: vi.fn(),
     setActiveSession: vi.fn(),
     refreshCurrentMap: vi.fn(),

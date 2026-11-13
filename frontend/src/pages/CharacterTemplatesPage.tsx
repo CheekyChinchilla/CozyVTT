@@ -15,16 +15,28 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCharacterTemplatesQuery, storeCharacterInList } from '@/hooks/queries';
 import { useToast } from '@/contexts/ToastContext';
 import api from '@/services/api';
-import { GameSystem, type CharacterTemplate, type CharacterTemplateSummary } from '@/types';
+import type { CharacterTemplate, CharacterTemplateSummary } from '@/types';
 import { canModifyTemplate } from '@/utils/templatePermissions';
 import { apiErrorMessage } from '@/utils/errors';
-import { GAME_SYSTEM_OPTIONS, GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
+import { GAME_SYSTEM_OPTIONS, GAME_SYSTEM_SHORT_LABELS, UNSUPPORTED_SYSTEM_LABEL, isGameSystem, isSupportedOrNoSystem } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/common/EmptyState';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import NewCharacterTemplateModal from '@/components/character/NewCharacterTemplateModal';
 import CharacterTemplateEditorModal from '@/components/character/CharacterTemplateEditorModal';
 import ImportCharacterModal from '@/components/character/ImportCharacterModal';
+
+/**
+ * A template's sheet as a new character starts from it. A Horror d100
+ * template an older version stored carries the record of its own conversion:
+ * those are the template's old values, so the character does not take them.
+ */
+function sheetForNewCharacter(template: CharacterTemplate): unknown {
+  const sheet: unknown = template.data;
+  if (template.gameSystem !== 'HORROR_D100' || typeof sheet !== 'object' || sheet === null || !('converted' in sheet)) return sheet;
+  const { converted: _templates, ...rest } = sheet;
+  return rest;
+}
 
 export default function CharacterTemplatesPage() {
   const navigate = useNavigate();
@@ -78,7 +90,7 @@ export default function CharacterTemplatesPage() {
       const created = await api.createCharacter({
         name: template.name,
         gameSystem: template.gameSystem ?? undefined,
-        data: template.data as never,
+        data: sheetForNewCharacter(template) as never,
         tokenImageUrl: template.tokenImageUrl ?? undefined,
       });
       storeCharacterInList(queryClient, created.character);
@@ -254,7 +266,7 @@ export default function CharacterTemplatesPage() {
                     <h2 className="font-semibold text-brand-ink truncate">{template.name}</h2>
                     <p className="text-xs text-warm-gray truncate">
                       {template.gameSystem
-                        ? GAME_SYSTEM_SHORT_LABELS[template.gameSystem as GameSystem]
+                        ? isGameSystem(template.gameSystem) ? GAME_SYSTEM_SHORT_LABELS[template.gameSystem] : UNSUPPORTED_SYSTEM_LABEL
                         : 'Flexible'}
                       {' · '}
                       {template.createdBy?.displayName ?? 'Unknown author'}
@@ -267,14 +279,17 @@ export default function CharacterTemplatesPage() {
                 )}
 
                 <div className="flex items-center gap-2 mt-auto pt-2">
-                  <Button
-                    onClick={() => handleUse(template)}
-                    loading={usingId === template.id}
-                    className="flex items-center gap-1.5 flex-1"
-                  >
-                    <Copy className="w-4 h-4" />
-                    Use
-                  </Button>
+                  {/* A template of a system CozyVTT no longer supports makes no character. */}
+                  {isSupportedOrNoSystem(template.gameSystem) && (
+                    <Button
+                      onClick={() => handleUse(template)}
+                      loading={usingId === template.id}
+                      className="flex items-center gap-1.5 flex-1"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Use
+                    </Button>
+                  )}
 
                   {canModify(template) && (
                     <>

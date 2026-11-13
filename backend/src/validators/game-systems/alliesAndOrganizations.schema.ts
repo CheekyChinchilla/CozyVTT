@@ -1,5 +1,5 @@
 /**
- * Allies and organizations, on a D&D 5e or Pathfinder 2e sheet.
+ * Allies and organizations, on a 5E or Fantasy d20 sheet.
  *
  * Declared once and imported by both schemas, so the two cannot end up with
  * different limits on the same box.

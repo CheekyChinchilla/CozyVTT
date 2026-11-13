@@ -134,9 +134,9 @@ function baseTokenState(overrides: Partial<TokenDrawState> = {}): TokenDrawState
     heldDrawnAt: null,
     hoverTokenId: null,
     revealedCells: null,
-    isDM: false,
-    dmShowSpiritTokens: true,
-    dmViewBothPlanes: true,
+    isGM: false,
+    gmShowSpiritTokens: true,
+    gmViewBothPlanes: true,
     spiritAccentColor: '#9370DB',
     characterHpCache: {},
     isOwnToken: () => false,
@@ -175,7 +175,7 @@ describe('drawFog', () => {
   // shape, filled once.
   it('fills every hidden cell as one shape, so no seam between two cells shows what is under them', () => {
     const ctx = makeMockCtx();
-    drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map() }, viewport3x3);
+    drawFog(ctx, { isGM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map() }, viewport3x3);
     expect(count(ctx, 'fillRect')).toBe(0);
     expect(count(ctx, 'rect')).toBe(8);
     const fills = ctx.calls.filter((c) => c.method === 'fill');
@@ -183,10 +183,10 @@ describe('drawFog', () => {
     expect(fills[0].fillStyle).toBe('rgba(15, 12, 25, 1)');
   });
 
-  it('fills the DM\'s hidden cells as one shape too, so its fog has no lighter lines', () => {
+  it('fills the GM\'s hidden cells as one shape too, so its fog has no lighter lines', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, {
-      isDM: true,
+      isGM: true,
       fogState: { fogCols: 3, fogRows: 3, cellPx: 50, revealed: [true, false, false, false, false, false, false, false, true] },
       revealedCells: null,
       revealOpacity: new Map(),
@@ -198,7 +198,7 @@ describe('drawFog', () => {
   it('player fog fills only unrevealed cells', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, {
-      isDM: false,
+      isGM: false,
       fogState: null,
       revealedCells: new Set([0, 4]), // 2 of 9 cells revealed
       revealOpacity: new Map(),
@@ -208,21 +208,21 @@ describe('drawFog', () => {
 
   it('skips player fog entirely until fog data arrives (revealedCells null)', () => {
     const ctx = makeMockCtx();
-    drawFog(ctx, { isDM: false, fogState: null, revealedCells: null, revealOpacity: new Map() }, viewport3x3);
+    drawFog(ctx, { isGM: false, fogState: null, revealedCells: null, revealOpacity: new Map() }, viewport3x3);
     expect(ctx.calls).toHaveLength(0);
   });
 
   it('paints a player\'s unrevealed cells fully opaque, so nothing under them shows through', () => {
     const ctx = makeMockCtx();
-    drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map() }, viewport3x3);
+    drawFog(ctx, { isGM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map() }, viewport3x3);
     expect(fogged(ctx)).toBe(8);
     for (const f of ctx.calls.filter((c) => c.method === 'fill')) expect(f.fillStyle).toBe('rgba(15, 12, 25, 1)');
   });
 
-  it('keeps the DM\'s fog translucent, so the DM can still work under it', () => {
+  it('keeps the GM\'s fog translucent, so the GM can still work under it', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, {
-      isDM: true,
+      isGM: true,
       fogState: { fogCols: 3, fogRows: 3, cellPx: 50, revealed: [true, false, false, false, false, false, false, false, true] },
       revealedCells: null,
       revealOpacity: new Map(),
@@ -235,7 +235,7 @@ describe('drawFog', () => {
   it('leaves the cells a player\'s own tokens stand on clear, even when unrevealed', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, {
-      isDM: false,
+      isGM: false,
       fogState: null,
       revealedCells: new Set([0]),
       exemptCells: new Set([4, 8]),
@@ -247,7 +247,7 @@ describe('drawFog', () => {
   it('player fog never reads the full fog grid, only the revealed set', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, {
-      isDM: false,
+      isGM: false,
       fogState: { fogCols: 3, fogRows: 3, cellPx: 50, revealed: [true, false, false, false, false, false, false, false, true] },
       revealedCells: null,
       revealOpacity: new Map(),
@@ -259,15 +259,15 @@ describe('drawFog', () => {
   // started for were the ones just revealed, so nothing ever faded.
   it('fades the fog out over a cell a player has just had revealed', () => {
     const ctx = makeMockCtx();
-    drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map([[4, 0.5]]) }, viewport3x3);
+    drawFog(ctx, { isGM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map([[4, 0.5]]) }, viewport3x3);
     expect(fogged(ctx)).toBe(9);
     expect(ctx.calls.filter((f) => f.method === 'fillRect' && f.fillStyle === 'rgba(15, 12, 25, 0.5)')).toHaveLength(1);
   });
 
-  it('fades the DM\'s fog out the same way, from its own strength', () => {
+  it('fades the GM\'s fog out the same way, from its own strength', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, {
-      isDM: true,
+      isGM: true,
       fogState: { fogCols: 3, fogRows: 3, cellPx: 50, revealed: [true, false, false, false, false, false, false, false, true] },
       revealedCells: null,
       revealOpacity: new Map([[0, 0.5]]),
@@ -278,15 +278,15 @@ describe('drawFog', () => {
 
   it('draws a hidden cell at full strength whatever the fade holds', () => {
     const ctx = makeMockCtx();
-    drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map([[0, 0.5]]) }, viewport3x3);
+    drawFog(ctx, { isGM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map([[0, 0.5]]) }, viewport3x3);
     expect(count(ctx, 'fillRect')).toBe(0);
     expect(ctx.calls.filter((c) => c.method === 'fill').map((c) => c.fillStyle)).toEqual(['rgba(15, 12, 25, 1)']);
   });
 
-  it('DM fog uses the full fog grid, not revealedCells', () => {
+  it('GM fog uses the full fog grid, not revealedCells', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, {
-      isDM: true,
+      isGM: true,
       fogState: { fogCols: 3, fogRows: 3, cellPx: 50, revealed: [true, false, false, false, false, false, false, false, true] },
       revealedCells: null,
       revealOpacity: new Map(),
@@ -339,19 +339,19 @@ describe('drawTokens', () => {
 
   it('an obscured token is a plain shape with a question mark, even when its art is cached', () => {
     // A player receives it with no image address, as a plain creature with no
-    // disposition. The DM's preview holds the real art under the same id, so
+    // disposition. The GM's preview holds the real art under the same id, so
     // the address decides, not the cache.
     const veiled = makeToken('v', { obscured: true, name: '', imageUrl: '', type: TokenType.NPC, disposition: null });
     const ctx = makeMockCtx();
-    drawTokens(ctx, baseTokenState({ tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: false }), viewport3x3);
+    drawTokens(ctx, baseTokenState({ tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isGM: false }), viewport3x3);
     expect(count(ctx, 'drawImage')).toBe(0);
     expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?')).toHaveLength(1);
     expect(placeholderColor(veiled)).toBe(hueColour(TOKEN_HUES.object));
   });
 
-  it('keeps an obscured token\'s own colour for the DM, who sees it as it is', () => {
+  it('keeps an obscured token\'s own colour for the GM, who sees it as it is', () => {
     // The grey the table sees comes from the mask (no kind, no disposition),
-    // not from the flag, so the DM's lettered circle stays blue for a
+    // not from the flag, so the GM's lettered circle stays blue for a
     // character and red for a hostile.
     expect(placeholderColor(makeToken('v', { obscured: true, type: TokenType.PLAYER }))).toBe(hueColour(TOKEN_HUES.player));
     expect(placeholderColor(makeToken('v', { obscured: true, type: TokenType.NPC, disposition: TokenDisposition.HOSTILE }))).toBe(hueColour(TOKEN_HUES.hostile));
@@ -359,40 +359,40 @@ describe('drawTokens', () => {
 
   it('draws the drag ghost from cached art only when the token has an address', () => {
     // In Player Preview the dragged token is the masked one, whose id the
-    // DM's image cache still holds under the real art.
+    // GM's image cache still holds under the real art.
     const veiled = makeToken('v', { obscured: true, name: '', imageUrl: '' });
     const ctx = makeMockCtx();
     drawTokens(ctx, baseTokenState({
-      tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: false,
+      tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isGM: false,
       draggedToken: veiled, heldDrawnAt: { x: 1, y: 1 },
     }), viewport3x3);
     expect(count(ctx, 'drawImage')).toBe(0);
     expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('marks an obscured token for the DM, who still sees its art', () => {
+  it('marks an obscured token for the GM, who still sees its art', () => {
     const veiled = makeToken('v', { obscured: true, imageUrl: '/api/assets/tokens/v' });
     const ctx = makeMockCtx();
-    drawTokens(ctx, baseTokenState({ tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: true }), viewport3x3);
+    drawTokens(ctx, baseTokenState({ tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isGM: true }), viewport3x3);
     expect(count(ctx, 'drawImage')).toBe(1);
     expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?')).toHaveLength(1);
 
     const plain = makeMockCtx();
-    drawTokens(plain, baseTokenState({ tokens: [makeToken('p', { imageUrl: '/api/assets/tokens/p' })], tokenImages: new Map([['p', fakeImage]]), isDM: true }), viewport3x3);
+    drawTokens(plain, baseTokenState({ tokens: [makeToken('p', { imageUrl: '/api/assets/tokens/p' })], tokenImages: new Map([['p', fakeImage]]), isGM: true }), viewport3x3);
     expect(plain.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?')).toHaveLength(0);
   });
 
-  it('players never see hidden tokens; the DM sees them', () => {
+  it('players never see hidden tokens; the GM sees them', () => {
     const hidden = makeToken('h', { visible: false });
     const images = new Map([['h', fakeImage]]);
 
     const playerCtx = makeMockCtx();
-    drawTokens(playerCtx, baseTokenState({ tokens: [hidden], tokenImages: images, isDM: false }), viewport3x3);
+    drawTokens(playerCtx, baseTokenState({ tokens: [hidden], tokenImages: images, isGM: false }), viewport3x3);
     expect(count(playerCtx, 'drawImage')).toBe(0);
 
-    const dmCtx = makeMockCtx();
-    drawTokens(dmCtx, baseTokenState({ tokens: [hidden], tokenImages: images, isDM: true }), viewport3x3);
-    expect(count(dmCtx, 'drawImage')).toBe(1);
+    const gmCtx = makeMockCtx();
+    drawTokens(gmCtx, baseTokenState({ tokens: [hidden], tokenImages: images, isGM: true }), viewport3x3);
+    expect(count(gmCtx, 'drawImage')).toBe(1);
   });
 
   it('fog hides other tokens from players but never their own', () => {
@@ -475,21 +475,21 @@ describe('drawTokens', () => {
     });
 
     it('never reveals an acting token the player cannot see', () => {
-      // The leak case: a DM-hidden ambusher takes its turn. The ring must be
+      // The leak case: a GM-hidden ambusher takes its turn. The ring must be
       // skipped by the same guard that skips the token, or it betrays them.
       const hidden = makeToken('h', { visible: false });
 
       const playerCtx = makeMockCtx();
       drawTokens(playerCtx, baseTokenState({
-        tokens: [hidden], currentTurnTokenId: 'h', isDM: false,
+        tokens: [hidden], currentTurnTokenId: 'h', isGM: false,
       }), viewport3x3);
       expect(count(playerCtx, 'stroke')).toBe(0);
 
-      const dmCtx = makeMockCtx();
-      drawTokens(dmCtx, baseTokenState({
-        tokens: [hidden], currentTurnTokenId: 'h', isDM: true,
+      const gmCtx = makeMockCtx();
+      drawTokens(gmCtx, baseTokenState({
+        tokens: [hidden], currentTurnTokenId: 'h', isGM: true,
       }), viewport3x3);
-      expect(count(dmCtx, 'stroke')).toBe(2);
+      expect(count(gmCtx, 'stroke')).toBe(2);
     });
 
     it('never reveals an acting token hidden by fog', () => {
@@ -586,15 +586,15 @@ describe('drawTokens', () => {
 
       const playerCtx = makeMockCtx();
       drawTokens(playerCtx, baseTokenState({
-        tokens: [hidden], peekTokenId: 'h', isDM: false,
+        tokens: [hidden], peekTokenId: 'h', isGM: false,
       }), viewport3x3);
       expect(count(playerCtx, 'stroke')).toBe(0);
 
-      const dmCtx = makeMockCtx();
-      drawTokens(dmCtx, baseTokenState({
-        tokens: [hidden], peekTokenId: 'h', isDM: true,
+      const gmCtx = makeMockCtx();
+      drawTokens(gmCtx, baseTokenState({
+        tokens: [hidden], peekTokenId: 'h', isGM: true,
       }), viewport3x3);
-      expect(count(dmCtx, 'stroke')).toBe(2);
+      expect(count(gmCtx, 'stroke')).toBe(2);
     });
 
     it('sits outside the turn ring so both can show at once', () => {
@@ -745,7 +745,7 @@ describe('drawWalls', () => {
   function wallsState(overrides: Record<string, unknown> = {}) {
     return {
       wallSegments: [wall, door],
-      isDM: false,
+      isGM: false,
       wallColor: '#ff6600',
       hoveredWallId: null,
       selectedWallIds: new Set<string>(),
@@ -780,9 +780,9 @@ describe('drawWalls', () => {
     expect(count(ctx, 'arc')).toBe(1); // the closed-door dot
   });
 
-  it('DM sees all segments and endpoint nodes while a wall tool is active', () => {
+  it('GM sees all segments and endpoint nodes while a wall tool is active', () => {
     const ctx = makeMockCtx();
-    drawWalls(ctx, wallsState({ isDM: true, showEndpoints: true }), viewport3x3);
+    drawWalls(ctx, wallsState({ isGM: true, showEndpoints: true }), viewport3x3);
     // 2 segments + 3 unique endpoints (100,0 shared junction)
     expect(count(ctx, 'moveTo')).toBeGreaterThanOrEqual(2);
     expect(count(ctx, 'arc')).toBe(1 + 3); // door dot + 3 endpoint nodes
@@ -795,8 +795,8 @@ describe('drawSpiritLayer', () => {
     spiritLayerOpacity: 1,
     spiritActive: true,
     isInSpiritRealm: true,
-    isDM: false,
-    dmViewBothPlanes: true,
+    isGM: false,
+    gmViewBothPlanes: true,
   };
 
   it('draws for a player in the spirit realm', () => {
@@ -811,9 +811,9 @@ describe('drawSpiritLayer', () => {
     expect(count(ctx, 'drawImage')).toBe(0);
   });
 
-  it('DM in dual-plane mode sees a ghost hint even when spirit is inactive', () => {
+  it('GM in dual-plane mode sees a ghost hint even when spirit is inactive', () => {
     const ctx = makeMockCtx();
-    drawSpiritLayer(ctx, { ...base, isDM: true, spiritActive: false, isInSpiritRealm: false }, viewport3x3);
+    drawSpiritLayer(ctx, { ...base, isGM: true, spiritActive: false, isInSpiritRealm: false }, viewport3x3);
     expect(count(ctx, 'drawImage')).toBe(1);
   });
 });
@@ -1614,16 +1614,16 @@ describe('drawLightIcons', () => {
   const torch: LightSource = { id: 'l1', x: 100, y: 100, brightRadius: 4, dimRadius: 8, color: '#ffcc66', enabled: true };
   const viewport: Viewport = { zoom: 1, panOffset: { x: 0, y: 0 }, gridSize: 50, mapWidth: 10, mapHeight: 10 };
 
-  it('draws a marker for each light in the DM view', () => {
+  it('draws a marker for each light in the GM view', () => {
     const ctx = makeMockCtx();
-    drawLightIcons(ctx as unknown as CanvasRenderingContext2D, { lights: [torch], selectedLightId: null, lightMode: null, isDM: true }, viewport);
+    drawLightIcons(ctx as unknown as CanvasRenderingContext2D, { lights: [torch], selectedLightId: null, lightMode: null, isGM: true }, viewport);
     expect(ctx.calls.filter((c) => c.method === 'arc')).toHaveLength(1);
   });
 
   it('draws nothing in a player view, where a marker would give away every light on the map', () => {
-    // A DM previewing as a token at a projected table is showing the room a player's view.
+    // A GM previewing as a token at a projected table is showing the room a player's view.
     const ctx = makeMockCtx();
-    drawLightIcons(ctx as unknown as CanvasRenderingContext2D, { lights: [torch], selectedLightId: 'l1', lightMode: 'light-select', isDM: false }, viewport);
+    drawLightIcons(ctx as unknown as CanvasRenderingContext2D, { lights: [torch], selectedLightId: 'l1', lightMode: 'light-select', isGM: false }, viewport);
     expect(ctx.calls.filter((c) => ['arc', 'fill', 'stroke'].includes(c.method))).toHaveLength(0);
   });
 });

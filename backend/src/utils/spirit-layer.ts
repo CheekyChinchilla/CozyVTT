@@ -15,7 +15,7 @@ import type { Token } from '../websocket/shared';
  * Spirit Layer Implementation
  *
  * All spirit layer filtering happens server-side.
- * Spirit layer tokens and data are never sent to players — only DMs see them.
+ * Spirit layer tokens and data are never sent to players — only GMs see them.
  */
 
 // The token shape lives in websocket/shared.ts — this file used to keep a third
@@ -41,7 +41,7 @@ function seesSpiritPlane(
   userId: string
 ): boolean {
   if (!role) return false;
-  if (role === 'DM' || spiritLayerEnabled) return true;
+  if (role === 'GM' || spiritLayerEnabled) return true;
   return role === 'PLAYER' && spiritTokens != null && spiritTokens.some((t) => t.controlledBy === userId);
 }
 
@@ -49,11 +49,11 @@ function seesSpiritPlane(
  * Check if a user can see the spirit layer for a given campaign.
  *
  * Visibility rules:
- * - DM always sees the spirit layer
- * - Players see it when the DM has globally enabled it (campaign.spiritLayerEnabled), OR
+ * - GM always sees the spirit layer
+ * - Players see it when the GM has globally enabled it (campaign.spiritLayerEnabled), OR
  *   when the player's own token (identified by controlledBy) is currently on the spirit
  *   layer in the campaign's current map — i.e. they have personally crossed over.
- * - Spectators see it when the DM has enabled it for everyone, and never by
+ * - Spectators see it when the GM has enabled it for everyone, and never by
  *   crossing over: a token that still names them from when they were a
  *   player is nobody's (viewerIdFor), here as everywhere else
  *
@@ -134,7 +134,7 @@ export async function getSpiritVisibilityBatch(
   const roleByUser = new Map(memberships.map((m) => [m.userId, m.role]));
 
   // The current-map crossover check is only needed when the spirit layer is
-  // globally off AND at least one requested user is a non-DM member. Fetch the
+  // globally off AND at least one requested user is a non-GM member. Fetch the
   // current map's spirit tokens at most once (not once per user).
   let spiritTokens: Token[] | null = null;
   const needsCrossover =
@@ -211,24 +211,24 @@ export async function getSpiritVisibilityAcrossCampaigns(
  * Filter tokens based on user role and spirit layer visibility.
  *
  * 
- * - DM always sees all tokens on both layers
+ * - GM always sees all tokens on both layers
  * - Players/spectators only see spirit layer tokens when spirit visibility is enabled
- * - Hidden tokens (visible: false) are only visible to the DM
+ * - Hidden tokens (visible: false) are only visible to the GM
  *
  * @param tokens - Raw token array from the map
- * @param userRole - The user's campaign role (DM, PLAYER, SPECTATOR)
+ * @param userRole - The user's stored campaign role: `'GM'`, `'PLAYER'` or `'SPECTATOR'`
  * @param spiritVisible - Whether the spirit layer is visible to this user
  * @returns Filtered token array
  */
 /**
- * A token as one non-DM recipient may see it. `filterTokensByRole` decides
+ * A token as one non-GM recipient may see it. `filterTokensByRole` decides
  * which tokens a player is sent; this decides which fields of each one. The
  * client has a display rule for hit points (`visibleTokenHp`), but a display
  * rule protects nothing: whatever reaches the browser can be read there, so
  * what a player is not meant to know is dropped here.
  *
- * - `notes` and `statBlock` are the DM's, on every token.
- * - `hp` goes to the token's controller, and to everyone once the DM turns
+ * - `notes` and `statBlock` are the GM's, on every token.
+ * - `hp` goes to the token's controller, and to everyone once the GM turns
  *   its bar on.
  * - `sightRadius` goes to the controller, whose client draws what they see
  *   from it; nobody needs another creature's darkvision.
@@ -237,7 +237,7 @@ export async function getSpiritVisibilityAcrossCampaigns(
  *   identity.
  *
  * The rule itself lives in `tokenMask.ts` (`tokenSentTo`), byte-identical
- * with the frontend copy, so the DM's Player Preview applies the same one.
+ * with the frontend copy, so the GM's Player Preview applies the same one.
  * "Own" is `controlledBy === userId`, the same test `filterTokensByLighting`
  * uses. A caller that passes no `userId` is treated as controlling nothing,
  * so forgetting it can only hide too much.
@@ -251,7 +251,7 @@ export function tokenForRecipient(token: Token, userId: string | undefined): Tok
  * spectator controls nothing, whatever `controlledBy` still says from their
  * time as a player (it is not cleared on demotion, and `canControlToken`
  * refuses them the move), so for hit points, darkvision, an obscured
- * identity and sight on a lit map they are nobody. The DM is sent everything
+ * identity and sight on a lit map they are nobody. The GM is sent everything
  * and needs no viewpoint. Every per-recipient filter asks this, so a caller
  * cannot forget the role half of the rule.
  */
@@ -260,7 +260,7 @@ export function viewerIdFor(role: string | undefined, userId: string | undefined
 }
 
 /**
- * Whether a member may act on this token's plane: the DM anywhere, anyone
+ * Whether a member may act on this token's plane: the GM anywhere, anyone
  * on the material plane, and a player on the spirit plane only while they
  * can see it. The socket move handlers and the REST token update ask this
  * before touching a token, so the two channels cannot disagree.
@@ -271,7 +271,7 @@ export async function canActOnTokenPlane(
   campaignId: string,
   userId: string
 ): Promise<boolean> {
-  if (role === 'DM' || token.layer !== 'spirit') return true;
+  if (role === 'GM' || token.layer !== 'spirit') return true;
   return getSpiritVisibility(campaignId, userId);
 }
 
@@ -283,8 +283,8 @@ export function filterTokensByRole(
 ): Token[] {
   const tokensArray = (Array.isArray(tokens) ? tokens : []) as Token[];
 
-  // DM sees everything (including notes)
-  if (userRole === 'DM') {
+  // GM sees everything (including notes)
+  if (userRole === 'GM') {
     return tokensArray;
   }
 
@@ -295,7 +295,7 @@ export function filterTokensByRole(
     if (spiritVisible && token.layer !== 'spirit') return false;
     if (!spiritVisible && token.layer !== 'token') return false;
 
-    // Filter out hidden tokens (only DM can see invisible tokens)
+    // Filter out hidden tokens (only GM can see invisible tokens)
     if (!token.visible) {
       return false;
     }
@@ -310,7 +310,7 @@ export function filterTokensByRole(
 }
 
 /**
- * Filter tokens by dynamic lighting visibility for a non-DM player.
+ * Filter tokens by dynamic lighting visibility for a non-GM player.
  *
  * When lightingEnabled is true on a map, players should only
  * receive tokens that are within their character's line of sight.
@@ -555,14 +555,14 @@ export function playerSightOnLitMap(
 /**
  * A wall as a member is sent it. Every wall reaches every member who may read
  * the map, since their browser works out its own sight from them, but a
- * door's lock is the DM's to reveal: anyone else is sent a locked door as a
+ * door's lock is the GM's to reveal: anyone else is sent a locked door as a
  * closed one, which blocks sight the same way.
  */
 export function wallSentTo(role: string | undefined, wall: WallSegment): WallSegment {
-  return role === 'DM' ? wall : playersWall(wall);
+  return role === 'GM' ? wall : playersWall(wall);
 }
 
-/** A wall as anyone but the DM is sent it: a locked door as a closed one. */
+/** A wall as anyone but the GM is sent it: a locked door as a closed one. */
 function playersWall(wall: WallSegment): WallSegment {
   return wall.type === 'door-locked' ? { ...wall, type: 'door-closed' } : wall;
 }
@@ -574,8 +574,8 @@ function sameWall(a: WallSegment, b: WallSegment): boolean {
 
 /**
  * Whether a wall changing from `before` to `after` changes the copy anyone
- * but the DM has. A closed door locked or unlocked does not. Such a change is
- * sent to the DM alone, and players are not sent the map again for it
+ * but the GM has. A closed door locked or unlocked does not. Such a change is
+ * sent to the GM alone, and players are not sent the map again for it
  * (resendSightAfterChange), since either would tell them something had just
  * been done there.
  */
@@ -585,7 +585,7 @@ export function wallChangeReachesPlayers(before: WallSegment, after: WallSegment
 
 /**
  * What a member is told of one wall changing from `before` to `after`: the
- * DM `wall:updated`; anyone else the wall as they are sent it (wallSentTo),
+ * GM `wall:updated`; anyone else the wall as they are sent it (wallSentTo),
  * and nothing when that is the wall they have already
  * (wallChangeReachesPlayers). `extra` (an operation id) rides on the event.
  */
@@ -596,7 +596,7 @@ export function wallChangeSentTo(
   after: WallSegment,
   extra: Record<string, unknown> = {}
 ): { event: string; data: Record<string, unknown> } | null {
-  if (role !== 'DM' && !wallChangeReachesPlayers(before, after)) return null;
+  if (role !== 'GM' && !wallChangeReachesPlayers(before, after)) return null;
   return { event: 'wall:updated', data: { mapId, segment: wallSentTo(role, after), ...extra } };
 }
 
@@ -608,12 +608,12 @@ function storedList<T>(value: unknown): T[] {
 /** A map's walls as a member is sent them (wallSentTo). */
 export function wallsSentTo(role: string | undefined, walls: unknown): WallSegment[] {
   const list = storedList<WallSegment>(walls);
-  return role === 'DM' ? list : list.map(playersWall);
+  return role === 'GM' ? list : list.map(playersWall);
 }
 
 /**
  * Whether a map's walls replaced, from the stored list `before` to `after`,
- * changes the list anyone but the DM has. It does not when every wall they
+ * changes the list anyone but the GM has. It does not when every wall they
  * are sent stays as it was, in the same order, as when the Walls panel's
  * Change type locks or unlocks closed doors.
  */
@@ -625,7 +625,7 @@ export function wallListChangeReachesPlayers(before: unknown, after: unknown): b
 
 /**
  * What a member is told of a map's walls replaced, from the stored list
- * `before` to `after`: the DM `walls:replaced`; anyone else the walls as
+ * `before` to `after`: the GM `walls:replaced`; anyone else the walls as
  * they are sent them, and nothing when that is the list they have already
  * (wallListChangeReachesPlayers). `extra` (an operation id) rides on the event.
  */
@@ -636,25 +636,25 @@ export function wallsReplacedSentTo(
   after: unknown,
   extra: Record<string, unknown> = {}
 ): { event: string; data: Record<string, unknown> } | null {
-  if (role !== 'DM' && !wallListChangeReachesPlayers(before, after)) return null;
+  if (role !== 'GM' && !wallListChangeReachesPlayers(before, after)) return null;
   return { event: 'walls:replaced', data: { mapId, segments: wallsSentTo(role, after), ...extra } };
 }
 
 /**
- * A map's lights as a member is sent them: the DM every one, anyone else only
+ * A map's lights as a member is sent them: the GM every one, anyone else only
  * those that are on. A light that is off lights nothing anyone can see, the
- * rule `filterTokensByLighting` applies, so nobody but the DM needs to know
+ * rule `filterTokensByLighting` applies, so nobody but the GM needs to know
  * where it is.
  */
 export function lightsSentTo(role: string | undefined, lights: unknown): LightSource[] {
   const list = storedList<LightSource>(lights);
-  return role === 'DM' ? list : list.filter(lightReachesPlayers);
+  return role === 'GM' ? list : list.filter(lightReachesPlayers);
 }
 
 /**
- * Whether anyone but the DM is sent this light: only while it is on. A light
+ * Whether anyone but the GM is sent this light: only while it is on. A light
  * that is off, added, changed while it stays off, or deleted, is sent to the
- * DM alone, and players are not sent the map again for it
+ * GM alone, and players are not sent the map again for it
  * (resendSightAfterChange).
  */
 export function lightReachesPlayers(light: LightSource | undefined): boolean {
@@ -663,7 +663,7 @@ export function lightReachesPlayers(light: LightSource | undefined): boolean {
 
 /**
  * Whether a light changing from `before` to `after` changes the copy anyone
- * but the DM has. A light set to the values it already has changes nothing.
+ * but the GM has. A light set to the values it already has changes nothing.
  */
 export function lightChangeReachesPlayers(before: LightSource, after: LightSource): boolean {
   if (sameLight(before, after)) return false;
@@ -678,7 +678,7 @@ function sameLight(a: LightSource, b: LightSource): boolean {
 
 /**
  * Whether a map's lights replaced, from the stored list `before` to `after`,
- * changes the list anyone but the DM has. It does not when every light that
+ * changes the list anyone but the GM has. It does not when every light that
  * is on stays as it was, in the same order, whatever happens to those that
  * are off, as when Clear All in the Lights panel removes only lights that
  * are off.
@@ -691,7 +691,7 @@ export function lightListChangeReachesPlayers(before: unknown, after: unknown): 
 
 /**
  * What a member is told of a map's lights replaced, from the stored list
- * `before` to `after`: the DM `lights:replaced`; anyone else the lights that
+ * `before` to `after`: the GM `lights:replaced`; anyone else the lights that
  * are on, and nothing when that is the list they have already
  * (lightListChangeReachesPlayers). `extra` (an operation id) rides on the event.
  */
@@ -702,13 +702,13 @@ export function lightsReplacedSentTo(
   after: unknown,
   extra: Record<string, unknown> = {}
 ): { event: string; data: Record<string, unknown> } | null {
-  if (role !== 'DM' && !lightListChangeReachesPlayers(before, after)) return null;
+  if (role !== 'GM' && !lightListChangeReachesPlayers(before, after)) return null;
   return { event: 'lights:replaced', data: { mapId, lights: lightsSentTo(role, after), ...extra } };
 }
 
 /**
  * What a member is told of one light changing from `before` to `after`: the
- * DM `light:updated`; anyone else, who has only the lights that are on, the
+ * GM `light:updated`; anyone else, who has only the lights that are on, the
  * light appearing (`light:added`) when it comes on, going (`light:removed`)
  * when it goes off, `light:updated` while it stays on, and nothing while it
  * stays off. `extra` (an operation id) rides on every event.
@@ -720,8 +720,8 @@ export function lightChangeSentTo(
   after: LightSource,
   extra: Record<string, unknown> = {}
 ): { event: string; data: Record<string, unknown> } | null {
-  if (role !== 'DM' && !lightChangeReachesPlayers(before, after)) return null;
-  if (role === 'DM' || (lightReachesPlayers(before) && lightReachesPlayers(after))) {
+  if (role !== 'GM' && !lightChangeReachesPlayers(before, after)) return null;
+  if (role === 'GM' || (lightReachesPlayers(before) && lightReachesPlayers(after))) {
     return { event: 'light:updated', data: { mapId, light: after, ...extra } };
   }
   if (lightReachesPlayers(after)) return { event: 'light:added', data: { mapId, light: after, ...extra } };
@@ -730,7 +730,7 @@ export function lightChangeSentTo(
 
 /**
  * What a member is told of the light `lightId` deleted, given the light as
- * it was (`removed`, undefined when the map had no light by that id): the DM
+ * it was (`removed`, undefined when the map had no light by that id): the GM
  * `light:removed`; anyone else only when the light was on
  * (lightReachesPlayers), since one that was off, or never there, is not a
  * light they have. `extra` (an operation id) rides on the event.
@@ -742,7 +742,7 @@ export function lightRemovalSentTo(
   removed: LightSource | undefined,
   extra: Record<string, unknown> = {}
 ): { event: string; data: Record<string, unknown> } | null {
-  if (role !== 'DM' && !lightReachesPlayers(removed)) return null;
+  if (role !== 'GM' && !lightReachesPlayers(removed)) return null;
   return { event: 'light:removed', data: { mapId, lightId, ...extra } };
 }
 
@@ -769,7 +769,7 @@ export const MAP_FIELDS_DECIDED_PER_RECIPIENT = [
 /**
  * Never sent to a member. This describes the map members are sent
  * (filterMapData, and the selects built from the first list). Four replies to
- * the DM alone return the stored row whole:
+ * the GM alone return the stored row whole:
  * `POST /maps`, `POST /maps/import-uvtt`, `PUT /maps/:id` and
  * `POST /maps/:id/tokens`.
  */
@@ -789,13 +789,13 @@ export const MAP_SELECT_SENT_TO_EVERYONE = Object.fromEntries(
 
 /** Each field decided for a recipient, as it is sent. */
 interface MapFieldsDecided {
-  /** The DM's every token; anyone else's as filterTokensByRole and, on a lit map, filterTokensByLighting leave them. */
+  /** The GM's every token; anyone else's as filterTokensByRole and, on a lit map, filterTokensByLighting leave them. */
   tokens: Token[];
-  /** Every wall; for anyone but the DM a locked door as a closed one (wallsSentTo). */
+  /** Every wall; for anyone but the GM a locked door as a closed one (wallsSentTo). */
   wallSegments: WallSegment[];
-  /** Every light for the DM; only those that are on for anyone else (lightsSentTo). */
+  /** Every light for the GM; only those that are on for anyone else (lightsSentTo). */
   lights: LightSource[];
-  /** The DM's alone; anyone else is sent the revealed cells by their own event. */
+  /** The GM's alone; anyone else is sent the revealed cells by their own event. */
   fogData: MapRow['fogData'];
   /** Null for anyone who cannot see the spirit layer. */
   spiritLayerUrl: string | null;
@@ -821,7 +821,7 @@ export type MapTokenSight = Pick<
 
 /**
  * The tokens of a map one member is sent: those the role filter keeps for
- * them, and on a lit map, for anyone but the DM, those in their sight. A
+ * them, and on a lit map, for anyone but the GM, those in their sight. A
  * spectator has no viewpoint (`viewerIdFor`), so a lit map sends them
  * nothing, like a player with no token on it. The map's own copy
  * (filterMapData) and anything that names what the map sends, such as the
@@ -834,7 +834,7 @@ export function tokensSentTo(
   userId: string | undefined
 ): Token[] {
   const forRole = filterTokensByRole(map.tokens, userRole, spiritVisible, userId);
-  if (userRole === 'DM' || !map.lightingEnabled || !userId) return forRole;
+  if (userRole === 'GM' || !map.lightingEnabled || !userId) return forRole;
   return filterTokensByLighting(
     forRole, viewerIdFor(userRole, userId), map.wallSegments, map.width, map.height, map.gridSize, true, map.lights, map.globalIllumination
   );
@@ -869,15 +869,15 @@ export function filterMapData(
   const decided: DecidedForRecipient = {
     tokens: tokensSentTo(mapData, userRole, spiritVisible, userId),
     // Remove spirit layer URL if user shouldn't see it
-    spiritLayerUrl: (userRole === 'DM' || spiritVisible) ? mapData.spiritLayerUrl : null,
+    spiritLayerUrl: (userRole === 'GM' || spiritVisible) ? mapData.spiritLayerUrl : null,
     // Wall segments are sent to all roles (players need them for visibility
-    // rendering), a locked door to anyone but the DM as a closed one
+    // rendering), a locked door to anyone but the GM as a closed one
     wallSegments: wallsSentTo(userRole, mapData.wallSegments),
     // Light sources that are on are sent to all roles (players need them for
-    // visibility rendering); the DM also gets those that are off
+    // visibility rendering); the GM also gets those that are off
     lights: lightsSentTo(userRole, mapData.lights),
-    // Fog data is DM-only (full state); players receive derived revealed-cells via WebSocket
-    fogData: userRole === 'DM' ? mapData.fogData : null,
+    // Fog data is GM-only (full state); players receive derived revealed-cells via WebSocket
+    fogData: userRole === 'GM' ? mapData.fogData : null,
     annotations: [],
   };
   return { ...mapFieldsSentToEveryone(mapData), ...decided };

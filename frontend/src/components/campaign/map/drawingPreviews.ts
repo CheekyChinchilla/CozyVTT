@@ -120,11 +120,11 @@ export function prunePreviews(previews: Map<string, ActivePreview>, now: number)
 
 /**
  * Which drawings a `drawings:cleared` took from this page. Without an
- * `authorId` it is every drawing on the layer (the DM's Clear drawings).
- * With one it is that member's, by their Clear mine or the DM's clear
+ * `authorId` it is every drawing on the layer (the GM's Clear drawings).
+ * With one it is that member's, by their Clear mine or the GM's clear
  * naming them, which both take a player's drawings for everyone and every
- * drawing of the DM's: the one DM seat is this page's when the author is
- * this page's member and its role is the DM's, and a player's otherwise.
+ * drawing of the GM's: the one GM seat is this page's when the author is
+ * this page's member and its role is the GM's, and a player's otherwise.
  */
 export function clearedBy(
   event: DrawingsClearedBroadcast,
@@ -134,6 +134,6 @@ export function clearedBy(
     if (d.layer !== event.layer) return false;
     if (event.authorId === undefined) return true;
     if (d.authorId !== event.authorId) return false;
-    return d.audience === 'ALL' || (viewer.role === 'DM' && event.authorId === viewer.userId);
+    return d.audience === 'ALL' || (viewer.role === 'GM' && event.authorId === viewer.userId);
   };
 }

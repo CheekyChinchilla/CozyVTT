@@ -1,15 +1,15 @@
 /**
  * Who is allowed to clear a campaign's dice roll history.
  *
- * The handler is documented as DM-only, but it decided by comparing the caller
+ * The handler is documented as GM-only, but it decided by comparing the caller
  * against `Campaign.ownerId` — which is a different fact from
  * `CampaignMembership.role`. The two are the same person in every campaign
  * created the ordinary way, so the difference never showed. It shows the moment
- * the DM seat moves: the person actually running the game is refused, and the
+ * the GM seat moves: the person actually running the game is refused, and the
  * original owner, now a player, can still wipe the panel for everyone.
  *
  * `campaigns.ts` already reads the role from the membership for exactly this
- * reason, noting that "a co-DM by membership is a DM here too". These tests pin
+ * reason, noting that "a co-GM by membership is a GM here too". These tests pin
  * the two down to the same answer.
  */
 
@@ -29,16 +29,16 @@ const email = (name: string) => `clearhist-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
 let ownerId: string;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let ownerCookie: string;
-let dmCookie: string;
+let gmCookie: string;
 
 beforeAll(async () => {
   // Two distinct people: one holds the campaign, the other runs it. This is the
-  // state a DM handover leaves behind, and it is legal today — nothing requires
-  // the owner to be the DM.
-  const [owner, dm] = await Promise.all(
+  // state a GM handover leaves behind, and it is legal today — nothing requires
+  // the owner to be the GM.
+  const [owner, gm] = await Promise.all(
     ['owner', 'dm'].map((name) =>
       prisma.user.create({
         data: {
@@ -50,7 +50,7 @@ beforeAll(async () => {
     )
   );
   ownerId = owner.id;
-  dmId = dm.id;
+  gmId = gm.id;
 
   const campaign = await prisma.campaign.create({
     data: {
@@ -66,21 +66,21 @@ beforeAll(async () => {
       // The owner sits at the table as an ordinary player.
       { userId: ownerId, campaignId, role: 'PLAYER', characterIds: [] },
       // Somebody else runs the game.
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
     ],
   });
 
   server = await createWsTestServer();
-  [ownerCookie, dmCookie] = await Promise.all([
+  [ownerCookie, gmCookie] = await Promise.all([
     server.loginAs(ownerId),
-    server.loginAs(dmId),
+    server.loginAs(gmId),
   ]);
 });
 
 afterAll(async () => {
   await server?.close();
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [ownerId, dmId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [ownerId, gmId] } } });
   await prisma.$disconnect();
 });
 
@@ -92,8 +92,8 @@ beforeEach(async () => {
 });
 
 describe('dice.clearHistory decides from the membership role', () => {
-  it('lets the DM clear the history even though someone else owns the campaign', async () => {
-    const client: ClientSocket = await server.connectAndAuth(dmCookie, campaignId);
+  it('lets the GM clear the history even though someone else owns the campaign', async () => {
+    const client: ClientSocket = await server.connectAndAuth(gmCookie, campaignId);
 
     const cleared = waitForEvent(client, 'dice.historyCleared');
     client.emit('dice.clearHistory');
@@ -118,7 +118,7 @@ describe('dice.clearHistory decides from the membership role', () => {
       client.emit('dice.clearHistory');
     });
 
-    expect(refusal.message).toMatch(/only the dm/i);
+    expect(refusal.message).toMatch(/only the gm/i);
 
     // The refusal must be real, not just a message — nothing may be written.
     const campaign = await prisma.campaign.findUnique({

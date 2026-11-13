@@ -16,7 +16,7 @@ import { TokenType, TokenDisposition } from '@/types';
 import TokenTemplateLibrary from '../TokenTemplateLibrary';
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: 'DND_5E' }, currentMap: null, viewedMap: null }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: 'FIFTH_EDITION' }, currentMap: null, viewedMap: null }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: null }) }));
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
@@ -74,11 +74,11 @@ async function sentUpdate(): Promise<Record<string, unknown>> {
 describe('editing a token template', () => {
   it('keeps the hit points of a template whose HP bar is hidden', async () => {
     await openEditor(template({}));
-    await rename('Goblin Scout');
+    await rename('Hobgoblin');
     await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     const sent = await sentUpdate();
-    expect(sent.name).toBe('Goblin Scout');
+    expect(sent.name).toBe('Hobgoblin');
     expect(sent).not.toHaveProperty('hp');
     expect(sent).not.toHaveProperty('showHpBar');
   });

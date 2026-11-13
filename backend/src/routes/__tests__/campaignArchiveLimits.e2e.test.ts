@@ -30,7 +30,7 @@ const LIMIT = 20;
 
 const manifest = JSON.stringify({
   formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT test', campaignName: 'Limits',
-  gameSystem: 'DND_5E', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0, assetCount: 0,
+  gameSystem: 'FIFTH_EDITION', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0, assetCount: 0,
   includesAudio: false, totalSizeBytes: 0,
 });
 
@@ -164,11 +164,11 @@ describe('each user may import 20 campaigns an hour', () => {
   }, 60_000);
 });
 
-describe('each DM may export 20 campaigns an hour', () => {
+describe('each GM may export 20 campaigns an hour', () => {
   it('answers the 21st with 429', async () => {
     const { agent, user, cookie } = await signedIn('exporter');
     const campaignId = (await createTestCampaign(user.id, { name: 'Exported often' })).id;
-    await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'GM', characterIds: [] } });
     for (let i = 0; i < LIMIT; i++) {
       expect((await agent.get(`/api/campaigns/${campaignId}/export`)).status).toBe(200);
     }
@@ -219,7 +219,7 @@ describe('one archive at a time', () => {
   it('keeps a map export\'s slot until its work is done, even if the caller hangs up', async () => {
     const { user, cookie } = await signedIn('map-export-hangup');
     const campaignId = (await createTestCampaign(user.id, { name: 'Map export hang-up' })).id;
-    await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'GM', characterIds: [] } });
     const picturePath = path.join(SCRATCH, 'hangup.png');
     fs.writeFileSync(picturePath, Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082', 'hex'));
     const art = await prisma.asset.create({
@@ -272,7 +272,7 @@ describe('one archive at a time', () => {
   it('counts a map export as an archive', async () => {
     const { user, cookie } = await signedIn('map-export');
     const campaignId = (await createTestCampaign(user.id, { name: 'Map export slot' })).id;
-    await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'GM', characterIds: [] } });
     const mapId = (await prisma.map.create({
       data: { campaignId, name: 'Room', imageUrl: '', baseLayerUrl: '', width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
     })).id;

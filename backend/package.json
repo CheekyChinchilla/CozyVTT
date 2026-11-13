@@ -1,6 +1,6 @@
 {
   "name": "cozyvtt-backend",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "CozyVTT Backend - Self-hosted Virtual Tabletop",
   "main": "dist/server.js",
   "scripts": {
@@ -47,8 +47,8 @@
     "qrcode": "^1.5.4",
     "sharp": "^0.35.5",
     "socket.io": "^4.8.4",
-    "unzipper": "^0.12.5",
     "winston": "^3.19.0",
+    "yauzl": "3.4.0",
     "yazl": "^3.3.1",
     "zod": "^4.6.7"
   },
@@ -64,7 +64,7 @@
     "@types/pg": "^8.23.1",
     "@types/qrcode": "^1.5.6",
     "@types/supertest": "^7.2.1",
-    "@types/unzipper": "^0.10.11",
+    "@types/yauzl": "3.4.0",
     "eslint": "10.14.0",
     "jest": "^30.5.2",
     "jest-environment-node": "^30.5.2",
@@ -73,7 +73,7 @@
     "ts-jest": "^29.4.15",
     "ts-node": "^10.9.2",
     "typescript": "~6.0.3",
-    "typescript-eslint": "8.72.1"
+    "typescript-eslint": "8.72.2"
   },
   "overrides": {
     "@istanbuljs/load-nyc-config": {

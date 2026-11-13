@@ -11,7 +11,7 @@ const REPEAT_WINDOW_MS = 5000;
 
 /**
  * Shows each refusal the server sends this page (a move during a pause, a
- * control that is the DM's, a token that has gone) as a message. They used
+ * control that is the GM's, a token that has gone) as a message. They used
  * to reach only the Dice panel's banner, which took every one as a refused
  * roll and showed it in a tab that might not be open. Requests that wait
  * for their own answer (chat messages, dice rolls) are answered where they

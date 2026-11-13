@@ -38,7 +38,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // What the asset list says the server will allow: the uploader, the DM of
+  // What the asset list says the server will allow: the uploader, the GM of
   // a campaign asset's campaign, or an admin, by the delete route's own rule.
   const canDelete = asset.canChange === true;
 

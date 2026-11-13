@@ -108,7 +108,7 @@ describe('tokenSentTo', () => {
 
   it('carries the creature template link to the controller only', () => {
     // The link resolves to the library entry, whose stat block and true name
-    // the DM may have renamed the token to hide.
+    // the GM may have renamed the token to hide.
     const placed = { ...token, creatureTemplateId: 'tmpl-1' };
     expect(tokenSentTo(placed, true).creatureTemplateId).toBe('tmpl-1');
     expect(tokenSentTo(placed, false)).not.toHaveProperty('creatureTemplateId');

@@ -1,10 +1,10 @@
 // ============================================
-// Player Preview selection — whose eyes the DM's canvas is drawn through.
+// Player Preview selection — whose eyes the GM's canvas is drawn through.
 //
 // A preview used to mean one player. A table that projects a single screen
 // and moves every token itself has no player accounts to preview as, so the
 // choice is now a player, one token, or every player-type token (the party),
-// or Follow my selection, which looks through whichever token the DM has
+// or Follow my selection, which looks through whichever token the GM has
 // selected and is resolved to that token before anything else reads it.
 // Pure: the predicate this produces is what MapCanvas feeds everywhere it
 // already asks "is this token the viewer's".
@@ -21,7 +21,7 @@ export type PreviewPlane = 'material' | 'spirit';
 
 /**
  * Whether a token is on the previewed viewer's plane and so can be shown or
- * supply sight at all. The DM's token list holds every token; a player is
+ * supply sight at all. The GM's token list holds every token; a player is
  * sent only visible tokens on their own plane (the server's
  * filterTokensByRole), so a preview must not look through any other. Without
  * this a hidden player token still lit its surroundings on the projector.
@@ -32,7 +32,7 @@ function onViewersPlane(t: Token, plane: PreviewPlane): boolean {
 
 /**
  * Which plane the previewed viewer is on, by the server's rule
- * (getSpiritVisibility): the spirit plane for everyone while the DM has it
+ * (getSpiritVisibility): the spirit plane for everyone while the GM has it
  * open to all, else for a player who controls a visible token on the spirit
  * layer. One token: its own plane. The party is several people, so it
  * crosses only while the plane is open to all.
@@ -76,7 +76,7 @@ const FOLLOWING_NOBODY = '';
  * token, or with none the one `followedTokenId` names, the last followed; with
  * neither it is a token that matches nothing, a viewer with no tokens of its
  * own, which on a lit map sees nothing. Never null for a selection that is
- * not null: a preview that resolved to nothing would draw the DM's own view,
+ * not null: a preview that resolved to nothing would draw the GM's own view,
  * every hidden token and the whole fog, onto a projector.
  */
 export function resolvePreviewSelection(
@@ -194,7 +194,7 @@ export function tokensShownInPreview(
  * only with the bar on or for the viewer's own, no darkvision for others, an
  * obscured token the viewer does not control masked). The hover card and the
  * downed fade read the result, so they show what the player is sent and not
- * what the DM holds.
+ * what the GM holds.
  */
 export function previewTokens(
   tokens: ReadonlyArray<Token>,

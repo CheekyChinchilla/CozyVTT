@@ -17,7 +17,7 @@ const socket = { on: vi.fn(), off: vi.fn() };
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'c1', memberships: [] }, currentMap: null, viewedMap: null, userRole: 'DM' }),
+  useCampaign: () => ({ campaign: { id: 'c1', memberships: [] }, currentMap: null, viewedMap: null, userRole: 'GM' }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm' } }) }));
@@ -27,9 +27,10 @@ vi.mock('@/services/api', () => {
 });
 
 import CampaignRoster from '../CampaignRoster';
+import { LEGACY_GM } from '@/legacy/gameSystemAliases';
 
 const member = (userId: string, userName: string): RosterMember => ({
-  userId, userName, userAvatar: null, role: userId === 'dm' ? CampaignRole.DM : CampaignRole.PLAYER, joinedAt: '2026-10-01T00:00:00.000Z', characters: [],
+  userId, userName, userAvatar: null, role: userId === 'dm' ? CampaignRole.GM : CampaignRole.PLAYER, joinedAt: '2026-10-01T00:00:00.000Z', characters: [],
 });
 
 beforeEach(() => {
@@ -49,4 +50,14 @@ it('shows who is in session from the store, and follows it', async () => {
 
   expect(screen.getByRole('img', { name: 'Ash is not in session' })).toBeTruthy();
   expect(screen.getByRole('img', { name: 'Mara is in session' })).toBeTruthy();
+});
+
+// The role is named by its short form, as everywhere else on the page.
+it("heads the GM's group GM", async () => {
+  getCampaignCharacters.mockResolvedValue({ roster: [member('dm', 'Dana'), member('p1', 'Ash')] });
+  render(<CampaignRoster />);
+
+  expect(await screen.findByRole('heading', { name: 'GM' })).toBeTruthy();
+  expect(screen.queryByRole('heading', { name: LEGACY_GM })).toBeNull();
+  expect(document.body.textContent).not.toMatch(/dungeon\s+master/i);
 });

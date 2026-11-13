@@ -30,9 +30,9 @@ describe('canRollAsCharacter', () => {
     ).toBe(true);
   });
 
-  it('lets the DM roll for anyone, so they can cover an absent player', () => {
+  it('lets the GM roll for anyone, so they can cover an absent player', () => {
     expect(
-      canRollAsCharacter(user(OTHER), character(OWNER), membership(CampaignRole.DM))
+      canRollAsCharacter(user(OTHER), character(OWNER), membership(CampaignRole.GM))
     ).toBe(true);
   });
 
@@ -74,8 +74,8 @@ describe('canEditCharacter', () => {
     expect(canEditCharacter(user(OWNER), character(OWNER), membership(CampaignRole.PLAYER))).toBe(true);
   });
 
-  it('lets the DM edit anyone\'s', () => {
-    expect(canEditCharacter(user(OTHER), character(OWNER), membership(CampaignRole.DM))).toBe(true);
+  it('lets the GM edit anyone\'s', () => {
+    expect(canEditCharacter(user(OTHER), character(OWNER), membership(CampaignRole.GM))).toBe(true);
   });
 
   it('refuses another player', () => {
@@ -111,8 +111,8 @@ describe('canEditCharacterIn', () => {
     expect(canEditCharacterIn(user(OWNER), character(OWNER), null)).toBe(true);
   });
 
-  it("lets the campaign's DM edit someone else's character, and nobody else", () => {
-    expect(canEditCharacterIn(user(OTHER), character(OWNER), campaign(CampaignRole.DM))).toBe(true);
+  it("lets the campaign's GM edit someone else's character, and nobody else", () => {
+    expect(canEditCharacterIn(user(OTHER), character(OWNER), campaign(CampaignRole.GM))).toBe(true);
     expect(canEditCharacterIn(user(OTHER), character(OWNER), campaign(CampaignRole.PLAYER))).toBe(false);
   });
 });
@@ -126,18 +126,18 @@ describe('characterEditRefusal', () => {
   });
 
   it('tells anyone else who may edit', () => {
-    expect(characterEditRefusal(user(OTHER), character(OWNER))).toMatch(/owner or the DM/);
+    expect(characterEditRefusal(user(OTHER), character(OWNER))).toMatch(/owner or the GM/);
   });
 });
 
-// The server lets the owner, or the DM of the character's campaign, take it
+// The server lets the owner, or the GM of the character's campaign, take it
 // out of that campaign; the roster offers Remove from Campaign to the same
 // people. The roster passes the viewer's membership of the campaign the
 // character is in.
 describe('canRemoveCharacterFromCampaign', () => {
-  it('offers it to the owner and to the DM', () => {
+  it('offers it to the owner and to the GM', () => {
     expect(canRemoveCharacterFromCampaign(user(OWNER), character(OWNER), membership(CampaignRole.PLAYER))).toBe(true);
-    expect(canRemoveCharacterFromCampaign(user(OTHER), character(OWNER), membership(CampaignRole.DM))).toBe(true);
+    expect(canRemoveCharacterFromCampaign(user(OTHER), character(OWNER), membership(CampaignRole.GM))).toBe(true);
   });
 
   it('offers it to an owner who is a spectator there', () => {

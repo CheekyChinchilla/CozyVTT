@@ -22,7 +22,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
   };
   const sent: Array<[string, unknown]> = [];
@@ -65,7 +65,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -140,7 +140,7 @@ function token(id: string, name: string, x: number, y: number, extra: Partial<To
   } as unknown as Token;
 }
 
-const goblin = () => token('tok-goblin', 'Goblin Scout', 0, 19);
+const goblin = () => token('tok-goblin', 'Goblin', 0, 19);
 
 /** The centre of square (x, y) on screen, at 100% and no pan. */
 const at = (x: number, y: number) => ({ clientX: x * 50 + 10, clientY: (19 - y) * 50 + 10 });
@@ -180,7 +180,7 @@ beforeAll(() => {
 beforeEach(() => {
   h.sent.length = 0;
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: MAP });
+  h.set({ userRole: 'GM', currentMap: MAP });
 });
 
 describe('the square under the pointer', () => {
@@ -293,7 +293,7 @@ describe('moving a token: click to pick it up, click again to put it down', () =
     expect(sentOf('token.move.end')).toEqual([]);
   });
 
-  it('lets the DM put a token down on another one', () => {
+  it('lets the GM put a token down on another one', () => {
     render(<MapCanvas />);
     show(goblin(), token('tok-wolf', 'Wolf', 3, 19));
 
@@ -352,9 +352,9 @@ describe('a right-click', () => {
   });
 
   // The menu once offered Hide from Players only for objects, while every
-  // other place a DM can hide a token offered it for every kind.
+  // other place a GM can hide a token offered it for every kind.
   it.each([TokenType.NPC, TokenType.PLAYER, TokenType.OBJECT])(
-    'offers the DM Hide from Players and Obscure Identity for a token of type %s',
+    'offers the GM Hide from Players and Obscure Identity for a token of type %s',
     (type) => {
       render(<MapCanvas />);
       show(token('tok-any', 'Anything', 0, 19, { type }));
@@ -380,40 +380,40 @@ describe('the card a hovered token shows', () => {
   const inOrder = (initiative: number | null) => act(() => {
     useGameStore.getState().setCombatState({
       active: true, round: 1, currentTokenId: null,
-      combatants: [{ tokenId: 'tok-goblin', mapId: 'map-a', name: 'Goblin Scout', imageUrl: '', initiative, hp: null, type: 'npc', disposition: null, characterId: null }],
+      combatants: [{ tokenId: 'tok-goblin', mapId: 'map-a', name: 'Goblin', imageUrl: '', initiative, hp: null, type: 'npc', disposition: null, characterId: null }],
     });
   });
 
   it('names the token and the square under the pointer, and lists its conditions in full', () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 0, 19, { conditions: ['poisoned', 'prone'] }));
+    show(token('tok-goblin', 'Goblin', 0, 19, { conditions: ['poisoned', 'prone'] }));
 
     hover(at(0, 19));
 
-    const shown = card('Goblin Scout');
+    const shown = card('Goblin');
     expect(within(shown).getByText('(0, 19)')).toBeInTheDocument();
     expect(within(shown).getByText('poisoned')).toBeInTheDocument();
     expect(within(shown).getByText('prone')).toBeInTheDocument();
   });
 
-  it("shows a creature's own hit points to the DM, and to a player only once its HP bar is on", () => {
-    const wounded = (showHpBar: boolean) => token('tok-goblin', 'Goblin Scout', 0, 19, { hp: { current: 5, max: 7, temp: 2 }, showHpBar });
+  it("shows a creature's own hit points to the GM, and to a player only once its HP bar is on", () => {
+    const wounded = (showHpBar: boolean) => token('tok-goblin', 'Goblin', 0, 19, { hp: { current: 5, max: 7, temp: 2 }, showHpBar });
     render(<MapCanvas />);
     show(wounded(false));
     hover(at(0, 19));
-    expect(within(card('Goblin Scout')).getByText('5/7')).toBeInTheDocument();
-    expect(within(card('Goblin Scout')).getByText('+2')).toBeInTheDocument();
+    expect(within(card('Goblin')).getByText('5/7')).toBeInTheDocument();
+    expect(within(card('Goblin')).getByText('+2')).toBeInTheDocument();
 
     act(() => { h.set({ userRole: 'PLAYER' }); });
     hover(at(1, 19));
     hover(at(0, 19));
-    expect(within(card('Goblin Scout')).queryByText('5/7')).toBeNull();
-    expect(within(card('Goblin Scout')).queryByText('HP')).toBeNull();
+    expect(within(card('Goblin')).queryByText('5/7')).toBeNull();
+    expect(within(card('Goblin')).queryByText('HP')).toBeNull();
 
     show(wounded(true));
     hover(at(1, 19));
     hover(at(0, 19));
-    expect(within(card('Goblin Scout')).getByText('5/7')).toBeInTheDocument();
+    expect(within(card('Goblin')).getByText('5/7')).toBeInTheDocument();
   });
 
   it("shows a character's hit points from its sheet, to a player too", () => {
@@ -431,14 +431,14 @@ describe('the card a hovered token shows', () => {
     render(<MapCanvas />);
     show(goblin());
     hover(at(0, 19));
-    expect(within(card('Goblin Scout')).queryByText('Initiative')).toBeNull();
+    expect(within(card('Goblin')).queryByText('Initiative')).toBeNull();
 
     inOrder(null);
-    expect(within(card('Goblin Scout')).getByText('Initiative')).toBeInTheDocument();
-    expect(within(card('Goblin Scout')).getByText('—')).toBeInTheDocument();
+    expect(within(card('Goblin')).getByText('Initiative')).toBeInTheDocument();
+    expect(within(card('Goblin')).getByText('—')).toBeInTheDocument();
 
     inOrder(14);
-    expect(within(card('Goblin Scout')).getByText('14')).toBeInTheDocument();
+    expect(within(card('Goblin')).getByText('14')).toBeInTheDocument();
   });
 
   it('says "Not yours to move" on a token the viewer may not move, and nothing on their own', () => {
@@ -447,7 +447,7 @@ describe('the card a hovered token shows', () => {
     show(goblin(), token('tok-mine', 'Aldra', 2, 19, { type: TokenType.PLAYER, controlledBy: 'me' }));
 
     hover(at(0, 19));
-    expect(within(card('Goblin Scout')).getByText('Not yours to move')).toBeInTheDocument();
+    expect(within(card('Goblin')).getByText('Not yours to move')).toBeInTheDocument();
 
     hover(at(2, 19));
     expect(within(card('Aldra')).queryByText('Not yours to move')).toBeNull();
@@ -457,9 +457,9 @@ describe('the card a hovered token shows', () => {
     render(<MapCanvas />);
     show(goblin());
     hover(at(0, 19));
-    expect(screen.getByText('Goblin Scout')).toBeInTheDocument();
+    expect(screen.getByText('Goblin')).toBeInTheDocument();
 
     hover(at(5, 5));
-    expect(screen.queryByText('Goblin Scout')).toBeNull();
+    expect(screen.queryByText('Goblin')).toBeNull();
   });
 });

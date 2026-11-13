@@ -11,32 +11,42 @@
 import { readFileSync } from 'fs';
 import path from 'path';
 import { extractCharacterHp, sameCharacterHp } from '../characterHp';
+import { RETIRED_GAME_SYSTEM } from '../../__tests__/helpers/retiredGameSystem';
+
+const OLD_HORROR_D100_SHEET: unknown = JSON.parse(
+  readFileSync(path.join(__dirname, '../../legacy/__fixtures__/horror-d100-sheets/v1.6.0-detective-played.json'), 'utf8')
+);
 
 describe('extractCharacterHp', () => {
-  it('reads top-level hp for D&D 5e', () => {
+  it('reads top-level hp for 5E', () => {
     expect(
-      extractCharacterHp('DND_5E', { hp: { maximum: 27, current: 11, temporary: 4 } })
+      extractCharacterHp('FIFTH_EDITION', { hp: { maximum: 27, current: 11, temporary: 4 } })
     ).toEqual({ current: 11, max: 27, temp: 4 });
   });
 
-  it('reads top-level hp for Pathfinder 2e', () => {
+  it('reads top-level hp for Fantasy d20', () => {
     expect(
-      extractCharacterHp('PATHFINDER_2E', { hp: { maximum: 20, current: 20, temporary: 0 } })
+      extractCharacterHp('FANTASY_D20', { hp: { maximum: 20, current: 20, temporary: 0 } })
     ).toEqual({ current: 20, max: 20, temp: 0 });
   });
 
-  // Call of Cthulhu keeps hit points under derived stats and has no temporary
+  // Horror d100 keeps hit points in their own block and has no temporary
   // hit points — a sheet carrying them anyway must not report them.
-  it('reads derivedStats.hp for Call of Cthulhu, ignoring temporary', () => {
+  it('reads hitPoints for Horror d100, ignoring temporary', () => {
     expect(
-      extractCharacterHp('CALL_OF_CTHULHU_7E', {
-        derivedStats: { hp: { maximum: 12, current: 9, temporary: 3 } },
+      extractCharacterHp('HORROR_D100', {
+        hitPoints: { maximum: 12, current: 9, temporary: 3 },
       })
     ).toEqual({ current: 9, max: 12, temp: 0 });
   });
 
+  // Hit points below 0 are something the open d100 rules track.
+  it('reads Horror d100 hit points below 0 as they are', () => {
+    expect(extractCharacterHp('HORROR_D100', { hitPoints: { maximum: 12, current: -2 } })).toEqual({ current: -2, max: 12, temp: 0 });
+  });
+
   it('falls back to full when current is missing', () => {
-    expect(extractCharacterHp('DND_5E', { hp: { maximum: 27 } })).toEqual({
+    expect(extractCharacterHp('FIFTH_EDITION', { hp: { maximum: 27 } })).toEqual({
       current: 27,
       max: 27,
       temp: 0,
@@ -44,20 +54,24 @@ describe('extractCharacterHp', () => {
   });
 
   it.each([
-    ['no data', 'DND_5E', null],
+    ['no data', 'FIFTH_EDITION', null],
     ['no game system', null, { hp: { maximum: 10, current: 10, temporary: 0 } }],
-    ['an unknown system', 'SHADOWRUN_6E', { hp: { maximum: 10, current: 10, temporary: 0 } }],
-    ['no hp block', 'DND_5E', {}],
-    ['hp that is not an object', 'DND_5E', { hp: 27 }],
+    ['a system CozyVTT no longer supports', RETIRED_GAME_SYSTEM, { hp: { maximum: 10, current: 10, temporary: 0 } }],
+    ['a system it never had', 'SOMETHING_ELSE', { hp: { maximum: 10, current: 10, temporary: 0 } }],
+    ['no hp block', 'FIFTH_EDITION', {}],
+    ['hp that is not an object', 'FIFTH_EDITION', { hp: 27 }],
     // An unfilled sheet stores zero, and a bar drawn against a maximum of zero
     // is meaningless — that is what separates "has HP" from "has the field".
-    ['a maximum of zero', 'DND_5E', { hp: { maximum: 0, current: 0, temporary: 0 } }],
-    ['a negative maximum', 'DND_5E', { hp: { maximum: -5, current: 0, temporary: 0 } }],
-    ['a non-numeric maximum', 'DND_5E', { hp: { maximum: '27', current: 27, temporary: 0 } }],
+    ['a maximum of zero', 'FIFTH_EDITION', { hp: { maximum: 0, current: 0, temporary: 0 } }],
+    ['a negative maximum', 'FIFTH_EDITION', { hp: { maximum: -5, current: 0, temporary: 0 } }],
+    ['a non-numeric maximum', 'FIFTH_EDITION', { hp: { maximum: '27', current: 27, temporary: 0 } }],
     // NaN fails every comparison, so a `<= 0` guard would let it through and
     // return a bar with a NaN maximum.
-    ['a NaN maximum', 'DND_5E', { hp: { maximum: NaN, current: 5, temporary: 0 } }],
-    ['5e data with CoC placement', 'DND_5E', { derivedStats: { hp: { maximum: 12 } } }],
+    ['a NaN maximum', 'FIFTH_EDITION', { hp: { maximum: NaN, current: 5, temporary: 0 } }],
+    ['5e data with Horror d100 placement', 'FIFTH_EDITION', { hitPoints: { maximum: 12 } }],
+    // The sheet before 1.7.0 kept hit points elsewhere; the server converts
+    // such a sheet before it is read (legacy/sheetConversion.ts).
+    ['a Horror d100 sheet still in the shape before 1.7.0', 'HORROR_D100', OLD_HORROR_D100_SHEET],
   ])('returns null for %s', (_label, system, data) => {
     expect(extractCharacterHp(system as string | null, data as Record<string, unknown> | null)).toBeNull();
   });

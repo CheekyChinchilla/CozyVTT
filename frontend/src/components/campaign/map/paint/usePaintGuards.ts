@@ -39,7 +39,7 @@ import type { PaintSurface } from './usePaintSurface';
 /** What is about to take the paint off the screen: a change of the map on screen, or leaving the page. */
 export type PaintLeaving = Exclude<ViewedMapChange['kind'], 'bring-everyone'> | 'leave';
 
-/** The DM's answer. */
+/** The GM's answer. */
 export type PaintLeaveAnswer = 'save' | 'discard' | 'later';
 
 /** What the question says about what is about to happen, after "Your painting of <map> is not saved." */

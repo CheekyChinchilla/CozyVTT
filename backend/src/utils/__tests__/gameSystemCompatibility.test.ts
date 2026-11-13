@@ -4,8 +4,8 @@ import { systemsCompatible } from '../gameSystemCompatibility';
 
 describe('systemsCompatible', () => {
   it.each([
-    ['DND_5E', 'DND_5E'],
-    ['PATHFINDER_2E', 'PATHFINDER_2E'],
+    ['FIFTH_EDITION', 'FIFTH_EDITION'],
+    ['FANTASY_D20', 'FANTASY_D20'],
     [null, null],
     [undefined, null],
   ])('lets a %s character join a %s campaign', (character, campaign) => {
@@ -13,10 +13,10 @@ describe('systemsCompatible', () => {
   });
 
   it.each([
-    [null, 'DND_5E'],
-    ['DND_5E', null],
-    ['PATHFINDER_2E', 'DND_5E'],
-    ['CALL_OF_CTHULHU_7E', undefined],
+    [null, 'FIFTH_EDITION'],
+    ['FIFTH_EDITION', null],
+    ['FANTASY_D20', 'FIFTH_EDITION'],
+    ['HORROR_D100', undefined],
   ])('keeps a %s character out of a %s campaign', (character, campaign) => {
     expect(systemsCompatible(character, campaign)).toBe(false);
   });

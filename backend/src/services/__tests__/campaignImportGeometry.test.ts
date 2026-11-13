@@ -29,7 +29,7 @@ function archive(maps: object[]): Promise<Buffer> {
   const entries: Record<string, string> = {
     'manifest.json': JSON.stringify({
       formatVersion: 1, exportedAt: new Date().toISOString(), exportedFrom: 'test', campaignName: 'Geometry',
-      gameSystem: 'DND_5E', mapCount: maps.length, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0,
+      gameSystem: 'FIFTH_EDITION', mapCount: maps.length, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0,
       assetCount: 0, includesAudio: false, totalSizeBytes: 0,
     }),
     'campaign.json': JSON.stringify({ name: 'Geometry' }),

@@ -1,0 +1,109 @@
+{
+  "investigatorName": "Jack Moran",
+  "occupation": "Private Detective",
+  "era": "Modern",
+  "age": 35,
+  "sex": "Male",
+  "residence": "A harbour city",
+  "birthplace": "Upstate",
+  "characteristics": {
+    "STR": { "regular": 60, "half": 30, "fifth": 12 },
+    "CON": { "regular": 60, "half": 30, "fifth": 12 },
+    "SIZ": { "regular": 65, "half": 33, "fifth": 13 },
+    "DEX": { "regular": 70, "half": 35, "fifth": 14 },
+    "APP": { "regular": 55, "half": 28, "fifth": 11 },
+    "INT": { "regular": 70, "half": 35, "fifth": 14 },
+    "POW": { "regular": 60, "half": 30, "fifth": 12 },
+    "EDU": { "regular": 65, "half": 33, "fifth": 13 }
+  },
+  "derivedStats": {
+    "hp": { "maximum": 13, "current": 13, "formula": "(CON+SIZ)/10", "majorWoundThreshold": 1 },
+    "magicPoints": { "maximum": 12, "current": 12, "formula": "POW/5" },
+    "sanity": { "starting": 60, "current": 60, "maximum": 99, "formula": "POW" },
+    "luck": { "score": 55, "notes": "" },
+    "moveRate": 8,
+    "build": 1,
+    "damageBonus": "+1d4",
+    "dodge": { "value": 35, "formula": "DEX/2", "improvementChecked": false }
+  },
+  "skills": {
+    "accounting": { "baseValue": 5, "currentValue": 10, "improvementChecked": false },
+    "anthropology": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "appraise": { "baseValue": 5, "currentValue": 5, "improvementChecked": false },
+    "archaeology": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "libraryUse": { "baseValue": 20, "currentValue": 50, "improvementChecked": false },
+    "occult": { "baseValue": 5, "currentValue": 5, "improvementChecked": false },
+    "spotHidden": { "baseValue": 25, "currentValue": 65, "improvementChecked": false },
+    "listen": { "baseValue": 20, "currentValue": 50, "improvementChecked": false },
+    "naturalWorld": { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+    "charm": { "baseValue": 15, "currentValue": 40, "improvementChecked": false },
+    "fastTalk": { "baseValue": 5, "currentValue": 40, "improvementChecked": false },
+    "intimidate": { "baseValue": 15, "currentValue": 45, "improvementChecked": false },
+    "persuade": { "baseValue": 10, "currentValue": 50, "improvementChecked": false },
+    "psychology": { "baseValue": 10, "currentValue": 55, "improvementChecked": false },
+    "climb": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "jump": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "swim": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "throw": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "stealth": { "baseValue": 20, "currentValue": 45, "improvementChecked": false },
+    "dodge": { "baseValue": 35, "currentValue": 35, "improvementChecked": false },
+    "fighting": {
+      "brawl": { "baseValue": 25, "currentValue": 50, "improvementChecked": false },
+      "custom": []
+    },
+    "firearms": {
+      "handgun": { "baseValue": 20, "currentValue": 55, "improvementChecked": false },
+      "rifle": { "baseValue": 25, "currentValue": 25, "improvementChecked": false },
+      "shotgun": { "baseValue": 25, "currentValue": 25, "improvementChecked": false },
+      "custom": []
+    },
+    "artCraft": { "baseValue": 5, "currentValue": 5, "improvementChecked": false, "specialization": null },
+    "disguise": { "baseValue": 5, "currentValue": 30, "improvementChecked": false },
+    "driveAuto": { "baseValue": 20, "currentValue": 45, "improvementChecked": false },
+    "firstAid": { "baseValue": 30, "currentValue": 30, "improvementChecked": false },
+    "locksmith": { "baseValue": 1, "currentValue": 45, "improvementChecked": false },
+    "mechanicalRepair": { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+    "electricalRepair": { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+    "operateHeavyMachinery": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "sleightOfHand": { "baseValue": 10, "currentValue": 30, "improvementChecked": false },
+    "pilot": { "baseValue": 1, "currentValue": 1, "improvementChecked": false, "specialization": null },
+    "history": { "baseValue": 5, "currentValue": 5, "improvementChecked": false },
+    "languageOwn": { "baseValue": 65, "currentValue": 65, "improvementChecked": false, "language": "English" },
+    "languageOther": [],
+    "law": { "baseValue": 5, "currentValue": 40, "improvementChecked": false },
+    "medicine": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "science": [],
+    "navigate": { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+    "survival": { "baseValue": 10, "currentValue": 10, "improvementChecked": false, "specialization": null },
+    "track": { "baseValue": 10, "currentValue": 40, "improvementChecked": false },
+    "creditRating": { "baseValue": 0, "currentValue": 30, "improvementChecked": false },
+    "cthulhuMythos": { "baseValue": 0, "currentValue": 0, "improvementChecked": false },
+    "psychoanalysis": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "ride": { "baseValue": 5, "currentValue": 5, "improvementChecked": false },
+    "customSkills": []
+  },
+  "combat": {
+    "weapons": [
+      { "name": "Revolver", "skill": "Firearms (Handgun)", "skillValue": 55, "damage": "1D10", "range": "15 yards", "attacks": 1, "ammo": 18, "malfunction": 100, "notes": "Six rounds, spares in a pocket" },
+      { "name": "Fists", "skill": "Fighting (Brawl)", "skillValue": 50, "damage": "1D3+1D4", "range": "Touch", "attacks": 1, "ammo": null, "malfunction": null, "notes": "Damage includes the bonus" }
+    ]
+  },
+  "wealth": { "spendingLevel": "Average", "cash": 100, "assets": "A small office and an old car", "notes": "" },
+  "possessions": [
+    { "name": "Coat", "notes": "Long and worn" },
+    { "name": "Lockpicks", "notes": "Kept quiet" }
+  ],
+  "backstory": {
+    "description": "Left the police after a falling out and took up private work.",
+    "personalDescription": "Rumpled suit, tired eyes.",
+    "ideology": "Everyone has something to hide.",
+    "significantPeople": "A former partner still on the force.",
+    "meaningfulLocations": "The office above the laundry.",
+    "treasuredPossessions": "His father's badge.",
+    "traits": "Dry humour, too much coffee.",
+    "injuriesAndScars": "A scar above one eyebrow.",
+    "phobiasAndManias": "Locks every door twice.",
+    "arcaneTomesAndSpells": "None yet.",
+    "encountersWithStrangeEntities": "Something in a warehouse he will not describe."
+  }
+}

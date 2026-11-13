@@ -1,9 +1,9 @@
 /**
  * What a spectator is sent, on the paths no test put a spectator on.
  *
- * Every per-recipient fan-out treats the DM as seeing everything and
+ * Every per-recipient fan-out treats the GM as seeing everything and
  * everyone else through the role filter. The tests of those paths used
- * players only, so widening the DM's branch to "anyone but a player" passed
+ * players only, so widening the GM's branch to "anyone but a player" passed
  * the whole suite while sending spectators hidden creatures' moves, hidden
  * creatures' rolls and other members' explored memory. These put a
  * spectator on each path. The last case pins that revealing the spirit
@@ -28,12 +28,12 @@ const WRAITH = randomUUID();
 const HERO = randomUUID();
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let spectatorId: string;
 let campaignId: string;
 let mapId: string;
-let dm: ClientSocket;
+let gm: ClientSocket;
 let player: ClientSocket;
 let spectator: ClientSocket;
 
@@ -44,15 +44,15 @@ const token = (id: string, extra: Record<string, unknown>) => ({
 const entry = (tokenId: string) => ({ tokenId, mapId, name: tokenId, imageUrl: '', initiative: null, hp: null, type: 'npc' as const, disposition: null, characterId: null });
 
 beforeAll(async () => {
-  const [dmUser, playerUser, spectatorUser] = await Promise.all(['dm', 'player', 'spectator'].map((name) =>
+  const [gmUser, playerUser, spectatorUser] = await Promise.all(['dm', 'player', 'spectator'].map((name) =>
     prisma.user.create({ data: { email: email(name), passwordHash: 'x', displayName: `Recv ${name}` } })));
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
   spectatorId = spectatorUser.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Spectator recipients ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Spectator recipients ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
     ],
@@ -82,12 +82,12 @@ beforeEach(async () => {
       ]),
     },
   });
-  dm = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  gm = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
   player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
   spectator = await server.connectAndAuth(await server.loginAs(spectatorId), campaignId);
 });
 
-afterEach(() => { dm.disconnect(); player.disconnect(); spectator.disconnect(); });
+afterEach(() => { gm.disconnect(); player.disconnect(); spectator.disconnect(); });
 
 afterAll(async () => {
   await server.close();
@@ -96,11 +96,11 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, spectatorId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId, spectatorId] } } });
   await prisma.$disconnect();
 });
 
-describe('a hidden creature the DM moves', () => {
+describe('a hidden creature the GM moves', () => {
   it.each([[false, 'an unlit'], [true, 'a lit']])('reaches no spectator, drag or drop, on %s map', async (lit) => {
     await prisma.map.update({ where: { id: mapId }, data: { lightingEnabled: lit as boolean } });
     const quiet = Promise.all([
@@ -108,10 +108,10 @@ describe('a hidden creature the DM moves', () => {
       expectNoEvent(spectator, 'token.moved', 800),
       expectNoEvent(spectator, 'token:appeared', 800),
     ]);
-    const done = waitForEvent<{ tokenId: string }>(dm, 'token.moved');
-    dm.emit('token.move.start', { tokenId: HIDDEN, mapId });
-    dm.emit('token.move', { tokenId: HIDDEN, mapId, x: 3, y: 2 });
-    dm.emit('token.move.end', { tokenId: HIDDEN, mapId, x: 4, y: 2 });
+    const done = waitForEvent<{ tokenId: string }>(gm, 'token.moved');
+    gm.emit('token.move.start', { tokenId: HIDDEN, mapId });
+    gm.emit('token.move', { tokenId: HIDDEN, mapId, x: 3, y: 2 });
+    gm.emit('token.move.end', { tokenId: HIDDEN, mapId, x: 4, y: 2 });
     expect((await done).tokenId).toBe(HIDDEN);
     await expect(quiet).resolves.toBeDefined();
   });
@@ -120,8 +120,8 @@ describe('a hidden creature the DM moves', () => {
 it("never tells a spectator a hidden creature's initiative roll", async () => {
   setState(campaignId, { active: true, round: 1, currentTokenId: null, combatants: [entry(HIDDEN)] });
   const quiet = expectNoEvent(spectator, 'dice.rolled', 800);
-  const logged = waitForEvent<{ purpose: string }>(dm, 'dice.rolled');
-  dm.emit('initiative.roll', { tokenId: HIDDEN, mapId });
+  const logged = waitForEvent<{ purpose: string }>(gm, 'dice.rolled');
+  gm.emit('initiative.roll', { tokenId: HIDDEN, mapId });
   expect((await logged).purpose).toMatch(/Initiative/);
   await expect(quiet).resolves.toBeUndefined();
 });
@@ -148,6 +148,6 @@ it('sends the initiative order again when the spirit layer is revealed to everyo
       if (state.combatants.some((c) => c.tokenId === WRAITH)) resolve();
     });
   });
-  dm.emit('spirit_layer.toggle', { visible: true });
+  gm.emit('spirit_layer.toggle', { visible: true });
   await expect(Promise.race([resent, new Promise((_r, reject) => setTimeout(() => reject(new Error('order not re-sent')), 3000))])).resolves.toBeUndefined();
 });

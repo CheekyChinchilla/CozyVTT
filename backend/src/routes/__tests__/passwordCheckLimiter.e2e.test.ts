@@ -65,7 +65,10 @@ it('locks the three password checks together after ten wrong passwords, from any
   expect(change.status).toBe(429);
   expect(change.body).toEqual(LOCKED);
   expect((await from().delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(429);
-  expect((await from().put(`/api/users/${id}`).send({ email: 'moved@test.invalid', currentPassword: TEST_PASSWORD })).status).toBe(429);
+  // The password limit's own refusal, which the cap on email changes cannot give.
+  const moved = await from().put(`/api/users/${id}`).send({ email: 'moved@test.invalid', currentPassword: TEST_PASSWORD });
+  expect(moved.status).toBe(429);
+  expect(moved.body).toEqual(LOCKED);
 
   // The password was never checked, so nothing changed and the session is still signed in.
   expect((await agent.get('/api/auth/me')).status).toBe(200);

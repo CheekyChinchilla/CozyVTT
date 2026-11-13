@@ -1,24 +1,26 @@
 /**
  * PrintedSkillsEditor
  * Skills for a creature whose system prints its numbers and has nothing to
- * work them out from: Call of Cthulhu's percentages, Shadowrun 6e's dice
- * pools. Each skill is a name and the number the DM types, stored as given.
+ * work them out from, such as Horror d100's percentages. Each skill is a name
+ * and the number the GM types, stored as given.
  */
 
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import type { NpcStatBlock } from '@/types';
-import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
+import { STAT_BLOCK_LIMITS, statBlockNumberBounds } from '@/constants/statBlockLimits';
 
 interface PrintedSkillsEditorProps {
   statBlock: NpcStatBlock;
   onChange: (updated: NpcStatBlock) => void;
+  /** The campaign's game system, which sets the highest skill the server keeps. */
+  gameSystem: string | null;
 }
 
-const clampSkill = (value: number) => Math.max(STAT_BLOCK_LIMITS.minBonus, Math.min(STAT_BLOCK_LIMITS.maxBonus, value));
-
-export default function PrintedSkillsEditor({ statBlock, onChange }: PrintedSkillsEditorProps) {
+export default function PrintedSkillsEditor({ statBlock, onChange, gameSystem }: PrintedSkillsEditorProps) {
   const [newSkill, setNewSkill] = useState('');
+  const { minSkill, maxSkill } = statBlockNumberBounds(gameSystem);
+  const clampSkill = (value: number) => Math.max(minSkill, Math.min(maxSkill, value));
 
   const skills = statBlock.skills ?? {};
   const names = Object.keys(skills).sort((a, b) => a.localeCompare(b));
@@ -45,8 +47,8 @@ export default function PrintedSkillsEditor({ statBlock, onChange }: PrintedSkil
             type="number"
             aria-label={name}
             value={skills[name]}
-            min={STAT_BLOCK_LIMITS.minBonus}
-            max={STAT_BLOCK_LIMITS.maxBonus}
+            min={minSkill}
+            max={maxSkill}
             onChange={(e) => {
               const parsed = parseInt(e.target.value, 10);
               setSkills({ ...skills, [name]: clampSkill(Number.isFinite(parsed) ? parsed : 0) });

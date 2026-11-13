@@ -3,7 +3,7 @@
  *
  * Removing a member deleted the membership and left each of their characters
  * pointing at the campaign, so the remaining members could go on reading the
- * sheets, the DM could go on editing them, and every save the owner made was
+ * sheets, the GM could go on editing them, and every save the owner made was
  * still sent to the campaign they had left.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -16,11 +16,11 @@ import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampai
 import { createWsTestServer, expectNoEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 
 const app = createTestApp();
-let dmId: string;
+let gmId: string;
 let leaverId: string;
 let stayerId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let stayer: ReturnType<typeof request.agent>;
 let leaver: ReturnType<typeof request.agent>;
 let server: WsTestServer;
@@ -35,24 +35,24 @@ const sheet = (userId: string, name: string) =>
   prisma.character.create({ data: { id: randomUUID(), userId, campaignId, name, data: {} } });
 
 beforeAll(async () => {
-  const [dmUser, leaverUser, stayerUser] = await Promise.all([
-    createTestUser({ displayName: 'Removal DM' }),
+  const [gmUser, leaverUser, stayerUser] = await Promise.all([
+    createTestUser({ displayName: 'Removal GM' }),
     createTestUser({ displayName: 'Removal Leaver' }),
     createTestUser({ displayName: 'Removal Stayer' }),
   ]);
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   leaverId = leaverUser.id;
   stayerId = stayerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Member removal' })).id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Member removal' })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: leaverId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: stayerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   // One at a time: one address may have only two sign-ins checked at once.
-  dm = await login(dmUser.email);
+  gm = await login(gmUser.email);
   stayer = await login(stayerUser.email);
   leaver = await login(leaverUser.email);
   server = await createWsTestServer();
@@ -60,9 +60,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await server.close();
-  await prisma.character.deleteMany({ where: { userId: { in: [dmId, leaverId, stayerId] } } });
+  await prisma.character.deleteMany({ where: { userId: { in: [gmId, leaverId, stayerId] } } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, leaverId, stayerId]);
+  await cleanupUsers([gmId, leaverId, stayerId]);
   await prisma.$disconnect();
 });
 
@@ -74,30 +74,30 @@ it("takes the removed member's characters out of the campaign", async () => {
   });
   expect((await stayer.get(`/api/characters/${character.id}`)).status).toBe(200);
 
-  expect((await dm.delete(`/api/campaigns/${campaignId}/members/${leaverId}`)).status).toBe(200);
+  expect((await gm.delete(`/api/campaigns/${campaignId}/members/${leaverId}`)).status).toBe(200);
 
   expect((await prisma.character.findUniqueOrThrow({ where: { id: character.id } })).campaignId).toBeNull();
   expect((await stayer.get(`/api/characters/${character.id}`)).status).toBe(404);
-  expect((await dm.put(`/api/characters/${character.id}`).send({ name: 'Renamed' })).status).toBe(404);
+  expect((await gm.put(`/api/characters/${character.id}`).send({ name: 'Renamed' })).status).toBe(404);
 });
 
 // Characters left behind by removals before this was fixed still name the
 // campaign; they are the owner's alone once the owner is not a member.
 it("keeps a character that still names the campaign from its owner's former table", async () => {
   await prisma.campaignMembership.deleteMany({ where: { userId: leaverId, campaignId } });
-  const orphan = await sheet(dmId, 'placeholder');
+  const orphan = await sheet(gmId, 'placeholder');
   await prisma.character.update({ where: { id: orphan.id }, data: { userId: leaverId, name: 'Left Behind' } });
 
   expect((await stayer.get(`/api/characters/${orphan.id}`)).status).toBe(404);
-  expect((await dm.put(`/api/characters/${orphan.id}`).send({ name: 'Renamed' })).status).toBe(404);
-  const listed = await dm.get(`/api/campaigns/${campaignId}`);
+  expect((await gm.put(`/api/characters/${orphan.id}`).send({ name: 'Renamed' })).status).toBe(404);
+  const listed = await gm.get(`/api/campaigns/${campaignId}`);
   expect(listed.status).toBe(200);
   expect(JSON.stringify(listed.body)).not.toContain('Left Behind');
 });
 
 it("does not send the owner's saves of such a character to the campaign", async () => {
   await prisma.campaignMembership.deleteMany({ where: { userId: leaverId, campaignId } });
-  const orphan = await sheet(dmId, 'placeholder');
+  const orphan = await sheet(gmId, 'placeholder');
   await prisma.character.update({ where: { id: orphan.id }, data: { userId: leaverId, name: 'Still Saving' } });
   const table = await server.connectAndAuth(await server.loginAs(stayerId), campaignId);
   const quiet = expectNoEvent(table, 'character.updated', 800);

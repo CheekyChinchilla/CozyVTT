@@ -10,7 +10,7 @@ import { withinCeiling } from '../shared';
 
 export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * ATMOSPHERE.EFFECT.SET — DM sets a visual particle overlay on the map canvas.
+   * ATMOSPHERE.EFFECT.SET — GM sets a visual particle overlay on the map canvas.
    * Valid: 'rain' | 'mist' | 'leaves' | 'sparkles' | 'snow' | 'wind' | null (clear)
    */
   socket.on('atmosphere.effect.set', async (data: { effect: string | null }) => {
@@ -18,8 +18,8 @@ export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSock
       if (!socket.campaignId) return;
       if (!withinCeiling(socket, 'atmosphere.effect.set')) return;
 
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only the DM can set atmosphere effects' });
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only the GM can set atmosphere effects' });
         return;
       }
 
@@ -44,14 +44,14 @@ export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSock
   });
 
   /**
-   * ATMOSPHERE.AUDIO.SET — DM queues or stops ambient audio for all players.
+   * ATMOSPHERE.AUDIO.SET — GM queues or stops ambient audio for all players.
    * assetId: UUID of an AUDIO asset, or null to stop.
    *
    * Setting a track is what opens it to the campaign: the read rule lets a
    * member fetch whatever their campaign is playing, because the sound is not
    * relayed through here, each player's browser fetches the file itself. So
-   * this handler asks the same question the serving route asks, of the DM. A
-   * track the DM cannot read answers the same as one that does not exist, so
+   * this handler asks the same question the serving route asks, of the GM. A
+   * track the GM cannot read answers the same as one that does not exist, so
    * the reply cannot be used to discover which ids are real.
    */
   socket.on('atmosphere.audio.set', async (data: { assetId: string | null; volume?: number; loop?: boolean }) => {
@@ -59,8 +59,8 @@ export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSock
       if (!socket.campaignId || !socket.userId) return;
       if (!withinCeiling(socket, 'atmosphere.audio.set')) return;
 
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only the DM can control ambient audio' });
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only the GM can control ambient audio' });
         return;
       }
 

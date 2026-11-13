@@ -6,10 +6,12 @@ import { useState, useEffect } from 'react';
 import { Check, XCircle, Users } from 'lucide-react';
 import { api } from '@/services/api';
 import Toast, { useToast } from '@/components/Toast';
+import { CampaignRole } from '@/types';
 import type { CampaignInvitation, CharacterSummary } from '@/types';
+import { CAMPAIGN_ROLE_LABEL } from '@/utils/campaignRoles';
 import { Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
-import { gameSystemName } from '@/constants/game-systems';
+import { gameSystemName, playedGameSystem } from '@/constants/game-systems';
 import { systemsCompatible } from '@/utils/gameSystemCompatibility';
 
 interface InvitationModalProps {
@@ -42,7 +44,7 @@ export default function InvitationModal({
 
         // Unassigned characters the server will let join this campaign
         const compatible = response.characters.filter(
-          (char: CharacterSummary) => !char.campaignId && systemsCompatible(char.gameSystem, invitation.campaign?.gameSystem)
+          (char: CharacterSummary) => !char.campaignId && systemsCompatible(char.gameSystem, playedGameSystem(invitation.campaign?.gameSystem))
         );
 
         setCharacters(compatible);
@@ -115,11 +117,11 @@ export default function InvitationModal({
                   {gameSystemName(invitation.campaign?.gameSystem || null)}
                 </span>
               </div>
-              {invitation.campaign?.dm && (
+              {invitation.campaign?.gm && (
                 <div>
-                  <span className="text-warm-gray">DM:</span>{' '}
+                  <span className="text-warm-gray">{CAMPAIGN_ROLE_LABEL[CampaignRole.GM]}:</span>{' '}
                   <span className="font-medium text-stone-gray">
-                    {invitation.campaign.dm.displayName}
+                    {invitation.campaign.gm.displayName}
                   </span>
                 </div>
               )}

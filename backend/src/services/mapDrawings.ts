@@ -4,7 +4,7 @@
  * One shape for every path that sends a drawing: the live table's events,
  * the REST read, and the lists sent again after a map is resized or a
  * member's role changes. Each reader is given what `drawingSentTo` allows their
- * role (utils/drawingRules.ts), so a drawing for the DM alone never leaves
+ * role (utils/drawingRules.ts), so a drawing for the GM alone never leaves
  * the server for anyone else, whichever path it takes.
  */
 
@@ -22,7 +22,7 @@ export interface DrawingSent {
   id: string;
   /** Who drew it; null once their account is deleted. */
   authorId: string | null;
-  audience: 'ALL' | 'DM';
+  audience: 'ALL' | 'GM';
   layer: 'MARKUP' | 'GROUND';
   kind: string;
   color: string;
@@ -59,7 +59,7 @@ export interface DrawingRemovedBroadcast {
 
 /**
  * `drawings:cleared`: to the readers who had any of them; `authorId` for one
- * member's, by their Clear mine or the DM's clear naming them.
+ * member's, by their Clear mine or the GM's clear naming them.
  */
 export interface DrawingsClearedBroadcast {
   mapId: string;
@@ -112,12 +112,12 @@ export function drawingSent(row: MapDrawing): DrawingSent {
  * A drawing as a campaign archive carries it, in its map file's
  * `drawings`: the fields `drawing:add` takes, without its id, its author or
  * its time, which the importing server sets, and the share of the map's
- * markup layer it counts to (drawingShare, by the campaign's DM, `dmId`),
+ * markup layer it counts to (drawingShare, by the campaign's GM, `gmId`),
  * which the import gives back to it.
  */
-export function drawingForArchive(row: MapDrawing, dmId: string | null) {
+export function drawingForArchive(row: MapDrawing, gmId: string | null) {
   return {
-    share: drawingShare(row, dmId),
+    share: drawingShare(row, gmId),
     audience: row.audience,
     layer: row.layer,
     kind: row.kind,
@@ -143,25 +143,25 @@ export const DRAWING_ORDER = [
 type Reader = Pick<typeof prisma, 'mapDrawing'> | Prisma.TransactionClient;
 
 /**
- * The campaign's DM the shares of its maps' markup layers count by: the
- * one seated first, so a campaign an older version left with two DM rows
+ * The campaign's GM the shares of its maps' markup layers count by: the
+ * one seated first, so a campaign an older version left with two GM rows
  * counts by the same one from one add to the next.
  */
-export async function campaignDmId(
+export async function campaignGmId(
   db: Pick<typeof prisma, 'campaignMembership'> | Prisma.TransactionClient, campaignId: string,
 ): Promise<string | null> {
-  const dm = await db.campaignMembership.findFirst({
-    where: { campaignId, role: 'DM' },
+  const gm = await db.campaignMembership.findFirst({
+    where: { campaignId, role: 'GM' },
     orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
     select: { userId: true },
   });
-  return dm?.userId ?? null;
+  return gm?.userId ?? null;
 }
 
 /** A map's drawings as a member of this role is sent them, in drawing order. */
 export async function drawingsFor(mapId: string, role: string | undefined, db: Reader = prisma): Promise<DrawingSent[]> {
   const rows = await db.mapDrawing.findMany({
-    where: { mapId, ...(role === 'DM' ? {} : { audience: 'ALL' as const }) },
+    where: { mapId, ...(role === 'GM' ? {} : { audience: 'ALL' as const }) },
     orderBy: [...DRAWING_ORDER],
   });
   return rows.map(drawingSent);
@@ -169,8 +169,8 @@ export async function drawingsFor(mapId: string, role: string | undefined, db: R
 
 /**
  * What one share of a map's markup layer holds, for an add of `adding`
- * points (drawingShare): the DM's, every drawing for the DM alone and the
- * campaign's DM's (`dmId`) for everyone, or the players', every other
+ * points (drawingShare): the GM's, every drawing for the GM alone and the
+ * campaign's GM's (`gmId`) for everyone, or the players', every other
  * drawing for everyone. Read under the map's lock, so
  * drawings sent together are counted one after another. The drawings are
  * counted first, which reads no point. Their points are added up only when
@@ -178,11 +178,11 @@ export async function drawingsFor(mapId: string, role: string | undefined, db: R
  * every drawing's points whole while the lock is held.
  */
 export async function markupHeld(
-  tx: Prisma.TransactionClient, mapId: string, adding: number, share: MarkupShare, dmId: string | null,
+  tx: Prisma.TransactionClient, mapId: string, adding: number, share: MarkupShare, gmId: string | null,
 ): Promise<MarkupHeld> {
-  const inShare = share === 'DM'
-    ? dmId === null ? Prisma.sql`audience = 'DM'` : Prisma.sql`(audience = 'DM' OR "authorId" = ${dmId})`
-    : dmId === null ? Prisma.sql`audience = 'ALL'` : Prisma.sql`(audience = 'ALL' AND ("authorId" IS NULL OR "authorId" <> ${dmId}))`;
+  const inShare = share === 'GM'
+    ? gmId === null ? Prisma.sql`audience = 'GM'` : Prisma.sql`(audience = 'GM' OR "authorId" = ${gmId})`
+    : gmId === null ? Prisma.sql`audience = 'ALL'` : Prisma.sql`(audience = 'ALL' AND ("authorId" IS NULL OR "authorId" <> ${gmId}))`;
   const [counted] = await tx.$queryRaw<Array<{ drawings: number }>>`
     SELECT COUNT(*)::int AS drawings FROM "MapDrawing" WHERE "mapId" = ${mapId} AND layer = 'MARKUP' AND ${inShare}`;
   const drawings = counted?.drawings ?? 0;
@@ -237,7 +237,7 @@ export async function resendDrawings(campaignId: string, mapId: string): Promise
   try {
     const io = getSocketInstance();
     await withMapsLocked([mapId], async (tx) => {
-      const all = await drawingsFor(mapId, 'DM', tx);
+      const all = await drawingsFor(mapId, 'GM', tx);
       await emitToMapReadersAs(io, campaignId, mapId, 'drawings:state', (role) => ({
         event: 'drawings:state', data: { mapId, drawings: all.filter((d) => drawingSentTo(role, d)) } satisfies DrawingsStateBroadcast,
       }));

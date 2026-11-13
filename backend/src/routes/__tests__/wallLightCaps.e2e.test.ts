@@ -23,9 +23,9 @@ import { MAX_LIGHT_SOURCES, MAX_WALL_SEGMENTS, TOO_MANY_LIGHTS_MESSAGE, TOO_MANY
 jest.setTimeout(30000);
 
 const app = createTestApp();
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let server: WsTestServer;
 let page: ClientSocket;
 
@@ -53,13 +53,13 @@ const base = (mapId: string) => `/api/campaigns/${campaignId}/maps/${mapId}`;
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
   const user = await createTestUser({ email: `wallcaps-${stamp}@test.cozyvtt.local` });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Wall caps ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Wall caps ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
-  page = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  page = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
 });
 
 afterAll(async () => {
@@ -67,14 +67,14 @@ afterAll(async () => {
   await server?.close();
   await prisma.map.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
 describe('a map at its wall cap', () => {
   it('refuses a REST add with the exported message', async () => {
     const mapId = await fullMap();
-    const res = await dm.post(`${base(mapId)}/walls`).send(wall());
+    const res = await gm.post(`${base(mapId)}/walls`).send(wall());
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: 'Limit Exceeded', message: TOO_MANY_WALLS_MESSAGE });
     expect((await counts(mapId)).walls).toBe(MAX_WALL_SEGMENTS);
@@ -90,7 +90,7 @@ describe('a map at its wall cap', () => {
 
   it('refuses a whole list one over the cap with the same message', async () => {
     const mapId = await fullMap();
-    const res = await dm.put(`${base(mapId)}/walls`).send({ segments: Array.from({ length: MAX_WALL_SEGMENTS + 1 }, wall) });
+    const res = await gm.put(`${base(mapId)}/walls`).send({ segments: Array.from({ length: MAX_WALL_SEGMENTS + 1 }, wall) });
     expect(res.status).toBe(400);
     expect(res.body.message).toBe(TOO_MANY_WALLS_MESSAGE);
   });
@@ -99,7 +99,7 @@ describe('a map at its wall cap', () => {
 describe('a map at its light cap', () => {
   it('refuses a REST add with the exported message', async () => {
     const mapId = await fullMap();
-    const res = await dm.post(`${base(mapId)}/lights`).send(light());
+    const res = await gm.post(`${base(mapId)}/lights`).send(light());
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: 'Limit Exceeded', message: TOO_MANY_LIGHTS_MESSAGE });
     expect((await counts(mapId)).lights).toBe(MAX_LIGHT_SOURCES);
@@ -115,7 +115,7 @@ describe('a map at its light cap', () => {
 
   it('refuses a whole list one over the cap with the same message', async () => {
     const mapId = await fullMap();
-    const res = await dm.put(`${base(mapId)}/lights`).send({ lights: Array.from({ length: MAX_LIGHT_SOURCES + 1 }, light) });
+    const res = await gm.put(`${base(mapId)}/lights`).send({ lights: Array.from({ length: MAX_LIGHT_SOURCES + 1 }, light) });
     expect(res.status).toBe(400);
     expect(res.body.message).toBe(TOO_MANY_LIGHTS_MESSAGE);
   });

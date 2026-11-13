@@ -87,7 +87,7 @@ import { createClickSwallow } from './map/clickSwallow';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
   encodePreviewSelection, decodePreviewSelection, resolvePreviewSelection, followStepTokens, type PreviewSelection,
-  previewTokens,
+  type PreviewPlane, previewTokens,
 } from './map/previewSelection';
 import { useExploredMemory } from './map/useExploredMemory';
 import { useFogStateRequest } from './map/useFogStateRequest';
@@ -133,10 +133,10 @@ import TemporaryHpDialog from '@/components/campaign/TemporaryHpDialog';
 import { tokenDisplayName, tokenPublicName, characterRollPublicName, UNKNOWN_CREATURE } from '@/utils/tokenDisplayName';
 import { setTokenFlag } from '@/utils/tokenFlags';
 import AtmosphereOverlay from '@/components/campaign/AtmosphereOverlay';
-import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogControls';
-import DmWallControls, { type WallToolMode } from '@/components/campaign/DmWallControls';
-import DmLightControls, { type LightToolMode } from '@/components/campaign/DmLightControls';
-import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
+import GmFogControls, { type FogToolMode } from '@/components/campaign/GmFogControls';
+import GmWallControls, { type WallToolMode } from '@/components/campaign/GmWallControls';
+import GmLightControls, { type LightToolMode } from '@/components/campaign/GmLightControls';
+import GmToolPanelContainer from '@/components/campaign/GmToolPanelContainer';
 import DrawControls, { type DrawControlsProps, type MemberDrawings } from '@/components/campaign/DrawControls';
 import DrawStrip from '@/components/campaign/DrawStrip';
 import PaintControls from '@/components/campaign/PaintControls';
@@ -162,6 +162,7 @@ import '@/styles/spirit-effects.css';
 import { mapImageState, pictureFor, PICTURE_DECODE_WAIT_MS, type LoadedPicture } from './map/mapImageState';
 import { useTokenImages } from './map/useTokenImages';
 import { useTopBand, underBand, belowBand, useMeasuredBottom, useMeasuredHeight, BAND_GAP } from './map/toolbarLayout';
+import { playedGameSystem } from '@/constants/game-systems';
 
 /** Returns the accent color for the spirit layer style string. Used for spirit token ring. */
 function getSpiritAccentColor(style: string | null | undefined): string {
@@ -183,6 +184,19 @@ const COMPACT_BAND = 'absolute top-2 left-[max(0.5rem,env(safe-area-inset-left))
 const RULER_NEEDS_TOKEN = 'Place your character token on the map to use the ruler';
 
 /**
+ * What a lit map says to a player who controls no token on the plane they
+ * are looking at, and so sees nothing. Said from their side alone: nothing
+ * in it tells whether anyone else's tokens are there.
+ */
+const NO_TOKEN_TO_SEE_THROUGH = {
+  material: 'You have no token on this map to see through. Ask your GM for one.',
+  spirit: 'You have no token in the spirit realm to see through. Ask your GM for one.',
+} as const satisfies Record<PreviewPlane, string>;
+
+/** How a note at the foot of the map looks: the ruler's, and the one saying there is no token to see through. */
+const MAP_NOTE = 'bg-black/60 text-white text-xs px-3 py-1.5 rounded-full text-center';
+
+/**
  * The compact layout's dock at the foot of the map: its floating rows keep
  * 8 pixels from either side, or clear of a phone's notch.
  */
@@ -193,8 +207,8 @@ function readDeviceRatio(): number {
   return typeof window === 'undefined' ? 1 : window.devicePixelRatio;
 }
 
-/** The DM's editing tool, from the wall, fog or light panel. */
-type DmTool =
+/** The GM's editing tool, from the wall, fog or light panel. */
+type GmTool =
   | { kind: 'wall'; mode: NonNullable<WallToolMode> }
   | { kind: 'fog'; mode: NonNullable<FogToolMode> }
   | { kind: 'light'; mode: NonNullable<LightToolMode> };
@@ -207,9 +221,9 @@ interface MapCanvasProps {
 
 export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasProps) {
   // `currentMap` here is the map this page shows (viewedMap): the table's,
-  // or one the DM is preparing. Every emit, request and filter below is for
+  // or one the GM is preparing. Every emit, request and filter below is for
   // it; the table's own map is the context's to follow (receiveTableMap).
-  const { viewedMap: currentMap, isPreparing, receiveTableMap, updateMap, registerViewedMapGuard, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect } = useCampaign();
+  const { viewedMap: currentMap, isPreparing, receiveTableMap, updateMap, registerViewedMapGuard, userRole, campaign, updateCampaignSpiritLayer, gmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect } = useCampaign();
   const characterHpCache = useCharacterHp();
   // Live token state comes from the game store, not the campaign context —
   // socket handlers write there directly (outside React), and this
@@ -232,7 +246,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const { socket, joinedEpoch } = useWebSocket();
   const tableRoll = useTableRoll(socket);
   const { user } = useAuth();
-  const isDM = userRole === 'DM';
+  const isGM = userRole === 'GM';
   // On the compact layout the token and door menus are action sheets.
   const compact = useCompactLayout();
   // Three stacked canvases. `canvasRef` is the TOP canvas — it
@@ -337,7 +351,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const [pingArmed, setPingArmed] = useState(false);
   /** On the compact layout: the Map controls sheet is open. */
   const [mapControlsOpen, setMapControlsOpen] = useState(false);
-  /** On the compact layout: Tools is on, and the DM's tool stack shows. */
+  /** On the compact layout: Tools is on, and the GM's tool stack shows. */
   const [toolsShown, setToolsShown] = useState(false);
   const mapControlsButtonRef = useRef<HTMLButtonElement>(null);
   const drawButtonRef = useRef<HTMLButtonElement>(null);
@@ -423,8 +437,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Compiler's purity rule take the handlers that reach it for render code.
   const rememberMenuPoint = useCallback((x: number, y: number) => { menuPointRef.current = { x, y }; }, []);
 
-  // DM-only: toggle whether spirit-layer tokens are drawn on canvas
-  const [dmShowSpiritTokens, setDmShowSpiritTokens] = useState(true);
+  // GM-only: toggle whether spirit-layer tokens are drawn on canvas
+  const [gmShowSpiritTokens, setGmShowSpiritTokens] = useState(true);
 
   // Latest-ref to the per-layer draw dispatcher — assigned right after the
   // draw callbacks are defined below. The render loop and the animation hooks
@@ -439,7 +453,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, setRulerColor,
     aoeConfig, setAoEConfig, aoeAnchor, setAoEAnchor, aoeAltHeldRef, aoeAimRef, aoeSnap, setAoESnap,
   } = useMeasureTools({
-    isDM, markDirty,
+    isGM, markDirty,
     // Asked at a press, by when all three are known.
     measuresFromToken: () => myToken !== null,
     picksUpAt: (square) => getMovableTokenAtPosition(square.x, square.y) !== null,
@@ -456,10 +470,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // null = fog data not received yet (show everything); Set = fog active (show only revealed cells).
   const [revealedCells, setRevealedCells] = useState<Set<number> | null>(null);
   // Fog reveal animation: per-cell opacity (1 = just revealed, 0 = fully faded in)
-  // Fog reveal fade. The DM's fog is drawn on the terrain layer and anyone
+  // Fog reveal fade. The GM's fog is drawn on the terrain layer and anyone
   // else's, a preview included, on the overlay, so each frame repaints that.
   const revealOpacityRef = useFogRevealAnimation(
-    () => markDirty(isDM && !previewing ? 'terrain' : 'overlay'),
+    () => markDirty(isGM && !previewing ? 'terrain' : 'overlay'),
     fogState,
     revealedCells
   );
@@ -479,50 +493,50 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   );
   const effectiveFogState = fogEnabled ? fogState : null;
 
-  // The DM's editing tool: one wall, fog or light mode at a time. Each
+  // The GM's editing tool: one wall, fog or light mode at a time. Each
   // setter below sets its own kind, or clears the tool only when it is of its
   // kind, so putting one panel's tool away leaves another panel's alone.
-  const [dmTool, setDmTool] = useState<DmTool | null>(null);
-  const wallMode: WallToolMode = dmTool?.kind === 'wall' ? dmTool.mode : null;
-  const fogMode: FogToolMode = dmTool?.kind === 'fog' ? dmTool.mode : null;
-  const lightMode: LightToolMode = dmTool?.kind === 'light' ? dmTool.mode : null;
+  const [gmTool, setGmTool] = useState<GmTool | null>(null);
+  const wallMode: WallToolMode = gmTool?.kind === 'wall' ? gmTool.mode : null;
+  const fogMode: FogToolMode = gmTool?.kind === 'fog' ? gmTool.mode : null;
+  const lightMode: LightToolMode = gmTool?.kind === 'light' ? gmTool.mode : null;
   const setWallMode = useCallback((mode: WallToolMode) => {
-    setDmTool((prev) => (mode ? { kind: 'wall', mode } : prev?.kind === 'wall' ? null : prev));
+    setGmTool((prev) => (mode ? { kind: 'wall', mode } : prev?.kind === 'wall' ? null : prev));
   }, []);
   const setFogMode = useCallback((mode: FogToolMode) => {
-    setDmTool((prev) => (mode ? { kind: 'fog', mode } : prev?.kind === 'fog' ? null : prev));
+    setGmTool((prev) => (mode ? { kind: 'fog', mode } : prev?.kind === 'fog' ? null : prev));
   }, []);
   const setLightMode = useCallback((mode: LightToolMode) => {
-    setDmTool((prev) => (mode ? { kind: 'light', mode } : prev?.kind === 'light' ? null : prev));
+    setGmTool((prev) => (mode ? { kind: 'light', mode } : prev?.kind === 'light' ? null : prev));
   }, []);
   // The draw tool, null while Draw is put away, and how the next drawing looks.
   const [drawKind, setDrawKind] = useState<DrawToolKind | null>(null);
   const [drawSettings, setDrawSettings] = useState<DrawSettings>(DEFAULT_DRAW_SETTINGS);
 
-  // Right-mouse button panning while a DM tool is active (left-click is reserved for tools)
+  // Right-mouse button panning while a GM tool is active (left-click is reserved for tools)
   const rightPanActiveRef = useRef(false);
   const { toast, showToast, hideToast } = useToast();
   // Why a wall or light tool drew nothing, or took back what the server refused.
   const refuseMapEdit = useCallback((message: string) => showToast(message, 'error'), [showToast]);
-  /** DM "Preview player view" toggle — when true, DM sees lighting as players do. */
-  const [dmPreviewPlayerView, setDmPreviewPlayerView] = useState(false);
+  /** GM "Preview player view" toggle — when true, GM sees lighting as players do. */
+  const [gmPreviewPlayerView, setGmPreviewPlayerView] = useState(false);
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
 
-  // Player Preview: the DM's canvas drawn through chosen eyes, a player's, one
+  // Player Preview: the GM's canvas drawn through chosen eyes, a player's, one
   // token's, the whole party's, or the selected token's (Follow my
   // selection). Those tokens supply the vision, the fog comes from the grid
-  // the DM already holds, and the same visibility rule decides what is drawn.
+  // the GM already holds, and the same visibility rule decides what is drawn.
   // Never on a map being prepared: a preview records the previewed player's
   // explored memory, of ground they have never been sent.
-  const previewing = isDM && dmPreviewPlayerView && previewSelection !== null && !isPreparing;
+  const previewing = isGM && gmPreviewPlayerView && previewSelection !== null && !isPreparing;
   // Opening a map to prepare turns it off, so Back to the table comes back
-  // to the DM's own view.
+  // to the GM's own view.
   useEffect(() => {
-    if (isPreparing) setDmPreviewPlayerView(false);
+    if (isPreparing) setGmPreviewPlayerView(false);
   }, [isPreparing]);
   // Follow my selection looks through the selected token, and with nothing
   // selected through the last one it followed on this map: clearing the
-  // selection must not drop the projector back to the DM's view.
+  // selection must not drop the projector back to the GM's view.
   const following = previewSelection?.kind === 'selected';
   const [followedTokenId, setFollowedTokenId] = useState<string | null>(null);
   useEffect(() => {
@@ -652,13 +666,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     lightPlacementDefaults, setLightPlacementDefaults,
     draggingLightRef,
   } = useLightTool({
-    isDM, previewing, mapId: currentMap?.id, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
+    isGM, previewing, mapId: currentMap?.id, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
     socket, ownEdits, mapControls, rightPanActiveRef, markDirty, refuse: refuseMapEdit,
   });
 
   // The fog boxes (map/tools/useFogTool.ts).
   const { tool: fogTool, fogDragAnchorRef, fogDragCurrent, cancelFogDrag } = useFogTool({
-    isDM, mapId: currentMap?.id, fogMode, fogState, setFogState, socket, mapControls, rightPanActiveRef, markDirty,
+    isGM, mapId: currentMap?.id, fogMode, fogState, setFogState, socket, mapControls, rightPanActiveRef, markDirty,
   });
 
   // The map's drawings and the strokes on their way (map/useMapDrawings.ts),
@@ -686,8 +700,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // The drawings the screen draws, and the eraser may find: in Player
   // Preview, those a player is sent.
   const drawingsShown = useCallback(
-    () => mapDrawings.drawings.filter((d) => drawingSentTo(isDM && !previewing ? 'DM' : 'PLAYER', d)),
-    [mapDrawings.drawings, isDM, previewing],
+    () => mapDrawings.drawings.filter((d) => drawingSentTo(isGM && !previewing ? 'GM' : 'PLAYER', d)),
+    [mapDrawings.drawings, isGM, previewing],
   );
   const drawTool = useDrawTool({
     kind: drawKind, setKind: setDrawKind, settings: drawSettings, mapId: currentMap?.id, gridSize: currentMap?.gridSize ?? 50,
@@ -695,10 +709,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     hoverAt: () => hoverMapPxRef.current, hint: (message) => showToast(message, 'info'),
   });
 
-  // Paint (map/paint/usePaintSurface.ts): the DM painting the picture of a
+  // Paint (map/paint/usePaintSurface.ts): the GM painting the picture of a
   // map drawn in CozyVTT, or of a map with no picture, which it gives one.
   // Never offered on an uploaded picture.
-  const pictureKind = useMapPictureKind(currentMap, campaign?.id, isDM);
+  const pictureKind = useMapPictureKind(currentMap, campaign?.id, isGM);
   // The other maps of the campaign whose picture is the one at `address`:
   // Save writes over that picture, so they change too, and are named before.
   const campaignMapList = campaign?.maps;
@@ -707,7 +721,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     return pictureId ? (campaignMapList ?? []).filter((m) => m.id !== mapId && extractAssetId(m.imageUrl) === pictureId) : [];
   }, [campaignMapList]);
   const paint = usePaintSurface({
-    map: currentMap, picture: shownPicture, pictureKind, pictureFailed: imageError !== null, isDM, mapControls, markDirty,
+    map: currentMap, picture: shownPicture, pictureKind, pictureFailed: imageError !== null, isGM, mapControls, markDirty,
     campaignId: campaign?.id,
     // The map on screen takes its new picture: a map being prepared hears
     // of it from nothing else, and the server sends the table's map again.
@@ -744,17 +758,17 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     else void paintSave();
   }, [saveOverwrites, paintSave, shownMapId]);
   // Drafts of painting on maps since deleted, from another device or tab,
-  // are dropped as the DM opens the campaign: they have no map to go back to.
+  // are dropped as the GM opens the campaign: they have no map to go back to.
   const draftsPruned = useRef<string | null>(null);
   const campaignMaps = campaign?.maps;
   useEffect(() => {
     const campaignId = campaign?.id;
     const userId = user?.id;
-    if (!isDM || !campaignId || !userId || !Array.isArray(campaignMaps) || draftsPruned.current === campaignId) return;
+    if (!isGM || !campaignId || !userId || !Array.isArray(campaignMaps) || draftsPruned.current === campaignId) return;
     draftsPruned.current = campaignId;
     const maps = new Set(campaignMaps.map((m) => m.id));
     void dropDrafts(paintDraftStore(), (draft) => draft.userId === userId && draft.campaignId === campaignId && !maps.has(draft.mapId));
-  }, [isDM, campaign?.id, user?.id, campaignMaps]);
+  }, [isGM, campaign?.id, user?.id, campaignMaps]);
   // Paint is offered where it opens (map/paint/usePaintSurface.ts).
   const paintOffered = paint.offered;
   // What the map's picture is drawn from: the picture being painted while
@@ -769,7 +783,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Who takes the map's presses (and with Paint its keys) from the token
   // tool and the rest (map/inputOwner.ts), read at every place that keeps
   // them out.
-  const inputOwner = mapInputOwner({ painting: paint.on, drawing: drawKind !== null, dmTool: dmTool !== null && isDM });
+  const inputOwner = mapInputOwner({ painting: paint.on, drawing: drawKind !== null, gmTool: gmTool !== null && isGM });
 
   // ============================================
   // Helper Functions
@@ -841,7 +855,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    * Let go of a held token this page has been told is gone from the map it
    * was picked up on, sending nothing, since there is nothing left to put
    * down or put back: `token:disappeared` took it out of this player's
-   * sight, or a `map.changed` for that map no longer carries it (the DM
+   * sight, or a `map.changed` for that map no longer carries it (the GM
    * removed it, hid it or moved it to another map). A finger or a pen can
    * hold a token for as long as it likes, so this can happen mid-hold. A
    * token list replaced for another map is the map switch's: it puts the
@@ -861,19 +875,19 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     selectedWallIds, setSelectedWallIds, wallMarquee, wallDragEndpointRef, selectedEndpoint,
     carryIntoDrags,
   } = useWallTool({
-    isDM, currentMap, wallMode, setWallMode, wallSegments,
+    isGM, currentMap, wallMode, setWallMode, wallSegments,
     pushWallHistory, replaceWallHistory, carryWallHistory, undoWalls, redoWalls, wallHistoryIndex, stepWallHistoryBack, canUndoWalls, canRedoWalls,
     socket, ownEdits, mapControls, rightPanActiveRef, mapImage, markDirty, refuse: refuseMapEdit,
   });
 
-  // Player's own token on the current map — used as ruler origin for non-DM users
+  // Player's own token on the current map — used as ruler origin for non-GM users
   const myToken = useMemo(() => {
-    if (isDM || !tokens || !user) return null;
+    if (isGM || !tokens || !user) return null;
     return tokens.find((t) => controlsToken(t, user.id, userRole)) ?? null;
-  }, [tokens, user, isDM, userRole]);
+  }, [tokens, user, isGM, userRole]);
 
-  // Effective ruler origin: players use their token position, DM uses clicked point
-  const effectiveRulerOrigin = isDM ? rulerOrigin : (myToken ? myToken.position : null);
+  // Effective ruler origin: players use their token position, GM uses clicked point
+  const effectiveRulerOrigin = isGM ? rulerOrigin : (myToken ? myToken.position : null);
 
 
   /**
@@ -1159,7 +1173,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   useEffect(() => {
     if (!socket) return;
 
-    // Applied only to the tokens of the map they are on (onMapTokens): a DM
+    // Applied only to the tokens of the map they are on (onMapTokens): a GM
     // preparing a map is still sent the table's, and one arriving while a
     // map's tokens are being read waits for them.
     const handleTokenMoved = (event: TokenMovedEvent) => {
@@ -1240,18 +1254,31 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per map switch; the spirit flag is only read then
   }, [currentMap?.id]);
 
-  // Listen for map.changed events broadcast by the DM.
+  /** What a refused turn says; a ref, so the turns made once keep the newest. */
+  const turnRefusedRef = useRef<(err: unknown) => void>(() => undefined);
+  turnRefusedRef.current = (err) => showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
+  /**
+   * A token's turns, sent one at a time (map/tokenTurns.ts), told each facing
+   * the server sends by the map.changed listener below.
+   */
+  const [tokenTurns] = useState(() => createTokenTurns({
+    send: ({ campaignId, mapId, tokenId }, rotation) => api.updateToken(campaignId, mapId, tokenId, { rotation }),
+    show: ({ mapId, tokenId }, rotation) => useGameStore.getState().patchToken(tokenId, { rotation }, mapId),
+    refused: (err) => turnRefusedRef.current(err),
+  }));
+
+  // Listen for map.changed events broadcast by the GM.
   //
   // Through the client, never the raw socket: the client rebuilds its socket
   // on a manual reconnect and re-attaches only what was registered with it.
   // Bound to `getSocket()` this listener died with the first socket, so after
   // the browser came back online a player never received another map change,
-  // and with it the DM's Hide or Obscure.
+  // and with it the GM's Hide or Obscure.
   //
   // The handler is registered once, so it reads the role and the campaign's
-  // spirit flag through refs: either can change without a reload, as in a DM
-  // handover, and a former DM kept skipping the spirit-realm update below
-  // while a new DM heard the crossing sound.
+  // spirit flag through refs: either can change without a reload, as in a GM
+  // handover, and a former GM kept skipping the spirit-realm update below
+  // while a new GM heard the crossing sound.
   const userRoleRef = useRef(userRole);
   userRoleRef.current = userRole;
   const spiritLayerEnabledRef = useRef(campaign?.spiritLayerEnabled);
@@ -1260,14 +1287,17 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (!socket) return;
 
     const handleMapChanged = ({ mapData, spiritVisible: sv }: { mapId: string; mapData: CampaignMap; spiritVisible?: boolean }) => {
+      // Each facing as the server stores it, another member's turn included,
+      // for a refused turn of this page's to put back.
+      for (const t of mapData.tokens ?? []) tokenTurns.heard({ mapId: mapData.id, tokenId: t.id }, t.rotation);
       // The table's map, which this page shows with its tokens unless the
-      // DM is preparing another here; then only the table's map follows.
+      // GM is preparing another here; then only the table's map follows.
       if (!receiveTableMap(mapData)) return;
       letGoIfGone(mapData.id, (tokenId) => (mapData.tokens ?? []).some((t) => t.id === tokenId));
 
-      // For non-DMs: track whether this player is personally in the spirit realm.
+      // For non-GMs: track whether this player is personally in the spirit realm.
       // Play the ethereal audio cue if they are crossing in or out.
-      if (userRoleRef.current !== 'DM' && sv !== undefined) {
+      if (userRoleRef.current !== 'GM' && sv !== undefined) {
         const prev = prevPlayerSpiritVisibleRef.current;
         if (sv !== prev) {
           prevPlayerSpiritVisibleRef.current = sv;
@@ -1285,7 +1315,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     return () => {
       socket.off('map.changed', handleMapChanged);
     };
-  }, [socket, receiveTableMap, setPlayerSpiritVisible, playEtherealTransition]);
+  }, [socket, receiveTableMap, setPlayerSpiritVisible, playEtherealTransition, tokenTurns]);
 
   // ============================================
   // Spirit Layer WebSocket Listeners
@@ -1306,7 +1336,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     };
 
     const handleSpiritTokenToggled = (data: SpiritLayerTokenToggledBroadcast) => {
-      // Only on the map it is on: the DM is told of a toggle on any map.
+      // Only on the map it is on: the GM is told of a toggle on any map.
       useGameStore.getState().onMapTokens(data.mapId, () => {
         useGameStore.getState().patchToken(data.tokenId, { visible: data.visible });
       });
@@ -1370,7 +1400,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     lightOnlyOffscreenRef.current = null;
     lightingCompositeRef.current = null;
     // A change to the same map's walls or lights arrives through the socket;
-    // loading them here again would wipe the DM's undo history.
+    // loading them here again would wipe the GM's undo history.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loads once per map switch
   }, [currentMap?.id]);
 
@@ -1381,16 +1411,16 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   useWallLightRequest(socket, currentMap?.id, joinedEpoch);
 
   // Fog state is requested whenever the map changes or fog is switched on for
-  // it (DMs get the full grid, players their revealed cells), once the socket
+  // it (GMs get the full grid, players their revealed cells), once the socket
   // can be answered and again after a reconnect. Off: nothing to ask for.
   useFogStateRequest(socket, currentMap?.id, fogEnabled, joinedEpoch);
 
   // Explored memory: the cells this viewer's vision has covered on this map,
   // as the server remembers them. Whose memory depends on whose eyes: a
-  // player's own, or the player the DM is previewing as; the DM's own view
+  // player's own, or the player the GM is previewing as; the GM's own view
   // explores as nobody.
   const explorationEnabled = currentMap?.explorationEnabled ?? true;
-  const exploringAs = previewing ? previewMemoryUser(previewViewer, tokens, campaign?.memberships ?? []) : (isDM ? null : user?.id ?? null);
+  const exploringAs = previewing ? previewMemoryUser(previewViewer, tokens, campaign?.memberships ?? []) : (isGM ? null : user?.id ?? null);
   const { exploredCells, addExplored } = useExploredMemory(
     socket,
     currentMap?.id,
@@ -1430,11 +1460,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (!socketInstance) return;
 
     // Wall and light changes from the server. Each is applied unless it is
-    // the echo of this page's own edit, which is drawn already: the DM's page
+    // the echo of this page's own edit, which is drawn already: the GM's page
     // too, so a player's door toggle or a change made through the API reaches
-    // it. They are carried into the whole undo history, so the DM's undo does
+    // it. They are carried into the whole undo history, so the GM's undo does
     // not put back what someone else changed. The role plays no part, so a
-    // DM handover without a reload changes nothing here. A wall drag in
+    // GM handover without a reload changes nothing here. A wall drag in
     // progress takes them too, so its drop does not put them back.
     const carryIncoming = (change: (walls: WallSegment[]) => WallSegment[]) => {
       carryWallHistory(change);
@@ -1510,8 +1540,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       });
     };
 
-    // Dynamic lighting toggle broadcast from DM
-    // Every per-map flag arrives on one event, so a DM changing any of them
+    // Dynamic lighting toggle broadcast from GM
+    // Every per-map flag arrives on one event, so a GM changing any of them
     // in Edit Map or a control panel reaches every client at once.
     // Only the flags change, on the map as it is now: spreading the map this
     // listener captured put back a picture or grid size edited since.
@@ -1589,7 +1619,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   /**
    * Resolve a pinger's display name from state the client already holds — the
-   * ping event carries only a user id. The campaign owner gets a DM membership
+   * ping event carries only a user id. The campaign owner gets a GM membership
    * row on creation, so the roster covers everyone; an unresolved id just
    * draws the ping without a label rather than failing.
    */
@@ -1640,7 +1670,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   // ============================================
   // Keyboard: Tab (ping), Escape, the token keys (map/keyboard.ts), and for
-  // the DM the wall keys, Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo)
+  // the GM the wall keys, Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo)
   // ============================================
   // The listener is added once and reads the tools as they are at the key
   // press, so a tool chosen since is the one Escape asks.
@@ -1703,15 +1733,15 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // While Paint is on, the keys every other tool takes are its own.
     if (paint.key(e, keyBelongsToMap(e, layersRef.current))) return;
 
-    // A DM's arrows, Ctrl+A, Delete and Backspace go to the wall selection
+    // A GM's arrows, Ctrl+A, Delete and Backspace go to the wall selection
     // first, so the walls keep the arrows while the select tool holds some.
-    if (isDM && currentMap && wallSelectKey(e)) return;
+    if (isGM && currentMap && wallSelectKey(e)) return;
 
     // The keys that act on the selected token, behind their own guard.
     if (tokenKey(e)) return;
 
-    // Only handle undo/redo for DM with active map
-    if (!isDM || !currentMap) return;
+    // Only handle undo/redo for GM with active map
+    if (!isGM || !currentMap) return;
 
     const isCtrl = e.ctrlKey || e.metaKey;
 
@@ -1776,13 +1806,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const doorViewer = useCallback((): DoorViewer => {
     const lightingEnabled = currentMap?.lightingEnabled ?? false;
     // Manual fog as this player has it: the squares their screen shows.
-    const fog = currentMap && !isDM && effectiveRevealedCells
+    const fog = currentMap && !isGM && effectiveRevealedCells
       ? {
           grid: { fogCols: currentMap.width, fogRows: currentMap.height, cellPx: currentMap.gridSize },
           isRevealed: (cell: number) => effectiveRevealedCells.has(cell),
         }
       : null;
-    if (!currentMap || !lightingEnabled || isDM) return { role: userRole, lightingEnabled, canSee: () => true, fog };
+    if (!currentMap || !lightingEnabled || isGM) return { role: userRole, lightingEnabled, canSee: () => true, fog };
     const viewport: Viewport = {
       zoom: mapControls.zoom,
       panOffset: mapControls.panOffset,
@@ -1791,7 +1821,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       mapHeight: currentMap.height,
     };
     return { role: userRole, lightingEnabled, canSee: ruleFor(tokens.filter(viewerOwn), viewport).canSee, fog };
-  }, [currentMap, isDM, userRole, mapControls.zoom, mapControls.panOffset, ruleFor, tokens, viewerOwn, effectiveRevealedCells]);
+  }, [currentMap, isGM, userRole, mapControls.zoom, mapControls.panOffset, ruleFor, tokens, viewerOwn, effectiveRevealedCells]);
 
   // Doors with no wall, fog or light tool up (map/tools/useDoorTool.ts).
   const { tool: doorTool, doorAt, setDoorType, hoveredDoorId, setHoveredDoorId } = useDoorTool({
@@ -1839,23 +1869,23 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     drawSaved(ctx, () => {
       applyViewport(ctx, viewport, dpr);
 
-      const renderIsDM = isDM && !previewing;
+      const renderIsGM = isGM && !previewing;
       // isInSpiritRealm is true if the campaign-wide toggle is on OR this
-      // specific non-DM player has personally crossed into the spirit realm. A
+      // specific non-GM player has personally crossed into the spirit realm. A
       // preview is in it when the previewed viewer is.
       const spiritActive = campaign?.spiritLayerEnabled ?? false;
       const isInSpiritRealm = previewing
         ? previewedPlane === 'spirit'
-        : spiritActive || (userRole !== 'DM' && playerSpiritVisible);
+        : spiritActive || (userRole !== 'GM' && playerSpiritVisible);
 
       // 1. Map image (Material Plane), or the picture being painted. Paint
-      //    shows the material plane, without the DM's fog and the spirit
+      //    shows the material plane, without the GM's fog and the spirit
       //    layer, so what is painted is what is seen.
       drawMapImage(ctx, {
         mapImage: terrainSource,
         spiritActive: spiritActive && !paint.on,
-        isDM: renderIsDM,
-        dmViewBothPlanes,
+        isGM: renderIsGM,
+        gmViewBothPlanes,
       }, viewport);
 
       // The part of the map on screen, which the drawings are culled to.
@@ -1867,21 +1897,21 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           maxY: (canvasSize.height - mapControls.panOffset.y) / mapControls.zoom,
         }
         : null;
-      // 1b. The ground layer's drawings, under the grid. Only the DM may draw
+      // 1b. The ground layer's drawings, under the grid. Only the GM may draw
       //     there, and nothing does: a drawn map is painted into its picture.
-      drawDrawings(ctx, { drawings: mapDrawings.drawings, layer: 'GROUND', showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
+      drawDrawings(ctx, { drawings: mapDrawings.drawings, layer: 'GROUND', showGmOnly: renderIsGM, visible, cache: drawingCache }, viewport);
 
       // 2. Grid overlay
       if (showGrid) {
         drawGrid(ctx, { gridColor }, viewport);
       }
 
-      // 3. The DM's translucent fog, under the spirit layer and tokens so they
+      // 3. The GM's translucent fog, under the spirit layer and tokens so they
       //    stay visible through it. A player's fog is opaque and has to cover
       //    walls, doors and light glows too, so it is drawn on the overlay.
-      if (renderIsDM && !paint.on) {
+      if (renderIsGM && !paint.on) {
         drawFog(ctx, {
-          isDM: true,
+          isGM: true,
           fogState: effectiveFogState,
           revealedCells: null,
           revealOpacity: revealOpacityRef.current,
@@ -1895,12 +1925,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           spiritLayerOpacity,
           spiritActive,
           isInSpiritRealm,
-          isDM: renderIsDM,
-          dmViewBothPlanes,
+          isGM: renderIsGM,
+          gmViewBothPlanes,
         }, viewport);
       }
     });
-  }, [currentMap, terrainSource, paint.on, mapControls.panOffset, mapControls.zoom, dpr, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef, canvasSize.width, canvasSize.height, mapDrawings.drawings, drawingCache]);
+  }, [currentMap, terrainSource, paint.on, mapControls.panOffset, mapControls.zoom, dpr, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, gmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isGM, revealOpacityRef, canvasSize.width, canvasSize.height, mapDrawings.drawings, drawingCache]);
 
   /**
    * Draw the TOKENS layer (middle canvas): every token + the drag ghost.
@@ -1925,7 +1955,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     drawSaved(ctx, () => {
       applyViewport(ctx, viewport, dpr);
 
-      const renderIsDM = isDM && !previewing;
+      const renderIsGM = isGM && !previewing;
 
       // In Player Preview only the tokens that player would have are drawn:
       // their own, and what the visibility rule says they see. Hidden and
@@ -1956,9 +1986,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           : null,
         hoverTokenId: hoverToken?.id ?? null,
         revealedCells: viewerRevealed,
-        isDM: renderIsDM,
-        dmShowSpiritTokens,
-        dmViewBothPlanes,
+        isGM: renderIsGM,
+        gmShowSpiritTokens,
+        gmViewBothPlanes,
         spiritAccentColor: getSpiritAccentColor(campaign?.spiritLayerStyle),
         characterHpCache,
         isOwnToken: viewerOwn,
@@ -1969,11 +1999,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         selectedTokenId,
       }, viewport);
     });
-  }, [currentMap, mapShown, mapControls.panOffset, mapControls.zoom, dpr, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, carrierSquare, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, selectedTokenId, isDM, previewControls]);
+  }, [currentMap, mapShown, mapControls.panOffset, mapControls.zoom, dpr, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, carrierSquare, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, gmShowSpiritTokens, gmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, selectedTokenId, isGM, previewControls]);
 
   /**
-   * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
-   * icons, walls, DM tool previews, ruler/AoE, fog brush cursor. This is also
+   * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, GM light
+   * icons, walls, GM tool previews, ruler/AoE, fog brush cursor. This is also
    * the pointer-input surface. Memoized vision raycasting lives here.
    */
   const drawOverlay = useCallback(() => {
@@ -1995,7 +2025,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     drawSaved(ctx, () => {
       applyViewport(ctx, viewport, dpr);
 
-      const renderIsDM = isDM && !previewing;
+      const renderIsGM = isGM && !previewing;
 
       // Manual fog for a player is drawn whatever fails before it (below):
       // a step that throws must not leave the picture and the tokens under
@@ -2003,13 +2033,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       let failed = false;
       try {
         // 6. Dynamic lighting — raycast visibility darkness over tokens.
-        //    DM always sees all; "Preview player view" simulates player vision.
+        //    GM always sees all; "Preview player view" simulates player vision.
         //    The vision polygons also feed the walls layer's door LOS filter.
         const lightingEnabled = currentMap.lightingEnabled ?? false;
         // Whether this viewer can make out a point, by the shared visibility rule.
         // Everything is seen until lighting says otherwise.
         let canSee: (x: number, y: number) => boolean = () => true;
-        if (lightingEnabled && !renderIsDM) {
+        if (lightingEnabled && !renderIsGM) {
           const myTokens = tokens.filter(viewerOwn);
           const rule = ruleFor(myTokens, viewport);
           canSee = rule.canSee;
@@ -2034,8 +2064,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           // Report what this viewer has just seen, at most every 300 ms, from the
           // coverage mask, which is this frame's whether it was drawn now or kept
           // from an earlier frame, to whoever's memory this is: the player's
-          // own, or the player the DM is previewing. A preview writes too, so a
-          // token the DM moves for an absent player still remembers its ground.
+          // own, or the player the GM is previewing. A preview writes too, so a
+          // token the GM moves for an absent player still remembers its ground.
           // The party and an uncontrolled token explore as nobody, and write
           // nothing.
           const now = Date.now();
@@ -2056,22 +2086,22 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           }
         }
 
-        // 7. DM light source markers, in the DM's own view only: a preview is a
+        // 7. GM light source markers, in the GM's own view only: a preview is a
         //    player's view, and a marker would give away every light on the map
-        if (isDM) {
+        if (isGM) {
           drawLightIcons(ctx, {
             lights: lightSources,
             selectedLightId,
             lightMode,
-            isDM: renderIsDM,
+            isGM: renderIsGM,
           }, viewport);
         }
 
-        // 8. Wall segments — DM sees all (+ endpoint nodes while a wall tool is
+        // 8. Wall segments — GM sees all (+ endpoint nodes while a wall tool is
         //    active); players see doors (LOS-filtered under dynamic lighting)
         drawWalls(ctx, {
           wallSegments,
-          isDM: renderIsDM,
+          isGM: renderIsGM,
           wallColor,
           hoveredWallId,
           selectedWallIds,
@@ -2083,8 +2113,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           canSee,
         }, viewport);
 
-        // 9. DM wall-tool overlays
-        if (isDM && wallMode === 'wall-draw' && wallInProgress.length > 0) {
+        // 9. GM wall-tool overlays
+        if (isGM && wallMode === 'wall-draw' && wallInProgress.length > 0) {
           drawWallDrawOverlay(ctx, {
             wallInProgress,
             hoverMapPx: hoverMapPxRef.current,
@@ -2094,10 +2124,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             findWallAtPoint,
           }, viewport);
         }
-        if (isDM && wallMode === 'wall-split' && splitHoverPoint) {
+        if (isGM && wallMode === 'wall-split' && splitHoverPoint) {
           drawSplitPreview(ctx, splitHoverPoint, viewport);
         }
-        if (isDM && wallMode === 'wall-erase') {
+        if (isGM && wallMode === 'wall-erase') {
           drawEraseOverlay(ctx, {
             hoverMapPx: hoverMapPxRef.current,
             eraseRadius: WALL_ERASE_RADIUS,
@@ -2105,14 +2135,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             wallSegments,
           }, viewport);
         }
-        if (isDM && wallMode === 'wall-brush') {
+        if (isGM && wallMode === 'wall-brush') {
           drawBrushOverlay(ctx, {
             points: wallBrushPointsRef.current,
             brushSize,
             hoverMapPx: hoverMapPxRef.current,
           }, viewport);
         }
-        if (isDM && wallMode === 'wall-polygon' && polygonPoints.length > 0) {
+        if (isGM && wallMode === 'wall-polygon' && polygonPoints.length > 0) {
           drawPolygonOverlay(ctx, {
             points: polygonPoints,
             hoverMapPx: hoverMapPxRef.current,
@@ -2148,13 +2178,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             aimMapPx: aoeAimRef.current,
             hoverExact: aoeAltHeldRef.current || !aoeSnap,
             feetPerSquare: currentMap.feetPerSquare ?? 5,
-            coneRule: campaign?.gameSystem === GameSystem.PATHFINDER_2E ? 'quarter-circle' : 'width-equals-distance',
+            coneRule: campaign?.gameSystem === GameSystem.FANTASY_D20 ? 'quarter-circle' : 'width-equals-distance',
           }, viewport);
         }
 
         // 11. Fog selection box — world space, so the snapped rectangle stays
         //     locked to the grid through pan and zoom.
-        if (fogMode && isDM && fogState) {
+        if (fogMode && isGM && fogState) {
           drawFogSelection(ctx, {
             mode: fogMode,
             fog: fogState,
@@ -2165,7 +2195,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
         // 11b. Wall selection — the dragged box and a ring around what is held,
         //      so a gathered selection reads as one thing before it is moved.
-        if (wallMode === 'wall-select' && isDM) {
+        if (wallMode === 'wall-select' && isGM) {
           drawWallSelection(ctx, viewport, {
             marquee: wallMarquee,
             selectedWallIds,
@@ -2185,7 +2215,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         // Nothing under an unrevealed cell shows, except the cells the player's
         // own tokens stand on. Pings stay above it: a ping is a deliberate
         // signal from someone at the table, not a discovery.
-        if (!renderIsDM) {
+        if (!renderIsGM) {
           // After a step that threw, the overlay holds the fog alone, drawn
           // in a fresh state: whatever that step left set (a clip, a
           // transform, its saves) would cut the fog short or move it.
@@ -2194,7 +2224,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             applyViewport(ctx, viewport, dpr);
           }
           drawFog(ctx, {
-            isDM: false,
+            isGM: false,
             fogState: null,
             revealedCells: viewerRevealed,
             exemptCells: ownTokenCells,
@@ -2205,8 +2235,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
       // 13. The drawings, the topmost layer of the map: over the tokens, a
       //     player's fog and the lit darkness, so a table can plan over
-      //     ground it cannot see. A drawing for the DM alone shows in the
-      //     DM's own view only, never in a preview. They are kept as pixels
+      //     ground it cannot see. A drawing for the GM alone shows in the
+      //     GM's own view only, never in a preview. They are kept as pixels
       //     and copied on, drawn again only when they or the view change, so
       //     a repaint for a ping or a stroke on its way strokes none of them.
       //     Then the strokes on their way, and the laser pointer and the
@@ -2221,25 +2251,25 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         : null;
       // Paint's strokes on their way, until the lift paints them into the picture.
       for (const preview of paintStrokes()) drawPaintPreview(ctx, preview);
-      drawMarkupLayer(ctx, { drawings: mapDrawings.drawings, showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
+      drawMarkupLayer(ctx, { drawings: mapDrawings.drawings, showGmOnly: renderIsGM, visible, cache: drawingCache }, viewport);
       const previewNow = Date.now();
       const ownStroke = drawTool.inProgress();
       const shownPreviews = [...mapDrawings.previews.current.values(), ...(ownStroke ? [ownStroke] : [])];
       if (shownPreviews.length > 0) {
-        drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: false }, viewport);
+        drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showGmOnly: renderIsGM, laser: false }, viewport);
       }
 
       // The laser pointer goes over everything, with the pings: pointing is
       // a signal from someone at the table, as a ping is.
       if (shownPreviews.length > 0) {
-        drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: true }, viewport);
+        drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showGmOnly: renderIsGM, laser: true }, viewport);
       }
 
       if (pings.length > 0) {
         drawPings(ctx, { pings, now: Date.now(), reducedMotion: prefersReducedMotion }, viewport);
       }
     });
-  }, [currentMap, mapShown, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, rulerEnd, rulerStartByTouch, showAoE, aoeConfig, aoeAnchor, aoeSnap, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef, mapDrawings.previews, mapDrawings.drawings, drawingCache, canvasSize.width, canvasSize.height, drawTool, paintStrokes]);
+  }, [currentMap, mapShown, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, rulerEnd, rulerStartByTouch, showAoE, aoeConfig, aoeAnchor, aoeSnap, hoverCoords, fogMode, isGM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef, mapDrawings.previews, mapDrawings.drawings, drawingCache, canvasSize.width, canvasSize.height, drawTool, paintStrokes]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -2267,14 +2297,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // alpha (tokens).
   useEffect(() => {
     markDirty('terrain', 'tokens');
-  }, [markDirty, campaign?.spiritLayerEnabled, campaign?.spiritLayerStyle, playerSpiritVisible, dmViewBothPlanes]);
+  }, [markDirty, campaign?.spiritLayerEnabled, campaign?.spiritLayerStyle, playerSpiritVisible, gmViewBothPlanes]);
 
   // Token visuals — the hot path. Under dynamic lighting a token move also
   // shifts the viewer's vision, so repaint the overlay (darkness) too.
   useEffect(() => {
     markDirty('tokens');
     if (currentMap?.lightingEnabled) markDirty('overlay');
-  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId, selectedTokenId, previewing, previewViewer]);
+  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, gmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId, selectedTokenId, previewing, previewViewer]);
 
   // Publish this map's own token hover so the initiative tracker can tint the
   // matching row — the other half of the cross-highlight.
@@ -2290,10 +2320,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (wallMode || showRuler || showAoE || fogMode) markDirty('overlay');
   }, [markDirty, hoverCoords, draggedToken, dragOffset, carrierSquare, wallMode, showRuler, showAoE, fogMode]);
 
-  // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
+  // Overlay content — walls, lights, GM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings, mapDrawings.drawings]);
+  }, [markDirty, wallSegments, wallColor, wallMode, wallInProgress, polygonPoints, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, gmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings, mapDrawings.drawings]);
 
   // ============================================
   // Token Hit Testing
@@ -2314,14 +2344,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    */
   const tokenView = useMemo(
     () => ({
-      isDM: userRole === 'DM',
+      isGM: userRole === 'GM',
       revealedCells: effectiveRevealedCells,
       isOwnToken,
-      dmShowSpiritTokens,
+      gmShowSpiritTokens,
       mapWidth: currentMap?.width ?? 0,
       mapHeight: currentMap?.height ?? 0,
     }),
-    [userRole, effectiveRevealedCells, isOwnToken, dmShowSpiritTokens, currentMap?.width, currentMap?.height]
+    [userRole, effectiveRevealedCells, isOwnToken, gmShowSpiritTokens, currentMap?.width, currentMap?.height]
   );
 
   /**
@@ -2343,14 +2373,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
     const shown = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
     return shown.filter((t) => isTokenVisibleTo(t, {
-      isDM: false,
+      isGM: false,
       revealedCells: viewerRevealed,
       isOwnToken: viewerOwn,
-      dmShowSpiritTokens,
+      gmShowSpiritTokens,
       mapWidth: currentMap.width,
       mapHeight: currentMap.height,
     }));
-  }, [currentMap, previewing, tokens, tokenView, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, previewControls, previewedPlane, viewerRevealed, dmShowSpiritTokens]);
+  }, [currentMap, previewing, tokens, tokenView, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, previewControls, previewedPlane, viewerRevealed, gmShowSpiritTokens]);
   const drawnIds = useMemo(() => new Set(drawnTokens.map((t) => t.id)), [drawnTokens]);
 
   /**
@@ -2359,7 +2389,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   /**
    * The token the hover panel may name. In a preview that is only what the
    * preview draws, by the same shown-token rule and the previewed fog: the
-   * DM's own lookup would name a hidden, unlit or fogged creature to a table
+   * GM's own lookup would name a hidden, unlit or fogged creature to a table
    * watching the projector.
    */
   const getHoverTokenAt = useCallback(
@@ -2376,15 +2406,15 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
       const shown = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
       return pickTokenAt(shown, gridX, gridY, {
-        isDM: false,
+        isGM: false,
         revealedCells: viewerRevealed,
         isOwnToken: viewerOwn,
-        dmShowSpiritTokens,
+        gmShowSpiritTokens,
         mapWidth: currentMap.width,
         mapHeight: currentMap.height,
       });
     },
-    [tokens, currentMap, tokenView, previewing, previewedPlane, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, viewerRevealed, dmShowSpiritTokens, previewControls]
+    [tokens, currentMap, tokenView, previewing, previewedPlane, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, viewerRevealed, gmShowSpiritTokens, previewControls]
   );
 
   const getTokenAtPosition = useCallback(
@@ -2396,14 +2426,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   );
 
   /**
-   * Check if user can move a token (DM or owner only)
+   * Check if user can move a token (GM or owner only)
    */
   const canMoveToken = useCallback(
     (token: Token): boolean => {
       if (!campaign) return false;
 
-      // DM can move any token (even when paused/inactive)
-      if (userRole === 'DM') return true;
+      // GM can move any token (even when paused/inactive)
+      if (userRole === 'GM') return true;
 
       // Players cannot move tokens when session is paused or inactive
       if (campaign.status === 'PAUSED' || campaign.status === 'INACTIVE') {
@@ -2426,7 +2456,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    * further down the stack: an NPC sharing the square is drawn on top of it, and
    * stopping at that NPC left a player unable to pick up their own token at all.
    *
-   * In Player Preview only what the preview draws can be taken. The DM's own
+   * In Player Preview only what the preview draws can be taken. The GM's own
    * view counts hidden creatures, so a click on a hidden creature's square
    * picked it up unseen and the next click put it down somewhere new.
    */
@@ -2479,21 +2509,21 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    */
   const putDown = (token: Token, square: Position, { start = false }: { start?: boolean } = {}): boolean => {
     if (!currentMap) return false;
-    // Two creatures do not share a square. The Basic Rules are blunt about it
-    // (p. 74, "Moving Around Other Creatures"): "whether a creature is a
+    // Two creatures do not share a square. The rules are blunt about it
+    // (SRD 5.1, "Moving Around Other Creatures"): "Whether a creature is a
     // friend or an enemy, you can't willingly end your move in its space."
     // A token at zero hit points is treated as no longer holding its space,
     // so a body can be stood on — that part is a house rule, not something
-    // the rulebook spells out.
+    // the rules spell out.
     //
-    // The DM is exempt. Stacking tokens on purpose — a rider on a mount, a
-    // swarm, scenery being arranged — is ordinary DM work, and refusing it
+    // The GM is exempt. Stacking tokens on purpose — a rider on a mount, a
+    // swarm, scenery being arranged — is ordinary GM work, and refusing it
     // would be an obstacle rather than a rule.
     //
     // Checked here on the client and nowhere else, deliberately: see
     // `blockingTokensAt`, which explains why enforcing this server-side would
     // turn a refused move into a way to find hidden creatures.
-    if (userRole !== 'DM') {
+    if (userRole !== 'GM') {
       const blockedBy = blockingTokensAt(tokens, token, square, characterHpCache);
       if (blockedBy.length > 0) {
         // A creature under the player's fog still holds its square, but the
@@ -2719,7 +2749,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   /**
    * The tools a press or a move is offered to, in this order, until one takes
-   * it: the armed Ping, the draw tool, a DM tool, then doors, the fog boxes,
+   * it: the armed Ping, the draw tool, a GM tool, then doors, the fog boxes,
    * the measuring tools, and tokens and panning last. The order is what decides a click
    * when two tools are up at once. When the button lifts each finishes what
    * it holds, in the same order.
@@ -2759,7 +2789,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
 
   /**
-   * A button pressed: the right one pans under a DM tool or Draw, the left
+   * A button pressed: the right one pans under a GM tool or Draw, the left
    * one goes to the tools. Returns the tool that took it, if one did.
    */
   const pressButton = (e: MapPointer, via: PointerAt['via']): MapTool | undefined => {
@@ -2915,11 +2945,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   // A finger reaches the tools through the gesture recogniser
   // (map/gestures.ts): a tap as a down and an up where it landed, a drag as a
-  // down where it landed, moves and an up. A drag the tools do not take pans
+  // down where it landed, moves and an up. Until it is either, its press is
+  // shown to them where it landed (`press`), so Mapmaker's stamp shows where
+  // a tap would paint it. A drag the tools do not take pans
   // the map, through the token tool; a door opens on a tap only. A second
   // finger cancels what the first began and pinches the zoom. A long-press
   // reaches no tool: it opens the menu a right-click opens there, or pings
-  // where none opens, and under a DM tool there is none, so a press held
+  // where none opens, and under a GM tool there is none, so a press held
   // still stays the tool's. A pen is a mouse to the tools, makes no
   // long-press, and while one is down every finger is ignored.
 
@@ -2945,6 +2977,23 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const [gestures] = useState(() => createGestureRecognizer((g) => gestureHandlerRef.current(g), {
     longPressAt: () => longPressAllowedRef.current,
   }));
+  /** The finger whose press the tools were last shown, by pointer id; null for none. */
+  const pressShownRef = useRef<number | null>(null);
+  /**
+   * Show the tools a finger's press whose gesture is not yet known, where it
+   * landed, or tell them it is over, whatever it became: read off the
+   * recogniser after every sample it is fed, and whenever it lets go of a
+   * press by itself.
+   */
+  const followPress = () => {
+    const pressing = gestures.pressing();
+    const id = pressing?.id ?? null;
+    if (id === pressShownRef.current) return;
+    pressShownRef.current = id;
+    const down = pressing ? fingerDownsRef.current.get(pressing.id) : undefined;
+    const at = (down && pointerAt(down, 'tap')) ?? null;
+    for (const tool of pointerTools) tool.press?.(at);
+  };
 
   const handleGesture = (g: Gesture) => {
     const current = gestureEventRef.current;
@@ -2962,6 +3011,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       releaseButton(0, at('tap'));
       countTap(mayPing && onGround ? { kind: down.kind, t: g.at.t, x: g.at.x, y: g.at.y } : null);
     } else if (g.type === 'long-press') {
+      // The timer's, outside any sample: the press is over.
+      followPress();
       if (!fingerDownsRef.current.has(g.at.id)) return;
       longPress(g.at.id, g.at.x, g.at.y);
     } else if (g.type === 'drag') {
@@ -3036,12 +3087,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     } finally {
       gestureEventRef.current = null;
     }
+    followPress();
   };
 
-  // A gesture under way is forgotten when the window loses focus or a DM tool
+  // A gesture under way is forgotten when the window loses focus or a GM tool
   // changes; a finger's drag that reached the tools is cancelled for them.
   const dropGestures = useEffectEvent(() => {
     gestures.reset();
+    followPress();
     fingerDownsRef.current.clear();
     fingerMenusRef.current.clear();
     penTipsRef.current.clear();
@@ -3236,7 +3289,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     e.preventDefault();
     // Paint takes the map: nothing is placed on it meanwhile.
     if (inputOwner === 'paint') return;
-    if (!campaign?.id || !currentMap || userRole !== 'DM' || !canvasRef.current) return;
+    if (!campaign?.id || !currentMap || userRole !== 'GM' || !canvasRef.current) return;
 
     const dragData = readCharacterTokenDrag(e.dataTransfer.getData('text/plain'));
     if (!dragData) return;
@@ -3252,8 +3305,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       y: Math.max(0, Math.min(Math.floor(gridCoords.y), currentMap.height - 1)),
     };
 
-    // Place on spirit layer if DM is in single-plane spirit view; otherwise material
-    const targetLayer = (!dmViewBothPlanes && (campaign?.spiritLayerEnabled ?? false))
+    // Place on spirit layer if GM is in single-plane spirit view; otherwise material
+    const targetLayer = (!gmViewBothPlanes && (campaign?.spiritLayerEnabled ?? false))
       ? TokenLayer.SPIRIT
       : TokenLayer.TOKEN;
 
@@ -3277,8 +3330,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    * Whether initiative may be rolled for a token from the map menu.
    *
    * Two conditions: the token is already in the initiative order, and the
-   * viewer is either the DM or the token's controller. Rolling is how you take
-   * part in a fight the DM has already put you in — it is not a way to add
+   * viewer is either the GM or the token's controller. Rolling is how you take
+   * part in a fight the GM has already put you in — it is not a way to add
    * yourself to one, which is why being in the order is required rather than
    * implied.
    *
@@ -3292,7 +3345,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const canRollForToken = (token: Token): boolean => canRollTokenCharacter(user, campaign, token);
 
   /**
-   * Whether this viewer may turn a token: by the move rule, the DM any token
+   * Whether this viewer may turn a token: by the move rule, the GM any token
    * at any time, a player a token they control while the session is live.
    * The server checks the same.
    */
@@ -3323,7 +3376,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   /**
    * This viewer, what they may do with `token`, and the table, as the token
-   * menu reads them (map/tokenMenuItems.ts). The DM always has the token
+   * menu reads them (map/tokenMenuItems.ts). The GM always has the token
    * actions; anyone else has the character's sheet and rolls, and turning a
    * token they control, so a creature or an object they do not control
    * opens no menu.
@@ -3338,16 +3391,6 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     maps: campaign?.maps ?? [],
     busy: { crossing: isMovingTokenLayer, moving: isMoveToMapLoading },
   });
-
-  /** What a refused turn says; a ref, so the turns made once keep the newest. */
-  const turnRefusedRef = useRef<(err: unknown) => void>(() => undefined);
-  turnRefusedRef.current = (err) => showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
-  /** A token's turns, sent one at a time (map/tokenTurns.ts). */
-  const [tokenTurns] = useState(() => createTokenTurns({
-    send: ({ campaignId, mapId, tokenId }, rotation) => api.updateToken(campaignId, mapId, tokenId, { rotation }),
-    show: ({ mapId, tokenId }, rotation) => useGameStore.getState().patchToken(tokenId, { rotation }, mapId),
-    refused: (err) => turnRefusedRef.current(err),
-  }));
 
   /**
    * Turn a token one step, shown at once. Read from the store, so presses in
@@ -3398,7 +3441,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
 
   /**
-   * Select the next token along (`.`) or the one before (`,`): for the DM
+   * Select the next token along (`.`) or the one before (`,`): for the GM
    * any token the map draws, and while following the selection in a preview
    * the whole party too; for anyone else their own, paused or not; in the
    * turn order during a fight, then by row from the top and by column.
@@ -3408,7 +3451,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (!currentMap) return false;
     // Following the selection, the party is in reach wherever it stands.
     const candidates = previewing && following ? followStepTokens(tokens, drawnTokens, previewedPlane) : drawnTokens;
-    const ordered = selectableTokens(candidates, isDM ? () => true : isOwnToken, useGameStore.getState().combat);
+    const ordered = selectableTokens(candidates, isGM ? () => true : isOwnToken, useGameStore.getState().combat);
     if (ordered.length === 0) return false;
     if (repeat) return true;
     const nextId = nextSelectedId(ordered, selectedTokenId, direction);
@@ -3514,9 +3557,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const canRollInitiativeFor = (token: Token): boolean => {
     const combat = useGameStore.getState().combat;
     if (!combat.combatants.some((c) => c.tokenId === token.id)) return false;
-    if (isDM) return true;
+    if (isGM) return true;
     // Once combat is under way a re-roll re-sorts the order and can skip a
-    // turn, so that is the DM's call; and a spectator controls no token. The
+    // turn, so that is the GM's call; and a spectator controls no token. The
     // server enforces both.
     if (combat.active) return false;
     return controlsToken(token, user?.id, userRole);
@@ -3589,7 +3632,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         useGameStore.getState().addToken(result.token, currentMap.id);
       } catch (err) {
         // A copy is a new token, so an older one whose fields predate
-        // validation is refused: say which, so the DM can fix it in Edit Token.
+        // validation is refused: say which, so the GM can fix it in Edit Token.
         showToast(apiErrorMessage(err) || 'Failed to duplicate the token', 'error');
       }
     },
@@ -3687,7 +3730,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // Check tokens first — they sit on a higher visual layer than doors. A
     // token whose menu would be empty for this viewer is passed over.
     // In Player Preview this finds a creature the preview hides too, and opens
-    // the DM's menu for it: the DM previewing is still the DM.
+    // the GM's menu for it: the GM previewing is still the GM.
     const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
     if (token && tokenMenuHasItems(token, tokenMenuView(token))) {
       rememberMenuPoint(clientX, clientY);
@@ -3748,6 +3791,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // ignores beside a stylus, leaves a right-click a right-click.
     for (const pointerId of fingerDownsRef.current.keys()) {
       if (gestures.hold(pointerId)) {
+        followPress();
         longPress(pointerId, e.clientX, e.clientY);
         return;
       }
@@ -3888,7 +3932,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // name a screen reader hears.
   const gridColorName = gridColorLabel(gridColor);
   const rulerColorName = rulerColorLabel(rulerColor);
-  const spiritTokensLabel = dmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show';
+  const spiritTokensLabel = gmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show';
   // What the toolbar's buttons do, and on the compact layout the rows of
   // Map controls, which hold the buttons its one row leaves out.
   const mapControlActions: MapControlsActions = {
@@ -3898,7 +3942,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     toggleRuler: () => { setDrawKind(null); handleToggleRuler(); },
     nextRulerColor: () => setRulerColor((prev) => prev === 'amber' ? 'purple' : prev === 'purple' ? 'black' : 'amber'),
     toggleAoE: () => { setDrawKind(null); handleToggleAoE(); },
-    toggleSpiritTokens: () => setDmShowSpiritTokens((prev) => !prev),
+    toggleSpiritTokens: () => setGmShowSpiritTokens((prev) => !prev),
     toggleTools: () => (stackShown ? hideTools() : showTools()),
     togglePaint: () => togglePaint(),
   };
@@ -3913,7 +3957,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const aoeTop = heldBarBottom !== null ? heldBarBottom + BAND_GAP : belowBand(topBand);
 
   /**
-   * Open Draw with the pen, putting away what would take its presses (a DM
+   * Open Draw with the pen, putting away what would take its presses (a GM
    * tool, the ruler, the area template, a held token); or put it away.
    */
   const toggleDraw = () => {
@@ -3921,7 +3965,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       setDrawKind(null);
       return;
     }
-    setDmTool(null);
+    setGmTool(null);
     setSelectedLightId(null);
     putRulerAway();
     if (draggedToken) cancelHold();
@@ -3931,7 +3975,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
   /**
    * Turn Paint on, putting away what would take its presses or keys (Draw,
-   * a DM tool and the chosen light, the ruler and the area template, the
+   * a GM tool and the chosen light, the ruler and the area template, the
    * armed Ping, a held token, the selected token and walls) and Player
    * Preview, which Paint is not drawn in; or turn it off.
    */
@@ -3944,7 +3988,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
   const openPaint = () => {
     setDrawKind(null);
-    setDmTool(null);
+    setGmTool(null);
     setSelectedLightId(null);
     putRulerAway();
     setPingArmed(false);
@@ -3952,7 +3996,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     useGameStore.getState().selectToken(null);
     setSelectedWallIds(new Set());
     setHoverToken(null);
-    setDmPreviewPlayerView(false);
+    setGmPreviewPlayerView(false);
     if (compact) setToolsShown(false);
     // The lighting's map-sized canvases are drawn for a preview alone, and
     // made again when one is next on: their memory goes to the picture.
@@ -3963,14 +4007,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     lightingCompositeRef.current = null;
     paint.open();
   };
-  // Draw, a DM tool, the ruler, the area template or the armed Ping coming
+  // Draw, a GM tool, the ruler, the area template or the armed Ping coming
   // up from anywhere (a panel, Map controls on a phone) puts Paint away, as
   // Paint puts each of them away; so does the map's picture turning out to
   // be an uploaded one.
   const putPaintAway = useEffectEvent(() => {
     if (paint.on) paint.close();
   });
-  const otherToolUp = drawKind !== null || dmTool !== null || showRuler || showAoE || pingArmed || pictureKind === 'uploaded';
+  const otherToolUp = drawKind !== null || gmTool !== null || showRuler || showAoE || pingArmed || pictureKind === 'uploaded';
   useEffect(() => {
     if (otherToolUp) putPaintAway();
   }, [otherToolUp]);
@@ -3986,35 +4030,35 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (openOnMapId !== null && openOnMapId === currentMap?.id && paintOffered && paint.ready && !paint.on) openPaintWhenShown();
   }, [openOnMapId, currentMap?.id, paintOffered, paint.ready, paint.on]);
   /**
-   * On the compact layout the DM's tool stack shows while Tools is on, and
+   * On the compact layout the GM's tool stack shows while Tools is on, and
    * while a tool from it is armed, so a tool armed as the layout turns
    * compact keeps its panel, with its Done and Cancel, in sight.
    */
-  const stackShown = toolsShown || dmTool !== null;
-  /** Put the DM's armed tool away, with what it had begun: a wall line or polygon, a fog box, the chosen light. */
-  const putDmToolAway = () => {
+  const stackShown = toolsShown || gmTool !== null;
+  /** Put the GM's armed tool away, with what it had begun: a wall line or polygon, a fog box, the chosen light. */
+  const putGmToolAway = () => {
     wallPanel.onCollapse?.();
     setFogMode(null);
     cancelFogDrag();
     setLightMode(null);
     setSelectedLightId(null);
   };
-  /** Tools on: the stack shows, and Draw is put away, as a DM tool puts it away. */
+  /** Tools on: the stack shows, and Draw is put away, as a GM tool puts it away. */
   const showTools = () => {
     setDrawKind(null);
     setToolsShown(true);
   };
   /** Tools off: the stack hides, and takes its armed tool with it. */
   const hideTools = () => {
-    putDmToolAway();
+    putGmToolAway();
     setToolsShown(false);
   };
-  /** How many drawings Clear mine, or for the DM Clear drawings, would erase. */
+  /** How many drawings Clear mine, or for the GM Clear drawings, would erase. */
   const clearableDrawings = mapDrawings.drawings.filter((d) => d.layer === 'MARKUP' && !d.id.startsWith('pending:')
-    && (isDM || (d.authorId === user?.id && canEraseDrawing(userRole ?? undefined, user?.id, d)))).length;
-  /** For the DM: each other member with drawings Clear one member's would erase, and how many. */
+    && (isGM || (d.authorId === user?.id && canEraseDrawing(userRole ?? undefined, user?.id, d)))).length;
+  /** For the GM: each other member with drawings Clear one member's would erase, and how many. */
   const membersWithDrawings = useMemo((): MemberDrawings[] => {
-    if (!isDM) return [];
+    if (!isGM) return [];
     const counts = new Map<string, number>();
     for (const d of mapDrawings.drawings) {
       if (d.layer !== 'MARKUP' || d.audience !== 'ALL' || !d.authorId || d.authorId === user?.id || d.id.startsWith('pending:')) continue;
@@ -4027,7 +4071,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     }));
     // By name, and anyone who has left after the members.
     return named.sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.name ?? '').localeCompare(b.name ?? ''));
-  }, [isDM, mapDrawings.drawings, user?.id, campaign?.memberships]);
+  }, [isGM, mapDrawings.drawings, user?.id, campaign?.memberships]);
   // A label's box takes the keys as it opens, after the press that opened it.
   const labelBoxRef = useRef<HTMLInputElement>(null);
   const labelAt = drawTool.textBox?.at;
@@ -4043,14 +4087,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   // The rows of Map controls on the compact layout, which its tooltip names.
   const mapControlRows = mapControlItems({
-    isDM,
+    isGM,
     hasMap: !!currentMap,
     showGrid,
     gridColor,
     showRuler,
     rulerColor,
     showAoE,
-    spiritTokensShown: dmShowSpiritTokens,
+    spiritTokensShown: gmShowSpiritTokens,
     toolsShown: stackShown,
     paint: paintOffered ? (paint.on ? 'on' : 'offered') : null,
   }, mapControlActions);
@@ -4067,7 +4111,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       <ZoomOut className="w-4 h-4" />
     </Button>
   );
-  // 48 pixels on a touch screen, room for "300%", so a DM's toolbar of
+  // 48 pixels on a touch screen, room for "300%", so a GM's toolbar of
   // 44-pixel buttons keeps one row on an iPad in landscape with both side
   // panels at their minimums.
   const zoomReadout = (
@@ -4098,7 +4142,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       <MapPin className={`w-4 h-4 ${pingArmed ? 'text-brand-ink' : ''}`} />
     </Button>
   );
-  // Draw, for whoever may draw now: the DM, or a player while Players may
+  // Draw, for whoever may draw now: the GM, or a player while Players may
   // draw is on and the session is live.
   const drawButton = drawOffered && (
     <Button
@@ -4113,7 +4157,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     </Button>
   );
 
-  // Paint, for the DM, on a map drawn in CozyVTT or one with no picture.
+  // Paint, for the GM, on a map drawn in CozyVTT or one with no picture.
   const paintButton = paintOffered && (
     <Button
       onClick={togglePaint}
@@ -4126,15 +4170,15 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     </Button>
   );
 
-  // The DM's Player Preview controls, offered while dynamic lighting or
+  // The GM's Player Preview controls, offered while dynamic lighting or
   // fog is on, and kept while a preview is on; not while Paint is on.
-  const previewOffered = userRole === 'DM' && !paint.on && (dmPreviewPlayerView || (currentMap?.lightingEnabled ?? false) || fogEnabled);
+  const previewOffered = userRole === 'GM' && !paint.on && (gmPreviewPlayerView || (currentMap?.lightingEnabled ?? false) || fogEnabled);
   const previewHint = isPreparing
     ? 'Preview Player View is off while you prepare a map the table is not on'
-    : dmPreviewPlayerView ? 'Back to DM view (see all)' : 'Preview this map as one of your players sees it';
+    : gmPreviewPlayerView ? 'Back to GM view (see all)' : 'Preview this map as one of your players sees it';
   const playerPreviewControls = (
     <>
-      {dmPreviewPlayerView && !isPreparing && (
+      {gmPreviewPlayerView && !isPreparing && (
         <select
           value={previewSelection ? encodePreviewSelection(previewSelection) : ''}
           onChange={(e) => setPreviewSelection(decodePreviewSelection(e.target.value))}
@@ -4157,13 +4201,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       )}
       <button
         onClick={() => {
-          const next = !dmPreviewPlayerView;
+          const next = !gmPreviewPlayerView;
           if (next && previewSelection === null) setPreviewSelection(defaultPreviewSelection(campaign?.memberships ?? [], tokens));
-          setDmPreviewPlayerView(next);
+          setGmPreviewPlayerView(next);
         }}
         disabled={isPreparing}
         className={`touch-target px-3 py-1.5 rounded text-xs font-medium transition-colors border disabled:opacity-60 disabled:cursor-not-allowed ${
-          dmPreviewPlayerView && !isPreparing
+          gmPreviewPlayerView && !isPreparing
             ? 'bg-info/30 text-info-ink border-info/50'
             // ink/paper invert together, so this stays a legible contrast
             // chip over the map on both light and dark themes
@@ -4173,8 +4217,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       >
         {/* Named by the words it shows, which say what a press does, so a
             voice command for them finds it. */}
-        {dmPreviewPlayerView && !isPreparing
-          ? <><span aria-hidden="true">👁</span> DM View</>
+        {gmPreviewPlayerView && !isPreparing
+          ? <><span aria-hidden="true">👁</span> GM View</>
           : <><span aria-hidden="true">🎭</span> Preview Player View</>}
       </button>
       {/* Said as well as greyed out: a touch screen shows no tooltip. */}
@@ -4190,13 +4234,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     onKindChange: setDrawKind,
     settings: drawSettings,
     onSettingsChange: (patch) => setDrawSettings((prev) => ({ ...prev, ...patch })),
-    isDM,
+    isGM,
     onlyErase: eraseOnly,
     polygonCorners: drawTool.polygonCorners,
     onPolygonDone: drawTool.finishPolygon,
     onPolygonCancel: drawTool.cancelPolygon,
     clearable: clearableDrawings,
-    onClear: isDM ? mapDrawings.clearAll : mapDrawings.clearMine,
+    onClear: isGM ? mapDrawings.clearAll : mapDrawings.clearMine,
     members: membersWithDrawings,
     onClearMember: mapDrawings.clearMember,
     onClose: () => {
@@ -4206,7 +4250,21 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     },
   };
   // A player with no token of theirs on the map measures from nothing.
-  const rulerNeedsToken = showRuler && !isDM && !myToken;
+  const rulerNeedsToken = showRuler && !isGM && !myToken;
+  // Whether the viewer looks at the spirit realm: a player, or the player
+  // the GM previews.
+  const viewerInSpiritRealm = previewing
+    ? previewedPlane === 'spirit'
+    : userRole !== 'GM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible);
+  // Lighting draws a player's view from the tokens they control on the plane
+  // they look at and nothing else, so with none a lit map is black, Global
+  // Illumination or not (drawDynamicLighting). In a preview, viewerOwn keeps
+  // to the previewed player's plane and visible tokens, as the server sends them.
+  const noTokenNote = (currentMap?.lightingEnabled ?? false)
+    && (previewing ? previewViewer?.kind === 'player' : userRole === 'PLAYER')
+    && !tokens.some(viewerOwn)
+    ? NO_TOKEN_TO_SEE_THROUGH[viewerInSpiritRealm ? 'spirit' : 'material']
+    : null;
 
   // The square under the pointer, shown where the details card goes while
   // no card shows.
@@ -4250,13 +4308,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       {/* The hovered token's details (TokenDetailsCard), with only what this
           viewer may see. A player token follows its character sheet, which
           every campaign member can already read; an NPC's own hit points are
-          the DM's to reveal, so they appear only once the HP bar is turned
+          the GM's to reveal, so they appear only once the HP bar is turned
           on, the rule the bar on the token itself draws by. */}
       {hoverToken && hoverCoords && (
         <TokenDetailsCard
           token={hoverToken}
           square={hoverCoords}
-          hp={visibleTokenHp(hoverToken, characterHpCache, isDM && !previewing)}
+          hp={visibleTokenHp(hoverToken, characterHpCache, isGM && !previewing)}
           imageSrc={cachedTokenImage(hoverToken, tokenImages)?.src}
           mayMove={canMoveToken(hoverToken)}
           docked={docked}
@@ -4271,7 +4329,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         <TokenDetailsCard
           token={selectionDetails}
           square={selectionDetails.position}
-          hp={visibleTokenHp(selectionDetails, characterHpCache, isDM && !previewing)}
+          hp={visibleTokenHp(selectionDetails, characterHpCache, isGM && !previewing)}
           imageSrc={cachedTokenImage(selectionDetails, tokenImages)?.src}
           mayMove={canMoveToken(selectionDetails)}
           onClose={() => setSelectionDetailsClosedFor(selectionDetails.id)}
@@ -4378,15 +4436,15 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       {currentMap?.spiritLayerUrl && spiritLayerImage && (
         (() => {
           // A preview shows the overlay as the previewed viewer sees it.
-          const isDM = userRole === 'DM' && !previewing;
+          const isGM = userRole === 'GM' && !previewing;
           const spiritActive = campaign?.spiritLayerEnabled ?? false;
-          // Non-DM players are in spirit realm if globally enabled OR their personal token is there
+          // Non-GM players are in spirit realm if globally enabled OR their personal token is there
           const playerSpiritPersonal = previewing ? previewedPlane === 'spirit' : playerSpiritVisible;
           const playerEffectivelyInSpirit = spiritActive || playerSpiritPersonal;
           // Show overlay only when spirit realm is actually visible to this viewer
-          if (!isDM && !playerEffectivelyInSpirit) return null;
-          // DM in single-plane material view: no overlay (they're not perceiving the spirit realm)
-          if (isDM && !dmViewBothPlanes && !spiritActive) return null;
+          if (!isGM && !playerEffectivelyInSpirit) return null;
+          // GM in single-plane material view: no overlay (they're not perceiving the spirit realm)
+          if (isGM && !gmViewBothPlanes && !spiritActive) return null;
 
           // The style is validated on both write paths and re-checked here:
           // anything outside the allowlist reads as plain wispy.
@@ -4398,11 +4456,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             ? { background: `${customColor}44` } // custom hue at ~27% alpha as base tint
             : {};
 
-          // When DM views spirit realm that's hidden from most players, reduce overlay intensity
+          // When GM views spirit realm that's hidden from most players, reduce overlay intensity
           // Full opacity when fully active (global toggle or personal crossover)
-          const overlayOpacity = (!isDM && !spiritActive && playerSpiritPersonal)
+          const overlayOpacity = (!isGM && !spiritActive && playerSpiritPersonal)
             ? 1.0   // player's own token is in spirit realm — full immersion
-            : (!spiritActive ? 0.4 : 1.0); // DM hint view vs full view
+            : (!spiritActive ? 0.4 : 1.0); // GM hint view vs full view
 
           return (
             <>
@@ -4414,9 +4472,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                   ...inlineStyle,
                 }}
               />
-              {/* DM-only indicator: red dashed border shows spirit realm is hidden from players */}
+              {/* GM-only indicator: red dashed border shows spirit realm is hidden from players */}
               {/* Only shown in dual-plane mode where the ghost overlay is visible */}
-              {isDM && !spiritActive && dmViewBothPlanes && (
+              {isGM && !spiritActive && gmViewBothPlanes && (
                 <div className="spirit-layer-hidden-indicator" title="Spirit realm hidden from players" />
               )}
             </>
@@ -4548,17 +4606,17 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             </div>
           )}
 
-          {/* DM-only: toggle spirit layer token visibility */}
-          {userRole === 'DM' && (
+          {/* GM-only: toggle spirit layer token visibility */}
+          {userRole === 'GM' && (
             <div className="flex items-center gap-2">
               <div className="w-px h-6 bg-moss-green/20" />
               <Button
                 onClick={mapControlActions.toggleSpiritTokens}
-                variant="secondary" iconOnly className={dmShowSpiritTokens ? 'bg-spirit-purple/15' : undefined}
+                variant="secondary" iconOnly className={gmShowSpiritTokens ? 'bg-spirit-purple/15' : undefined}
                 title={spiritTokensLabel}
                 aria-label={spiritTokensLabel}
               >
-                <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-ink' : 'text-stone-gray/40'}`} />
+                <Ghost className={`w-4 h-4 ${gmShowSpiritTokens ? 'text-spirit-ink' : 'text-stone-gray/40'}`} />
               </Button>
             </div>
           )}
@@ -4566,9 +4624,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         )}
 
         {/* Spirit Realm indicator — shown to players when in spirit realm (global or personal) */}
-        {(previewing
-          ? previewedPlane === 'spirit'
-          : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
+        {viewerInSpiritRealm && (
           // An opaque backing under the tint, as the zoom panel has, so the
           // words read over any map.
           <div className="ml-auto mr-4 z-10 rounded-cozy bg-parchment animate-pulse-soft pointer-events-auto">
@@ -4612,11 +4668,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       })()}
 
       {/* The tool panels, in a stack that can be dragged: the drawing tools
-          for whoever has Draw open, then the DM's Fog, Walls and Lights. On
+          for whoever has Draw open, then the GM's Fog, Walls and Lights. On
           the compact layout the drawing tools are a strip in the dock at
           the map's foot instead. */}
-      {(userRole === 'DM' || (drawPanel && !compact)) && currentMap && (
-        <DmToolPanelContainer
+      {(userRole === 'GM' || (drawPanel && !compact)) && currentMap && (
+        <GmToolPanelContainer
           containerRef={containerRef}
           band={topBand}
           // On the compact layout it hides behind Tools, in Map controls,
@@ -4650,8 +4706,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           )}
           {drawPanel && !compact && <DrawControls {...drawPanel} />}
           {/* On a phone the stack is put away while Paint is on, so the map keeps room to paint on. */}
-          {userRole === 'DM' && !(compact && paint.on) && (<>
-          <DmFogControls
+          {userRole === 'GM' && !(compact && paint.on) && (<>
+          <GmFogControls
             fogMode={fogMode}
             fogEnabled={fogEnabled}
             onResetExploration={(currentMap.lightingEnabled ?? false) && explorationEnabled
@@ -4705,7 +4761,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               setFogState((prev) => prev ? { ...prev, revealed: new Array(prev.revealed.length).fill(false) } : prev);
             }}
           />
-          <DmWallControls
+          <GmWallControls
             {...wallPanel}
             onWallModeChange={(mode) => {
               wallPanel.onWallModeChange(mode);
@@ -4713,7 +4769,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               if (mode) { setFogMode(null); setLightMode(null); setSelectedLightId(null); setDrawKind(null); }
             }}
           />
-          <DmLightControls
+          <GmLightControls
             lightMode={lightMode}
             onLightModeChange={(mode) => {
               setLightMode(mode);
@@ -4768,7 +4824,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             onDefaultsChange={setLightPlacementDefaults}
           />
           </>)}
-        </DmToolPanelContainer>
+        </GmToolPanelContainer>
       )}
 
       {/* A text label being written, in a box at its point on the map. */}
@@ -4846,9 +4902,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         />
       )}
 
-      {/* DM Preview Player View — offered while dynamic lighting or fog is
+      {/* GM Preview Player View — offered while dynamic lighting or fog is
          on, and kept while a preview is on, so turning both off mid-preview
-         still leaves the way back to the DM's view. On the compact layout
+         still leaves the way back to the GM's view. On the compact layout
          it is in the dock at the foot of the map, over the details card. */}
       {previewOffered && !compact && (
         <div className="absolute bottom-20 right-2 z-30 flex items-center gap-1">
@@ -4856,10 +4912,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         </div>
       )}
 
-      {/* Ruler hint for players with no token */}
-      {rulerNeedsToken && !compact && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full pointer-events-none">
-          {RULER_NEEDS_TOKEN}
+      {/* Why a lit map is dark for a player with no token on it, and the
+          ruler's hint for one with no token, stacked up from the foot. In
+          Player Preview they sit above Preview's controls (bottom-20). */}
+      {(noTokenNote || rulerNeedsToken) && !compact && (
+        <div className={`absolute ${previewing ? 'bottom-32' : 'bottom-16'} left-1/2 -translate-x-1/2 w-max max-w-[calc(100%-2rem)] flex flex-col items-center gap-2 pointer-events-none`}>
+          {noTokenNote && <div className={MAP_NOTE}>{noTokenNote}</div>}
+          {rulerNeedsToken && <div className={MAP_NOTE}>{RULER_NEEDS_TOKEN}</div>}
         </div>
       )}
 
@@ -4991,25 +5050,22 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
       {!compact && tokenDetails(false)}
 
-      {/* The compact layout's dock at the foot of the map, from the top: the
-          ruler's hint, a row of the square under the pointer at the left and
-          the DM's Player Preview controls at the right, and the token's
-          details. Laid out as a
-          column from the foot, so each stands clear of the one below it
-          whatever its height. It is the map's size, a size container, so the
+      {/* The compact layout's dock at the foot of the map, from the top: why
+          a lit map is dark for a player with no token, the ruler's hint, a
+          row of the square under the pointer at the left and the GM's
+          Player Preview controls at the right, and the token's details.
+          Laid out as a column from the foot, so each stands clear of the
+          one below it whatever its height. It is the map's size, a size container, so the
           Draw strip's height is a share of the map's (cqh). It lets presses
           through to the map, except on its controls. */}
       {compact && (
         <div data-map-dock="" className="absolute inset-0 z-30 flex flex-col justify-end pointer-events-none [container-type:size]">
-          {/* What the dock holds, measured: the DM's stack stops above it. */}
+          {/* What the dock holds, measured: the GM's stack stops above it. */}
           <div ref={dockContentRef} className="flex min-h-0 flex-col">
             <div className={`${DOCK_ROW} flex flex-col gap-2 pb-2`}>
-              {rulerNeedsToken && (
-                <div className="self-center bg-black/60 text-white text-xs px-3 py-1.5 rounded-full text-center">
-                  {RULER_NEEDS_TOKEN}
-                </div>
-              )}
-              {/* The square under the pointer and the DM's Preview controls share
+              {noTokenNote && <div className={`self-center ${MAP_NOTE}`}>{noTokenNote}</div>}
+              {rulerNeedsToken && <div className={`self-center ${MAP_NOTE}`}>{RULER_NEEDS_TOKEN}</div>}
+              {/* The square under the pointer and the GM's Preview controls share
                   a row, the square at the left: stacked, the controls rose and
                   fell as the square came and went, out from under the pointer. */}
               {(previewOffered || cornerPanelShown) && (
@@ -5067,9 +5123,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           <div className="glass-panel p-4 text-center max-w-sm">
             <p className="text-sm text-brand-ink mb-1">This map has no picture.</p>
             <p className="text-xs text-stone-gray">
-              {isDM
+              {isGM
                 ? 'Choose one in Edit Map, or draw one with Mapmaker; its walls, tokens and fog are kept.'
-                : 'The DM has to choose one before the map can be shown.'}
+                : 'The GM has to choose one before the map can be shown.'}
             </p>
           </div>
         </div>
@@ -5126,7 +5182,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             contextMenu.token,
             user?.id,
             campaign?.memberships,
-            visibleTokenHp(contextMenu.token, characterHpCache, isDM && !previewing)
+            visibleTokenHp(contextMenu.token, characterHpCache, isGM && !previewing)
           )}
           leading={<TokenSheetPicture token={contextMenu.token} imageSrc={cachedTokenImage(contextMenu.token, tokenImages)?.src} />}
           items={tokenMenuItems(contextMenu.token, { ...tokenMenuView(contextMenu.token), actions: tokenMenuActions })}
@@ -5266,7 +5322,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             campaignId={campaign.id}
             membership={membership}
             // Rolls from it reach the whole table, as from Roll... below,
-            // or the DM alone from a map being prepared.
+            // or the GM alone from a map being prepared.
             publicName={characterRollPublicName(tokens.find((t) => t.id === viewingSheet.tokenId), user?.id)}
             secretRolls={isPreparing}
             onClose={() => setViewingSheet(null)}
@@ -5286,13 +5342,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           // The dice log goes to the whole table, so an obscured token's
           // rolls are filed under the name everyone may see.
           publicName={characterRollPublicName(tokens.find((t) => t.id === rollPicker.tokenId), user?.id)}
-          // A token on a map the table is not on is the DM's to know of, so
-          // its rolls are secret while the DM prepares that map.
+          // A token on a map the table is not on is the GM's to know of, so
+          // its rolls are secret while the GM prepares that map.
           onRoll={(expression, purpose, characterName) =>
             tableRoll({ expression, purpose, characterName, ...(isPreparing ? { secret: true } : {}) })
           }
           // Only offered when this token is already in the initiative order and
-          // this viewer may roll for it — the DM for anyone, a player for a
+          // this viewer may roll for it — the GM for anyone, a player for a
           // token they control. The server checks the same thing.
           onRollInitiative={
             rollPicker.canRollInitiative
@@ -5303,14 +5359,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         />
       )}
 
-      {/* NPC Roll Picker (DM-only, opened from token context menu) */}
+      {/* NPC Roll Picker (GM-only, opened from token context menu) */}
       {npcRollPicker && (() => {
         const npcToken = tokens.find((t) => t.id === npcRollPicker.tokenId);
         if (!npcToken) return null;
         return (
           <NpcRollPicker
             token={npcToken}
-            gameSystem={campaign?.gameSystem ?? 'DND_5E'}
+            gameSystem={playedGameSystem(campaign?.gameSystem) ?? 'FIFTH_EDITION'}
             anchorX={npcRollPicker.at.x}
             anchorY={npcRollPicker.at.y}
             onRoll={(expression, purpose, characterName) =>

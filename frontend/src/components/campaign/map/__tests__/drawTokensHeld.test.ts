@@ -45,7 +45,7 @@ const viewport: Viewport = { zoom: 1, panOffset: { x: 0, y: 0 }, gridSize: 50, m
 const state = (held: { x: number; y: number } | null): TokenDrawState => ({
   tokens: [wolf], tokenImages: new Map(), animatingTokens: new Map(), heldAt: {}, now: 0,
   draggedToken: held ? wolf : null, heldDrawnAt: held, hoverTokenId: null, revealedCells: null,
-  isDM: true, dmShowSpiritTokens: true, dmViewBothPlanes: false, spiritAccentColor: '#000',
+  isGM: true, gmShowSpiritTokens: true, gmViewBothPlanes: false, spiritAccentColor: '#000',
   characterHpCache: {}, isOwnToken: () => false, currentTurnTokenId: 't1', pulsePhase: 0.5, peekTokenId: 't1', selectedTokenId: 't1',
 });
 

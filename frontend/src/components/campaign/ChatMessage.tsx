@@ -23,8 +23,8 @@ interface ChatMessageProps {
   whisperLabel?: string;
   /** On a whisper: the other person's name, for "Only you and Mara can see this". */
   whisperPeer?: string;
-  /** The campaign's DM sent it: a DM's whisper keeps the DM's shield. */
-  sentByDM?: boolean;
+  /** The campaign's GM sent it: a GM's whisper keeps the GM's shield. */
+  sentByGM?: boolean;
   /** Choosing a whisper's name whispers back to the other person, while they are a member. */
   onWhisperBack?: (message: Message) => void;
 }
@@ -52,7 +52,7 @@ function messageAge(timestamp: string, now: number): string {
  */
 function getMessageStyle(type: MessageType): { bg: string; textColor: string; borderColor: string } {
   switch (type) {
-    case 'DM':
+    case 'GM':
       return {
         bg: 'bg-warning/10',
         textColor: 'text-warning-ink',
@@ -88,14 +88,14 @@ function getMessageStyle(type: MessageType): { bg: string; textColor: string; bo
 /** A whisper's tint, whoever sent it. */
 const WHISPER_STYLE = { bg: 'bg-accent/10', textColor: 'text-stone-gray', borderColor: 'border-accent/30' };
 
-function ChatMessageInner({ message, isCurrentUser = false, isPending = false, notSentReason, onRetry, onDiscard, whisperLabel, whisperPeer, sentByDM = false, onWhisperBack }: ChatMessageProps) {
+function ChatMessageInner({ message, isCurrentUser = false, isPending = false, notSentReason, onRetry, onDiscard, whisperLabel, whisperPeer, sentByGM = false, onWhisperBack }: ChatMessageProps) {
   // The row is memoised, so without this its "just now" never moved on.
   const now = useMinuteClock();
   const isWhisper = whisperLabel !== undefined;
   const { bg, textColor, borderColor } = isWhisper ? WHISPER_STYLE : getMessageStyle(message.type);
   const isSystem = message.type === 'SYSTEM';
-  const isDM = message.type === 'DM';
-  const showShield = isDM || (isWhisper && sentByDM);
+  const isGM = message.type === 'GM';
+  const showShield = isGM || (isWhisper && sentByGM);
 
   // Get display name
   const displayName = isSystem
@@ -104,7 +104,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
 
   const compact = useCompactLayout();
 
-  const nameColor = isDM ? 'text-warning-ink' : isSystem || isCurrentUser ? 'text-brand-ink' : 'text-stone-gray';
+  const nameColor = isGM ? 'text-warning-ink' : isSystem || isCurrentUser ? 'text-brand-ink' : 'text-stone-gray';
   const onlyYou = `Only you and ${whisperPeer} can see this.`;
   const sentAt = message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Unknown time';
 

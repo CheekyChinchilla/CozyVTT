@@ -1,6 +1,6 @@
 /**
  * useWallHistory
- * Undo/redo stack for DM wall segment editing.
+ * Undo/redo stack for GM wall segment editing.
  * Maximum 50 history entries — oldest entries are dropped when the limit is exceeded.
  *
  * Uses a single atomic state object { stack, idx } to prevent the race condition

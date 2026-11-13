@@ -38,7 +38,7 @@ const macro: DiceMacro = {
 
 /** A saved roll with a character and a purpose of its own. */
 const goblin: DiceMacro = {
-  ...macro, id: 'm-2', name: 'Goblin', expression: '1d20+4', characterName: 'Goblin boss', purpose: 'Scimitar attack',
+  ...macro, id: 'm-2', name: 'Goblin', expression: '1d20+4', characterName: 'Hobgoblin', purpose: 'Longsword attack',
 };
 
 const summary: LeftCampaignSummary = {
@@ -133,7 +133,7 @@ describe('notes from campaigns you have left', () => {
   it('shows a saved roll\'s own character and purpose', async () => {
     api.getLeftCampaign.mockResolvedValue({ ...detail, macros: [macro, goblin] });
     const dialog = await openDialog();
-    expect(await within(dialog).findByText('as Goblin boss, for Scimitar attack')).toBeInTheDocument();
+    expect(await within(dialog).findByText('as Hobgoblin, for Longsword attack')).toBeInTheDocument();
   });
 
   it('says why a note could not be read', async () => {
@@ -243,6 +243,6 @@ describe('the downloaded file', () => {
 
   it('holds a saved roll\'s own character and purpose', () => {
     const file = leftCampaignMarkdown({ campaign: detail.campaign, notes: [], macros: [macro, goblin] });
-    expect(file).toContain('- Sneak attack: `3d6`\n- Goblin: `1d20+4`, as Goblin boss, for Scimitar attack\n');
+    expect(file).toContain('- Sneak attack: `3d6`\n- Goblin: `1d20+4`, as Hobgoblin, for Longsword attack\n');
   });
 });

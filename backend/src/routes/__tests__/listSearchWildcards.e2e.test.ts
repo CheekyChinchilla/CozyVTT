@@ -25,7 +25,7 @@ beforeAll(async () => {
   const user = await createTestUser({ displayName: 'Search Wildcards' });
   userId = user.id;
   campaignId = (await createTestCampaign(userId, { name: 'Wildcards' })).id;
-  await prisma.campaignMembership.create({ data: { userId, campaignId, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId, campaignId, role: 'GM', characterIds: [] } });
   for (const name of Object.values(names)) {
     await prisma.asset.create({
       data: {

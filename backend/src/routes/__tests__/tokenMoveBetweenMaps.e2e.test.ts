@@ -8,7 +8,7 @@
  * other: every request answered success while some tokens ended on neither
  * map and others on both. The copy also gave the token a new id (a combatant
  * dropped out of the order) and, through the create route's defaults, handed
- * a character's token back to its owner after the DM had taken control away.
+ * a character's token back to its owner after the GM had taken control away.
  *
  * One request now moves a set of tokens in one transaction under a lock on
  * both maps, keeping each token exactly as stored; and every write to a
@@ -34,12 +34,12 @@ import {
 const app = createTestApp();
 
 describe('tokens between maps', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let campaignId: string;
   let sourceId: string;
   let targetId: string;
-  let dm: ReturnType<typeof request.agent>;
+  let gm: ReturnType<typeof request.agent>;
 
   const base = { imageUrl: '', size: { width: 1, height: 1 }, layer: 'token', visible: true, rotation: 0, conditions: [], metadata: {} };
   const tokensOf = async (mapId: string) => {
@@ -51,7 +51,7 @@ describe('tokens between maps', () => {
       where: { id: sourceId },
       data: {
         tokens: [
-          // A character's token whose controller the DM set to none, with a
+          // A character's token whose controller the GM set to none, with a
           // stat block written before token validation existed.
           { ...base, id: 'aldra', name: 'Aldra', position: { x: 18, y: 14 }, size: { width: 2, height: 2 }, controlledBy: null, characterId: null, statBlock: { ac: 12, abilities: { str: 99 } }, hp: { current: 3, max: 30, temp: 0 } },
           { ...base, id: 'goblin', name: 'Goblin', position: { x: 2, y: 2 }, controlledBy: null },
@@ -61,14 +61,14 @@ describe('tokens between maps', () => {
     });
 
   beforeAll(async () => {
-    const dmUser = await createTestUser({ displayName: 'Move DM' });
+    const gmUser = await createTestUser({ displayName: 'Move GM' });
     const playerUser = await createTestUser({ displayName: 'Move Player' });
-    dmId = dmUser.id;
+    gmId = gmUser.id;
     playerId = playerUser.id;
-    campaignId = (await createTestCampaign(dmId, { name: 'Token Moves' })).id;
+    campaignId = (await createTestCampaign(gmId, { name: 'Token Moves' })).id;
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+        { userId: gmId, campaignId, role: 'GM', characterIds: [] },
         { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       ],
     });
@@ -79,8 +79,8 @@ describe('tokens between maps', () => {
     sourceId = (await prisma.map.create({ data: mapData('Source', 20, 16) })).id;
     targetId = (await prisma.map.create({ data: mapData('Target', 10, 10) })).id;
     await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: sourceId } });
-    dm = request.agent(app);
-    await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD });
+    gm = request.agent(app);
+    await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD });
   });
 
   beforeEach(async () => {
@@ -94,12 +94,12 @@ describe('tokens between maps', () => {
     await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
     await prisma.map.deleteMany({ where: { campaignId } });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId]);
+    await cleanupUsers([gmId, playerId]);
     await prisma.$disconnect();
   });
 
   const move = (tokenIds: string[], targetMapId = targetId) =>
-    dm.post(`/api/campaigns/${campaignId}/maps/${sourceId}/tokens/move`).send({ tokenIds, targetMapId });
+    gm.post(`/api/campaigns/${campaignId}/maps/${sourceId}/tokens/move`).send({ tokenIds, targetMapId });
 
   describe('POST /maps/:id/tokens/move', () => {
     it('moves the tokens as they are stored, under their own ids, and clamps them onto the target', async () => {
@@ -129,7 +129,7 @@ describe('tokens between maps', () => {
     });
 
     it('refuses a target outside the campaign, and the map itself', async () => {
-      const other = await createTestCampaign(dmId, { name: 'Elsewhere' });
+      const other = await createTestCampaign(gmId, { name: 'Elsewhere' });
       const foreign = await prisma.map.create({
         data: { campaignId: other.id, name: 'Foreign', imageUrl: '/x', baseLayerUrl: '/x', width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
       });
@@ -154,7 +154,7 @@ describe('tokens between maps', () => {
       expect(getState(campaignId).combatants[0]).toMatchObject({ tokenId: 'goblin', mapId: targetId });
     });
 
-    it('is the DM\'s alone', async () => {
+    it('is the GM\'s alone', async () => {
       const playerUser = await prisma.user.findUniqueOrThrow({ where: { id: playerId } });
       const player = request.agent(app);
       await player.post('/api/auth/login').send({ email: playerUser.email, password: TEST_PASSWORD });
@@ -168,7 +168,7 @@ describe('tokens between maps', () => {
       await prisma.map.update({ where: { id: targetId }, data: { tokens: [] } });
       const results = await Promise.all(
         Array.from({ length: 10 }, (_, i) =>
-          dm.post(`/api/campaigns/${campaignId}/maps/${targetId}/tokens`).send({ name: `Rat ${i}`, position: { x: i, y: 0 } })
+          gm.post(`/api/campaigns/${campaignId}/maps/${targetId}/tokens`).send({ name: `Rat ${i}`, position: { x: i, y: 0 } })
         )
       );
       expect(results.every((r) => r.status === 201)).toBe(true);
@@ -181,7 +181,7 @@ describe('tokens between maps', () => {
         data: { tokens: Array.from({ length: 10 }, (_, i) => ({ ...base, id: `rat-${i}`, name: `Rat ${i}`, position: { x: i, y: 0 }, controlledBy: null })) },
       });
       const results = await Promise.all(
-        Array.from({ length: 5 }, (_, i) => dm.delete(`/api/campaigns/${campaignId}/maps/${targetId}/tokens/rat-${i}`))
+        Array.from({ length: 5 }, (_, i) => gm.delete(`/api/campaigns/${campaignId}/maps/${targetId}/tokens/rat-${i}`))
       );
       expect(results.every((r) => r.status === 200)).toBe(true);
       expect((await tokensOf(targetId)).map((t) => t.id).sort()).toEqual(['rat-5', 'rat-6', 'rat-7', 'rat-8', 'rat-9']);

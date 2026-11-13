@@ -25,14 +25,14 @@ function isDoor(segment: WallSegment): boolean {
 }
 
 /**
- * Whether the map offers this viewer a door. The DM any door. A player only
+ * Whether the map offers this viewer a door. The GM any door. A player only
  * a door they can see: on a lit map, where its middle is seen by the rule the
  * walls layer shows doors by; under manual fog, one beside a revealed square
  * (utils/doorFog.ts); otherwise every door. A spectator none, since
  * spectators change nothing at the table.
  */
 export function doorOffered(door: WallSegment, viewer: DoorViewer): boolean {
-  if (viewer.role === 'DM') return true;
+  if (viewer.role === 'GM') return true;
   if (viewer.role !== 'PLAYER') return false;
   if (viewer.lightingEnabled && !viewer.canSee((door.x1 + door.x2) / 2, (door.y1 + door.y2) / 2)) return false;
   return !viewer.fog || doorBesideRevealed(door, viewer.fog.grid, viewer.fog.isRevealed);

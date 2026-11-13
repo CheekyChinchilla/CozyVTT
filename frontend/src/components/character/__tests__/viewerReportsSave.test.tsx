@@ -9,7 +9,7 @@ import type { Character, CampaignMembership } from '@/types';
 import CharacterSheetViewerModal from '../CharacterSheetViewerModal';
 
 const character = {
-  id: 'char-1', userId: 'owner', name: 'Sheet A', gameSystem: 'DND_5E', data: { background: 'Sage' }, campaignId: null,
+  id: 'char-1', userId: 'owner', name: 'Sheet A', gameSystem: 'FIFTH_EDITION', data: { background: 'Acolyte' }, campaignId: null,
   updatedAt: '2026-01-01T00:00:00.000Z',
 } as unknown as Character;
 const stored = { ...character, data: { background: 'Scholar' }, updatedAt: '2026-01-01T00:00:09.000Z' } as unknown as Character;
@@ -24,8 +24,8 @@ vi.mock('@/contexts/WebSocketContext', () => ({
 vi.mock('@/services/api', () => ({
   api: { getUser: vi.fn(), getCharacter: () => Promise.resolve({ character: stored }) },
 }));
-vi.mock('../../character-sheets/dnd5e/DnD5eCharacterView', () => ({
-  DnD5eCharacterView: ({ onEdit }: { onEdit?: () => void }) => (
+vi.mock('../../character-sheets/fifth-edition/FifthEditionCharacterView', () => ({
+  FifthEditionCharacterView: ({ onEdit }: { onEdit?: () => void }) => (
     <button type="button" onClick={onEdit}>Edit</button>
   ),
 }));

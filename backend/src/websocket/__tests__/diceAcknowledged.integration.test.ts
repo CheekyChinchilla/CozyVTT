@@ -22,7 +22,7 @@ jest.setTimeout(20000);
 const runId = randomUUID().slice(0, 8);
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let watcherId: string;
 let floodId: string;
@@ -33,22 +33,22 @@ type Answer = { ok: true; id?: string } | { ok: false; error: string };
 
 beforeAll(async () => {
   const users = await Promise.all(
-    ['dm', 'player', 'watcher', 'flood'].map((name) =>
+    ['gm', 'player', 'watcher', 'flood'].map((name) =>
       prisma.user.create({ data: { email: `diceack-${name}-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: `Dice ${name}` } })
     )
   );
-  [dmId, playerId, watcherId, floodId] = users.map((u) => u.id);
-  campaignId = (await prisma.campaign.create({ data: { name: `Dice ack ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
+  [gmId, playerId, watcherId, floodId] = users.map((u) => u.id);
+  campaignId = (await prisma.campaign.create({ data: { name: `Dice ack ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: watcherId, campaignId, role: 'SPECTATOR', characterIds: [] },
       { userId: floodId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   server = await createWsTestServer();
-  for (const [name, id] of [['dm', dmId], ['player', playerId], ['watcher', watcherId], ['flood', floodId]] as const) {
+  for (const [name, id] of [['gm', gmId], ['player', playerId], ['watcher', watcherId], ['flood', floodId]] as const) {
     cookies[name] = await server.loginAs(id);
   }
 });
@@ -57,21 +57,21 @@ afterAll(async () => {
   await server?.close();
   await prisma.diceRoll.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, watcherId, floodId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId, watcherId, floodId] } } });
   await prisma.$disconnect();
 });
 
 describe('dice.roll with an acknowledgement', () => {
   it('answers with the stored roll\'s id, and the roll still reaches the table', async () => {
     const player = await server.connectAndAuth(cookies.player, campaignId);
-    const dm = await server.connectAndAuth(cookies.dm, campaignId);
-    const toDm = waitForEvent<{ id: string }>(dm, 'dice.rolled');
+    const gm = await server.connectAndAuth(cookies.gm, campaignId);
+    const toGm = waitForEvent<{ id: string }>(gm, 'dice.rolled');
 
     const answer: Answer = await player.timeout(3000).emitWithAck('dice.roll', { expression: '1d20+2', purpose: 'Stealth' });
 
     const stored = await prisma.diceRoll.findFirstOrThrow({ where: { campaignId, userId: playerId }, orderBy: { rolledAt: 'desc' } });
     expect(answer).toEqual({ ok: true, id: stored.id });
-    expect((await toDm).id).toBe(stored.id);
+    expect((await toGm).id).toBe(stored.id);
   });
 
   it.each([
@@ -105,16 +105,16 @@ describe('dice.roll with an acknowledgement', () => {
 });
 
 describe('dice.clearHistory with an acknowledgement', () => {
-  it('answers the DM', async () => {
-    const dm = await server.connectAndAuth(cookies.dm, campaignId);
-    expect(await dm.timeout(3000).emitWithAck('dice.clearHistory')).toEqual({ ok: true });
+  it('answers the GM', async () => {
+    const gm = await server.connectAndAuth(cookies.gm, campaignId);
+    expect(await gm.timeout(3000).emitWithAck('dice.clearHistory')).toEqual({ ok: true });
   });
 
   it('refuses a player through the acknowledgement alone', async () => {
     const player = await server.connectAndAuth(cookies.player, campaignId);
     const noError = expectNoEvent(player, 'error');
 
-    expect(await player.timeout(3000).emitWithAck('dice.clearHistory')).toEqual({ ok: false, error: 'Only the DM can clear roll history' });
+    expect(await player.timeout(3000).emitWithAck('dice.clearHistory')).toEqual({ ok: false, error: 'Only the GM can clear roll history' });
     await noError;
   });
 });

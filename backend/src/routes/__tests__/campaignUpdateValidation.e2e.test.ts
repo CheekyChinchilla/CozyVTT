@@ -22,23 +22,23 @@ import {
 } from '../../__tests__/helpers/db';
 
 const app = createTestApp();
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let agent: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
-  const dm = await createTestUser({ email: `cu-dm-${Date.now()}@test.cozyvtt.local`, displayName: 'DM' });
-  dmId = dm.id;
-  const campaign = await createTestCampaign(dm.id, { name: 'Update me' });
+  const gm = await createTestUser({ email: `cu-dm-${Date.now()}@test.cozyvtt.local`, displayName: 'GM' });
+  gmId = gm.id;
+  const campaign = await createTestCampaign(gm.id, { name: 'Update me' });
   campaignId = campaign.id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
   agent = request.agent(app);
-  expect((await agent.post('/api/auth/login').send({ email: dm.email, password: TEST_PASSWORD })).status).toBe(200);
+  expect((await agent.post('/api/auth/login').send({ email: gm.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
@@ -50,7 +50,7 @@ describe('rejected bodies', () => {
     ['a name over 200 characters', { name: 'x'.repeat(201) }],
     ['a description over 5000 characters', { description: 'x'.repeat(5001) }],
     ['an unknown status', { status: 'BOGUS' }],
-    ['an unknown game system', { gameSystem: 'GURPS' }],
+    ['an unknown game system', { gameSystem: 'NOT_A_SYSTEM' }],
     ['spiritLayerEnabled that is not a boolean', { spiritLayerEnabled: 'yes' }],
     ['spiritLayerStyle that is not a string', { spiritLayerStyle: 123 }],
     ['vibeSettings that is not an object', { vibeSettings: 'night' }],
@@ -79,7 +79,7 @@ describe('accepted bodies', () => {
       name: '  Renamed  ',
       description: 'A description',
       status: 'COMPLETED',
-      gameSystem: 'DND_5E',
+      gameSystem: 'FIFTH_EDITION',
       spiritLayerEnabled: true,
       spiritLayerStyle: 'custom:#7c3aed:wispy',
       vibeSettings: { periods: [{ name: 'Day', hue: '#ffffff', filter: 'brightness(0.9) saturate(1.1)' }], currentPeriod: 'Day' },
@@ -96,14 +96,14 @@ describe('accepted bodies', () => {
     expect(stored.name).toBe('Renamed');
     expect(stored.description).toBe('A description');
     expect(stored.status).toBe('COMPLETED');
-    expect(stored.gameSystem).toBe('DND_5E');
+    expect(stored.gameSystem).toBe('FIFTH_EDITION');
     expect(stored.spiritLayerEnabled).toBe(true);
     expect(stored.spiritLayerStyle).toBe('custom:#7c3aed:wispy');
     expect(stored.vibeSettings).toMatchObject({ currentPeriod: 'Day' });
     expect(stored.chatCooldownEnabled).toBe(true);
     expect(stored.chatCooldownSeconds).toBe(30);
     expect(stored.playersMayDraw).toBe(false);
-    expect(stored.ownerId).toBe(dmId);
+    expect(stored.ownerId).toBe(gmId);
     expect(stored.id).toBe(campaignId);
   });
 

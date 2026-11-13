@@ -164,11 +164,11 @@ describe('the compact arrangement', () => {
     expect(sheets().map((el) => el.querySelector('h2')?.textContent)).toEqual(['Chat', 'Party', 'More']);
   });
 
-  it("tells players under the header that the session is paused, and the DM not", () => {
+  it("tells players under the header that the session is paused, and the GM not", () => {
     table(CampaignStatus.PAUSED);
     expect(screen.getByText(/Session is paused/)).toBeInTheDocument();
     cleanup();
-    page.role = 'DM';
+    page.role = 'GM';
     table(CampaignStatus.PAUSED);
     expect(screen.queryByText(/Session is paused/)).toBeNull();
   });
@@ -291,8 +291,8 @@ describe('More', () => {
     expect(sheet('Dice')).toHaveAttribute('aria-modal', 'true');
   });
 
-  it("asks the page for its windows: Documents, Shortcuts and the DM's tools", () => {
-    page.role = 'DM';
+  it("asks the page for its windows: Documents, Shortcuts and the GM's tools", () => {
+    page.role = 'GM';
     const openers = table();
     press('More');
     fireEvent.click(moreRow('Documents'));

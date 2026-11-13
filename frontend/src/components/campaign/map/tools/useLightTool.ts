@@ -1,5 +1,5 @@
 // ============================================
-// The DM's light tools: Place drops a light with the panel's settings where
+// The GM's light tools: Place drops a light with the panel's settings where
 // the map is clicked, and Select picks the nearest light up to edit it or
 // drag it somewhere else, sending it once when it is let go.
 //
@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { LightSource } from '@/types/walls';
-import type { LightToolMode, LightPlacementDefaults } from '@/components/campaign/DmLightControls';
+import type { LightToolMode, LightPlacementDefaults } from '@/components/campaign/GmLightControls';
 import { randomId } from '@/utils/uuid';
 import { TOO_MANY_LIGHTS_MESSAGE } from '@/constants/mapLimits';
 import type { OwnEdits } from '../ownEdits';
@@ -18,7 +18,7 @@ import type { MapLayer } from '../useRenderLoop';
 import type { MapControls, MapTool, PointerAt, ToolSocketSource } from './types';
 
 interface UseLightToolArgs {
-  isDM: boolean;
+  isGM: boolean;
   /** A player-view preview hides the light markers, so Select stays idle. */
   previewing: boolean;
   mapId: string | undefined;
@@ -31,15 +31,15 @@ interface UseLightToolArgs {
   socket: ToolSocketSource | null | undefined;
   ownEdits: OwnEdits;
   mapControls: MapControls;
-  /** Set while the right button pans the map under a DM tool. */
+  /** Set while the right button pans the map under a GM tool. */
   rightPanActiveRef: RefObject<boolean>;
   markDirty: (...layers: MapLayer[]) => void;
-  /** Tell the DM why a light was not placed, or was taken back. */
+  /** Tell the GM why a light was not placed, or was taken back. */
   refuse: (message: string) => void;
 }
 
 export function useLightTool({
-  isDM, previewing, mapId, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
+  isGM, previewing, mapId, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
   socket, ownEdits, mapControls, rightPanActiveRef, markDirty, refuse,
 }: UseLightToolArgs) {
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
@@ -62,7 +62,7 @@ export function useLightTool({
   const tool: MapTool = {
     // Light tool: place or select/drag
     down({ mapPx }: PointerAt) {
-      if (!(lightMode && isDM)) return false;
+      if (!(lightMode && isGM)) return false;
       if (lightMode === 'light-place') {
         if (atLightCap(lightSources.length)) {
           refuse(TOO_MANY_LIGHTS_MESSAGE);
@@ -115,7 +115,7 @@ export function useLightTool({
     },
     // Light mode: handle right-pan and drag-to-move
     move({ e, mapPx }: PointerAt) {
-      if (!(lightMode && isDM)) return false;
+      if (!(lightMode && isGM)) return false;
       if (rightPanActiveRef.current) mapControls.handleDrag(e);
       // Drag-to-move: update light position in real time
       if (draggingLightRef.current && (e.buttons & 1)) {

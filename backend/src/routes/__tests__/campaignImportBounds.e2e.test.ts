@@ -19,7 +19,7 @@ const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-bounds-'))
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
 import request from 'supertest';
-import unzipper from 'unzipper';
+import { ZipFile } from 'yauzl';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { prisma as appPrisma } from '../../config/database';
@@ -39,7 +39,7 @@ const manifest = (overrides: Record<string, unknown> = {}) =>
     exportedAt: '2026-10-06T00:00:00.000Z',
     exportedFrom: 'CozyVTT test',
     campaignName: 'Bounded',
-    gameSystem: 'DND_5E',
+    gameSystem: 'FIFTH_EDITION',
     mapCount: 0,
     tokenCount: 0,
     creatureCount: 0,
@@ -202,14 +202,12 @@ describe('an archive whose directory lists more entries than an import allows', 
   // costs over a kilobyte of memory an entry. A 50 MB archive can list a
   // million entries.
   it.each(['/api/campaigns/import/preview', '/api/campaigns/import'])('is refused by %s before its directory is read', async (route) => {
-    const readFromDisk = jest.spyOn(unzipper.Open, 'file');
-    const readFromMemory = jest.spyOn(unzipper.Open, 'buffer');
+    const readEntry = jest.spyOn(ZipFile.prototype, 'readEntry');
 
     const res = await agent.post(route).attach('file', many);
 
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/1,?000/);
-    expect(readFromDisk).not.toHaveBeenCalled();
-    expect(readFromMemory).not.toHaveBeenCalled();
+    expect(readEntry).not.toHaveBeenCalled();
   }, 60_000);
 });

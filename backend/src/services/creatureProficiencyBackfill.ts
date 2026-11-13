@@ -14,7 +14,7 @@
  *     reconciled with the rules is marked 'custom' and left exactly as it is,
  *     not "corrected".
  *  2. **SRD creatures only.** Rows with any other `source` are never read or
- *     written. A DM's homebrew is their own.
+ *     written. A GM's homebrew is their own.
  *
  * It also normalises Open5e's snake_case skill keys ("animal_handling") onto the
  * canonical camelCase ones. That is a key change, not a value change, and fixes
@@ -30,7 +30,7 @@ import {
   normalizeSkillKey,
   proficiencyBonusForCR,
   type ProficiencyLevel,
-} from '../utils/rules/dnd5e';
+} from '../utils/rules/fifthEdition';
 import logger from '../utils/logger';
 
 /** Minimal shape this service needs; stat blocks are JSONB and vary in age. */

@@ -70,7 +70,7 @@ async function importedMaps(campaignId: string) {
 describe('a campaign exported and imported again', () => {
   it('comes back whole at the limits the app allows', async () => {
     const source = await createTestCampaign(userId, { name: 'At the limits' });
-    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'GM', characterIds: [] } });
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
     const pictureFile = path.join(UPLOAD_DIR, 'source.png');
     fs.writeFileSync(pictureFile, PNG);
@@ -135,7 +135,7 @@ describe('a campaign exported and imported again', () => {
 
   it('brings back every picture, creature and token template, each picture byte for byte', async () => {
     const source = await createTestCampaign(userId, { name: 'Every file' });
-    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'GM', characterIds: [] } });
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
     // Four pictures of their own, the map's random enough that deflate
     // cannot shrink it and larger than one read.
@@ -214,11 +214,11 @@ async function archive(maps: object[], assets: Record<string, { entry?: FixtureE
       name: 'manifest.json',
       data: JSON.stringify({
         formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT v1.4.0', campaignName: 'Older',
-        gameSystem: 'DND_5E', mapCount: maps.length, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0,
+        gameSystem: 'FIFTH_EDITION', mapCount: maps.length, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0,
         assetCount: Object.keys(assets).length, includesAudio: false, totalSizeBytes: 0,
       }),
     },
-    { name: 'campaign.json', data: JSON.stringify({ name: 'Older', gameSystem: 'DND_5E' }) },
+    { name: 'campaign.json', data: JSON.stringify({ name: 'Older', gameSystem: 'FIFTH_EDITION' }) },
     { name: 'assets/asset-manifest.json', data: JSON.stringify(Object.fromEntries(Object.entries(assets).map(([id, a]) => [id, a.info]))) },
     ...Object.values(assets).flatMap((a) => (a.entry ? [a.entry] : [])),
     ...maps.map((m, i) => ({ name: `maps/map-${i}.json`, data: JSON.stringify(m) })),
@@ -509,7 +509,7 @@ describe('a token, creature or template whose picture is not a token picture', (
 describe('the order of an imported campaign\'s maps and pictures', () => {
   it('follows the original: the Map Library lists the maps as it did, and no two share a time', async () => {
     const source = await createTestCampaign(userId, { name: 'In order' });
-    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'GM', characterIds: [] } });
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
     const made = Date.parse('2026-01-01T00:00:00.000Z');
     const maps = [];

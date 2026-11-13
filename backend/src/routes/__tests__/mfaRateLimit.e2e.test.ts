@@ -85,6 +85,10 @@ describe('the sign-in code step, per account', () => {
     // A sixth address, with the right code, is still turned away for this account.
     const blocked = await attempt(target.email, '10.20.0.6', generateSync({ secret }));
     expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+    // The headers are the sixth address's, which has had no wrong code.
+    expect(blocked.headers['ratelimit-policy']).toBe('5;w=900');
+    expect(blocked.headers['ratelimit-remaining']).toBe('4');
   });
 
   it('leaves other accounts alone', async () => {

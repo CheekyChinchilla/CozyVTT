@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CharacterTemplateEditorModal from '../CharacterTemplateEditorModal';
-import { PF2E_BLANK_SHEET } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { FANTASY_D20_BLANK_SHEET } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
 import type { CharacterTemplate } from '@/types';
 
 const showToast = vi.fn();
@@ -31,8 +31,8 @@ const template = {
   id: 'tpl-1',
   name: 'Level 1 Fighter',
   description: null,
-  gameSystem: 'PATHFINDER_2E',
-  data: JSON.parse(JSON.stringify(PF2E_BLANK_SHEET)),
+  gameSystem: 'FANTASY_D20',
+  data: JSON.parse(JSON.stringify(FANTASY_D20_BLANK_SHEET)),
   tokenImageUrl: null,
   createdById: 'user-1',
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -40,7 +40,7 @@ const template = {
 } as unknown as CharacterTemplate;
 
 beforeAll(async () => {
-  await import('@/components/character-sheets/pathfinder2e/Pathfinder2eCharacterSheet');
+  await import('@/components/character-sheets/fantasy-d20/FantasyD20CharacterSheet');
 }, 30_000);
 
 beforeEach(() => {
@@ -50,7 +50,7 @@ beforeEach(() => {
 
 async function saveRefused() {
   render(<CharacterTemplateEditorModal template={template} onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'Torag' } });
+  fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'The Quiet Forge' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(showToast).toHaveBeenCalled());
   return showToast.mock.calls[0];

@@ -150,9 +150,9 @@ describe('PUT /api/users/:id', () => {
   });
 
   it('strips a right-to-left override from a new name', async () => {
-    const res = await agent.put(`/api/users/${userId}`).send({ displayName: 'Dungeon\u202E Master' });
+    const res = await agent.put(`/api/users/${userId}`).send({ displayName: 'Night\u202E Owl' });
     expect(res.status).toBe(200);
-    expect(res.body.user.displayName).toBe('Dungeon Master');
+    expect(res.body.user.displayName).toBe('Night Owl');
   });
 
   it('accepts a 50-character name and stores it trimmed', async () => {

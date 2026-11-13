@@ -1,0 +1,131 @@
+{
+  "themeColor": "#335577",
+  "investigatorName": "Jack Moran",
+  "playerName": "Sam Okafor",
+  "occupation": "Private Detective",
+  "era": "Modern",
+  "age": "35",
+  "sex": "Male",
+  "residence": "A harbour city",
+  "birthplace": "Upstate",
+  "characteristics": {
+    "STR": { "regular": 60, "half": 30, "fifth": 12 },
+    "CON": { "regular": 60, "half": 30, "fifth": 12 },
+    "SIZ": { "regular": 65, "half": 32, "fifth": 13 },
+    "DEX": { "regular": 70, "half": 35, "fifth": 14 },
+    "APP": { "regular": 55, "half": 27, "fifth": 11 },
+    "INT": { "regular": 70, "half": 35, "fifth": 14 },
+    "POW": { "regular": 60, "half": 30, "fifth": 12 },
+    "EDU": { "regular": 65, "half": 32, "fifth": 13 }
+  },
+  "derivedStats": {
+    "hp": { "maximum": 12, "current": 7, "formula": "(CON+SIZ)/10", "majorWoundThreshold": 6 },
+    "magicPoints": { "maximum": 12, "current": 4, "formula": "POW/5" },
+    "sanity": { "starting": 60, "current": 52, "maximum": 93, "formula": "POW" },
+    "luck": { "score": 41, "notes": "Spent 14 on the warehouse job." },
+    "moveRate": 8,
+    "build": 1,
+    "damageBonus": "+1d4",
+    "dodge": { "value": 35, "formula": "DEX/2", "improvementChecked": false }
+  },
+  "skills": {
+    "accounting": { "baseValue": 5, "currentValue": 10, "improvementChecked": false },
+    "anthropology": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "appraise": { "baseValue": 5, "currentValue": 5, "improvementChecked": false },
+    "archaeology": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "libraryUse": { "baseValue": 20, "currentValue": 50, "improvementChecked": false },
+    "occult": { "baseValue": 5, "currentValue": 5, "improvementChecked": false },
+    "spotHidden": { "baseValue": 25, "currentValue": 65, "improvementChecked": true, "notes": "Never forgets a face" },
+    "listen": { "baseValue": 20, "currentValue": 50, "improvementChecked": false },
+    "naturalWorld": { "baseValue": 10, "currentValue": 30, "improvementChecked": false },
+    "charm": { "baseValue": 15, "currentValue": 40, "improvementChecked": false },
+    "fastTalk": { "baseValue": 5, "currentValue": 40, "improvementChecked": false },
+    "intimidate": { "baseValue": 15, "currentValue": 45, "improvementChecked": false },
+    "persuade": { "baseValue": 10, "currentValue": 50, "improvementChecked": false },
+    "psychology": { "baseValue": 10, "currentValue": 55, "improvementChecked": true },
+    "climb": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "jump": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "swim": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "throw": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "stealth": { "baseValue": 20, "currentValue": 45, "improvementChecked": false },
+    "dodge": { "baseValue": 35, "currentValue": 35, "improvementChecked": false },
+    "fighting": {
+      "brawl": { "baseValue": 25, "currentValue": 50, "improvementChecked": false },
+      "custom": [
+        { "baseValue": 25, "currentValue": 40, "improvementChecked": false, "specialization": "Knife" }
+      ]
+    },
+    "firearms": {
+      "handgun": { "baseValue": 20, "currentValue": 55, "improvementChecked": true },
+      "rifle": { "baseValue": 25, "currentValue": 25, "improvementChecked": false },
+      "shotgun": { "baseValue": 25, "currentValue": 30, "improvementChecked": false },
+      "custom": [
+        { "baseValue": 15, "currentValue": 18, "improvementChecked": false, "specialization": "Bow" }
+      ]
+    },
+    "artCraft": { "baseValue": 5, "currentValue": 25, "improvementChecked": false, "specialization": "Photography" },
+    "disguise": { "baseValue": 5, "currentValue": 30, "improvementChecked": false },
+    "driveAuto": { "baseValue": 20, "currentValue": 45, "improvementChecked": false },
+    "firstAid": { "baseValue": 30, "currentValue": 30, "improvementChecked": false },
+    "locksmith": { "baseValue": 1, "currentValue": 45, "improvementChecked": false },
+    "mechanicalRepair": { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+    "electricalRepair": { "baseValue": 10, "currentValue": 15, "improvementChecked": false },
+    "operateHeavyMachinery": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "sleightOfHand": { "baseValue": 10, "currentValue": 30, "improvementChecked": false },
+    "pilot": { "baseValue": 1, "currentValue": 11, "improvementChecked": false, "specialization": "Boat" },
+    "history": { "baseValue": 5, "currentValue": 5, "improvementChecked": false },
+    "languageOwn": { "baseValue": 65, "currentValue": 65, "improvementChecked": false, "language": "English" },
+    "languageOther": [
+      { "language": "Latin", "baseValue": 1, "currentValue": 26, "improvementChecked": false }
+    ],
+    "law": { "baseValue": 5, "currentValue": 40, "improvementChecked": false },
+    "medicine": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "science": [
+      { "specialization": "Chemistry", "baseValue": 1, "currentValue": 21, "improvementChecked": false }
+    ],
+    "navigate": { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+    "survival": { "baseValue": 10, "currentValue": 10, "improvementChecked": false, "specialization": null },
+    "track": { "baseValue": 10, "currentValue": 40, "improvementChecked": false },
+    "creditRating": { "baseValue": 0, "currentValue": 30, "improvementChecked": true },
+    "cthulhuMythos": { "baseValue": 0, "currentValue": 4, "improvementChecked": false, "notes": "Saw too much" },
+    "psychoanalysis": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "ride": { "baseValue": 5, "currentValue": 5, "improvementChecked": false },
+    "customSkills": [
+      { "name": "Lip Reading", "baseValue": 1, "currentValue": 21, "improvementChecked": true }
+    ]
+  },
+  "combat": {
+    "weapons": [
+      { "name": "Revolver", "skill": "Firearms (Handgun)", "skillValue": 55, "damage": "1D10", "range": "15 yards", "attacks": 1, "ammo": 12, "malfunction": 100, "notes": "Six rounds" },
+      { "name": "Fists", "skill": "Fighting (Brawl)", "skillValue": 50, "damage": "1D3+DB", "range": "Touch", "attacks": 1, "ammo": null, "malfunction": null, "notes": "" }
+    ]
+  },
+  "conditions": {
+    "unconscious": false,
+    "dying": false,
+    "majorWound": true,
+    "temporaryInsanity": false,
+    "indefiniteInsanity": true
+  },
+  "pulpTalents": ["Keen eye", "", "Hard to rattle"],
+  "spellsAndMythos": { "cthulhuMythos": 6, "spells": ["Ward of the Threshold"] },
+  "wealth": { "spendingLevel": "Average", "cash": 72.5, "assets": "A small office and an old car", "notes": "Owes rent" },
+  "possessions": [
+    { "name": "Coat", "notes": "Long and worn" },
+    { "name": "Camera" }
+  ],
+  "backstory": {
+    "description": "Left the police after a falling out and took up private work.",
+    "personalDescription": "",
+    "ideology": "Everyone has something to hide.",
+    "significantPeople": "   ",
+    "meaningfulLocations": "The office above the laundry.",
+    "traits": "Dry humour, too much coffee.",
+    "encountersWithStrangeEntities": "Something in a warehouse he will not describe."
+  },
+  "contacts": [
+    { "name": "Rook", "role": "Fence", "notes": "Owes him a favour" }
+  ],
+  "appearance": { "age": 35, "height": "Tall", "weight": "Heavy", "eyes": "Brown", "hair": "Greying", "skin": "Weathered" },
+  "notes": "The partner works for the other side; Moran does not know yet."
+}

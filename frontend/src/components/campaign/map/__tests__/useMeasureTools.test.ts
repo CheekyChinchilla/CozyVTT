@@ -3,7 +3,7 @@
  * needs no end of its own; a finger has no hover, so its ruler drew nothing
  * once the finger lifted, and a player, whose ruler starts at their token,
  * could not measure by touch at all, since a finger's drag moved the map.
- * A finger or a pen now pins the ruler's end: for the DM the first tap sets
+ * A finger or a pen now pins the ruler's end: for the GM the first tap sets
  * the start, the second the end and the third starts again, and a drag
  * measures from where it lands to where it lifts; for a player a tap or a
  * drag pins the end. A mouse's ruler is as it was.
@@ -37,9 +37,9 @@ function on(square: Square, how: 'mouse' | 'tap' | 'drag' | 'pen'): PointerAt {
   };
 }
 
-function setup(who: 'DM' | 'PLAYER', options: { hasToken?: boolean; movableAt?: Square; holding?: { now: boolean } } = {}) {
+function setup(who: 'GM' | 'PLAYER', options: { hasToken?: boolean; movableAt?: Square; holding?: { now: boolean } } = {}) {
   const view = renderHook(() => useMeasureTools({
-    isDM: who === 'DM',
+    isGM: who === 'GM',
     markDirty: vi.fn(),
     measuresFromToken: () => options.hasToken ?? true,
     picksUpAt: (s) => options.movableAt !== undefined && s.x === options.movableAt.x && s.y === options.movableAt.y,
@@ -67,9 +67,9 @@ function setup(who: 'DM' | 'PLAYER', options: { hasToken?: boolean; movableAt?: 
 
 const ends = (t: { rulerOrigin: Square | null; rulerEnd: Square | null }) => ({ origin: t.rulerOrigin, end: t.rulerEnd });
 
-describe("the DM's ruler by touch", () => {
+describe("the GM's ruler by touch", () => {
   it('starts at the first tap, ends at the second, and starts again at the third', () => {
-    const { tools, press } = setup('DM');
+    const { tools, press } = setup('GM');
 
     press({ x: 1, y: 1 }, 'tap');
     expect(ends(tools())).toEqual({ origin: { x: 1, y: 1 }, end: null });
@@ -80,7 +80,7 @@ describe("the DM's ruler by touch", () => {
   });
 
   it('measures a drag from where it lands to where it lifts, and keeps it there', () => {
-    const { tools, press, drag } = setup('DM');
+    const { tools, press, drag } = setup('GM');
     press({ x: 1, y: 1 }, 'tap');
 
     expect(drag({ x: 2, y: 2 }, { x: 5, y: 2 })).toBe(true);
@@ -89,7 +89,7 @@ describe("the DM's ruler by touch", () => {
   });
 
   it('takes a pen\'s taps as a finger\'s, and a pen\'s press that lifts on another square as a drag\'s end', () => {
-    const { tools, press, drag } = setup('DM');
+    const { tools, press, drag } = setup('GM');
 
     press({ x: 1, y: 1 }, 'pen');
     press({ x: 3, y: 1 }, 'pen');
@@ -100,9 +100,9 @@ describe("the DM's ruler by touch", () => {
   });
 });
 
-describe("the DM's ruler with a mouse", () => {
+describe("the GM's ruler with a mouse", () => {
   it('starts at every click and never pins an end, which follows the pointer', () => {
-    const { tools, press } = setup('DM');
+    const { tools, press } = setup('GM');
 
     press({ x: 1, y: 1 }, 'mouse');
     press({ x: 4, y: 1 }, 'mouse');
@@ -112,7 +112,7 @@ describe("the DM's ruler with a mouse", () => {
   });
 
   it("lets go of a finger's end once the mouse moves over the map", () => {
-    const { tools, press } = setup('DM');
+    const { tools, press } = setup('GM');
     press({ x: 1, y: 1 }, 'tap');
     press({ x: 4, y: 1 }, 'tap');
 
@@ -164,7 +164,7 @@ describe("a player's ruler, which starts at their token", () => {
 
 describe('putting the ruler away', () => {
   it('forgets its start and its end', () => {
-    const { tools, press } = setup('DM');
+    const { tools, press } = setup('GM');
     press({ x: 1, y: 1 }, 'tap');
     press({ x: 4, y: 1 }, 'tap');
 
@@ -176,7 +176,7 @@ describe('putting the ruler away', () => {
 });
 
 describe('a token held by a tap', () => {
-  it.each([['the DM', 'DM'], ['a player', 'PLAYER']] as const)('takes the tap that puts it down ahead of the ruler, for %s, and then the ruler takes taps again', (_who, who) => {
+  it.each([['the GM', 'GM'], ['a player', 'PLAYER']] as const)('takes the tap that puts it down ahead of the ruler, for %s, and then the ruler takes taps again', (_who, who) => {
     const holding = { now: true };
     const { tools, press } = setup(who, { holding });
 
@@ -189,9 +189,9 @@ describe('a token held by a tap', () => {
   });
 });
 
-describe("the DM's start before its end", () => {
+describe("the GM's start before its end", () => {
   it("is shown after a finger's or a pen's first tap, until the end is set", () => {
-    const { tools, press } = setup('DM');
+    const { tools, press } = setup('GM');
 
     press({ x: 1, y: 1 }, 'tap');
     expect(tools().rulerStartByTouch).toBe(true);
@@ -202,7 +202,7 @@ describe("the DM's start before its end", () => {
   });
 
   it("is not for a mouse's click, whose end is the pointer", () => {
-    const { tools, press } = setup('DM');
+    const { tools, press } = setup('GM');
 
     press({ x: 1, y: 1 }, 'tap');
     press({ x: 2, y: 1 }, 'mouse');

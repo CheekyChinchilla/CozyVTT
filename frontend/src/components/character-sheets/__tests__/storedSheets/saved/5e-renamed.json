@@ -1,0 +1,360 @@
+{
+  "themeColor": "#6c2a4b",
+  "characterName": "Renamed in the editor",
+  "class": "class 3003",
+  "level": 5,
+  "race": "race 3005",
+  "proficiencyBonus": 3,
+  "stats": {
+    "strength": {
+      "score": 8,
+      "modifier": -1
+    },
+    "dexterity": {
+      "score": 10,
+      "modifier": 0
+    },
+    "constitution": {
+      "score": 12,
+      "modifier": 1
+    },
+    "intelligence": {
+      "score": 14,
+      "modifier": 2
+    },
+    "wisdom": {
+      "score": 16,
+      "modifier": 3
+    },
+    "charisma": {
+      "score": 18,
+      "modifier": 4
+    }
+  },
+  "playerName": "playerName 3019",
+  "background": "background 3020",
+  "alignment": "alignment 3021",
+  "experiencePoints": 19,
+  "inspiration": true,
+  "savingThrows": {
+    "strength": {
+      "proficient": false,
+      "bonus": 20,
+      "otherBonus": 21
+    },
+    "dexterity": {
+      "proficient": true,
+      "bonus": 26,
+      "otherBonus": 23
+    },
+    "constitution": {
+      "proficient": false,
+      "bonus": 26,
+      "otherBonus": 25
+    },
+    "intelligence": {
+      "proficient": true,
+      "bonus": 32,
+      "otherBonus": 27
+    },
+    "wisdom": {
+      "proficient": false,
+      "bonus": 32,
+      "otherBonus": 29
+    },
+    "charisma": {
+      "proficient": true,
+      "bonus": 38,
+      "otherBonus": 31
+    }
+  },
+  "skills": {
+    "acrobatics": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 39,
+      "otherBonus": 33
+    },
+    "animalHandling": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 44,
+      "otherBonus": 35
+    },
+    "arcana": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 45,
+      "otherBonus": 37
+    },
+    "athletics": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 44,
+      "otherBonus": 39
+    },
+    "deception": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 51,
+      "otherBonus": 41
+    },
+    "history": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 51,
+      "otherBonus": 43
+    },
+    "insight": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 54,
+      "otherBonus": 45
+    },
+    "intimidation": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 57,
+      "otherBonus": 47
+    },
+    "investigation": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 57,
+      "otherBonus": 49
+    },
+    "medicine": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 60,
+      "otherBonus": 51
+    },
+    "nature": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 61,
+      "otherBonus": 53
+    },
+    "perception": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 64,
+      "otherBonus": 55
+    },
+    "performance": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 67,
+      "otherBonus": 57
+    },
+    "persuasion": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 69,
+      "otherBonus": 59
+    },
+    "religion": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 69,
+      "otherBonus": 61
+    },
+    "sleightOfHand": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 69,
+      "otherBonus": 63
+    },
+    "stealth": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 71,
+      "otherBonus": 65
+    },
+    "survival": {
+      "proficient": false,
+      "expertise": true,
+      "bonus": 76,
+      "otherBonus": 67
+    }
+  },
+  "customSkills": [
+    {
+      "name": "name 3071",
+      "ability": "strength",
+      "proficient": false,
+      "expertise": true,
+      "otherBonus": -7
+    }
+  ],
+  "passivePerception": 79,
+  "passivePerceptionBonus": 5,
+  "armorClass": 74,
+  "initiative": -2,
+  "initiativeBonus": -2,
+  "initiativeAdvantage": false,
+  "speed": 76,
+  "hp": {
+    "maximum": 78,
+    "current": 78,
+    "temporary": 79
+  },
+  "conditions": [
+    "conditions 3083"
+  ],
+  "exhaustionLevel": 4,
+  "hitDice": [
+    {
+      "class": "class 3085",
+      "total": "total 3086",
+      "die": "die 3087",
+      "maximum": 85,
+      "remaining": 85
+    }
+  ],
+  "deathSaves": {
+    "successes": 2,
+    "failures": 3
+  },
+  "attacks": [
+    {
+      "name": "name 3092",
+      "attackBonus": 90,
+      "damageRoll": "damageRoll 3094",
+      "damageType": "damageType 3095",
+      "range": 93,
+      "properties": [
+        "properties 3097"
+      ],
+      "notes": "notes 3098",
+      "additionalDamage": [
+        {
+          "label": "label 3099",
+          "damageRoll": "damageRoll 3100",
+          "damageType": "damageType 3101"
+        }
+      ]
+    }
+  ],
+  "currency": {
+    "cp": 99,
+    "sp": 100,
+    "ep": 101,
+    "gp": 102,
+    "pp": 103
+  },
+  "inventory": [
+    {
+      "name": "name 3107",
+      "quantity": 105,
+      "weight": 106,
+      "notes": "notes 3110",
+      "equippable": true,
+      "equipped": false,
+      "requiresAttunement": true,
+      "attuned": false,
+      "value": 108
+    }
+  ],
+  "proficiencies": {
+    "armor": "armor 3112",
+    "weapons": "weapons 3113",
+    "tools": "tools 3114",
+    "languages": "languages 3115"
+  },
+  "proficienciesAndLanguages": [
+    "armor 3112",
+    "weapons 3113",
+    "tools 3114",
+    "languages 3115"
+  ],
+  "featuresAndTraits": [
+    {
+      "name": "featuresAndTraits 3117",
+      "description": ""
+    },
+    {
+      "name": "name 3118",
+      "description": "description 3119"
+    }
+  ],
+  "spellcasting": {
+    "class": "class 3120",
+    "ability": "ability 3121",
+    "spellSaveDC": 28,
+    "spellAttackBonus": 19,
+    "spellSaveDCOtherBonus": 17,
+    "spellAttackOtherBonus": 16,
+    "cantrips": [
+      "cantrips 3126"
+    ],
+    "slots": {
+      "1": {
+        "total": 20,
+        "expended": 19
+      },
+      "2": {
+        "total": 1,
+        "expended": 0
+      },
+      "3": {
+        "total": 3,
+        "expended": 2
+      },
+      "4": {
+        "total": 5,
+        "expended": 4
+      },
+      "5": {
+        "total": 7,
+        "expended": 6
+      },
+      "6": {
+        "total": 9,
+        "expended": 8
+      },
+      "7": {
+        "total": 11,
+        "expended": 10
+      },
+      "8": {
+        "total": 13,
+        "expended": 12
+      },
+      "9": {
+        "total": 15,
+        "expended": 14
+      }
+    },
+    "spells": [
+      {
+        "level": 5,
+        "name": "name 3146",
+        "prepared": true,
+        "ritual": false,
+        "concentration": true
+      }
+    ]
+  },
+  "appearance": {
+    "age": "age 3147",
+    "height": "height 3148",
+    "weight": "weight 3149",
+    "eyes": "eyes 3150",
+    "skin": "skin 3151",
+    "hair": "hair 3152"
+  },
+  "personality": {
+    "traits": "traits 3153",
+    "ideals": "ideals 3154",
+    "bonds": "bonds 3155",
+    "flaws": "flaws 3156"
+  },
+  "backstory": "backstory 3157",
+  "alliesAndOrganizations": {
+    "name": "name 3158",
+    "description": "description 3159"
+  },
+  "treasure": "treasure 3160",
+  "additionalFeaturesAndTraits": "additionalFeaturesAndTraits 3161"
+}

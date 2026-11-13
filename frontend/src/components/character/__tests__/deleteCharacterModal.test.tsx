@@ -11,7 +11,7 @@ import DeleteCharacterModal from '../DeleteCharacterModal';
 import type { Campaign, CharacterSummary } from '@/types';
 
 const character = {
-  id: 'char-1', userId: 'user-1', name: 'Aldra', gameSystem: 'DND_5E', campaignId: 'camp-1',
+  id: 'char-1', userId: 'user-1', name: 'Aldra', gameSystem: 'FIFTH_EDITION', campaignId: 'camp-1',
   tokenImageUrl: null, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 } as unknown as CharacterSummary;
 const campaign = (status: string) => ({ id: 'camp-1', name: 'Dragons of the North', status }) as unknown as Campaign;

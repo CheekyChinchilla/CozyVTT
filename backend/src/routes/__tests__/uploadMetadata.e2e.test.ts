@@ -134,13 +134,13 @@ describe('POST /api/assets/upload metadata', () => {
 
   it('stores the name and description trimmed, and each tag once', async () => {
     const res = await upload([
-      ['name', '  Goblin Boss  '],
+      ['name', '  Goblin  '],
       ['description', '  Leader of the cave  '],
       ['tags', ' goblin, boss ,goblin,, '],
     ]);
     expect(res.status).toBe(201);
     const asset = await prisma.asset.findUniqueOrThrow({ where: { id: res.body.asset.id } });
-    expect(asset.name).toBe('Goblin Boss');
+    expect(asset.name).toBe('Goblin');
     expect(asset.description).toBe('Leader of the cave');
     expect(asset.tags).toEqual(['goblin', 'boss']);
   });

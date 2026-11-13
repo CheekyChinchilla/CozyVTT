@@ -6,7 +6,257 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each release are in `CHANGELOG.md` at its tag, such as [v1.5.4](https://github.com/CheekyChinchilla/CozyVTT/blob/v1.5.4/CHANGELOG.md).
 
+Game systems and the game master's role are called by their current names throughout.
+
 ---
+
+## [1.7.0] - 2026-11-12
+
+### Upgrading from 1.6.0
+
+**This release changes your database. Back up before you upgrade.** The names CozyVTT stores for its game systems and for the game master's role have changed, and the Horror d100 character sheet has been rebuilt on the open d100 rules. Every campaign, character and template you have is kept. Every saved Horror d100 character is converted to the rebuilt sheet and keeps its original values beside the new ones. Once you have upgraded, the only way back to 1.6.0 is the backup you take now.
+
+1. Back up, with the stack running (see [Database Backups](docs/DEPLOYMENT.md#database-backups)):
+
+   ```bash
+   ./backend/scripts/backup.sh
+   ```
+
+   It ends with `Backup complete:` and the file it wrote, `./backups/cozyvtt_YYYYMMDD_HHMMSS.sql.gz`. Copy the `backend/uploads/` folder somewhere safe as well. A backup made with **Create Backup** in the Admin Panel holds both and does as well.
+
+2. Rebuild and restart:
+
+   ```bash
+   git pull origin main
+   docker compose up -d --build
+   ```
+
+On the first start two things happen by themselves, in this order, before CozyVTT answers anyone:
+
+1. **A database migration renames the stored values.** Each campaign, character, character template and creature keeps its game system under the system's new name, and each GM keeps the role under its new name. The GM's chat messages, the drawings for the GM alone, and the stat blocks of creatures and tokens are renamed the same way. Anything a script stored for the unfinished fourth game system is kept and now has no game system. No row is deleted, and the migration is undone as a whole if any part of it fails.
+2. **The backend converts every saved Horror d100 character and character template to the rebuilt sheet,** one at a time. **What you will notice** below says what changes on them. Sheets of the other systems are left as they are.
+
+The first start takes longer than usual on a large instance. The migration writes the campaigns, characters, character templates and creatures out again, so the database's disk needs free space of about their size for it; if the disk fills, the migration fails with nothing changed. To see how it went:
+
+```bash
+docker compose logs backend | grep -i -e migrat -e "Horror d100"
+```
+
+You should see `Migrations completed successfully`. If the instance has Horror d100 characters or templates from before this release, a line reading `Converted the stored Horror d100 sheets to the rebuilt sheet` follows, with how many were converted (`converted`), how many of those kept a value it could not place (`keptValues`) and how many could not be converted (`failed`). Each sheet that kept such a value has a line of its own with the sheet's id, and so does each that could not be converted. A sheet that could not be converted is still shown in the rebuilt shape, and every later start tries it again.
+
+There is no new or removed setting, and no manual step. The backend and frontend containers are rebuilt with the new code. `nginx/nginx.conf` and `docker-compose.yml` do not change, so `git pull` does not stop at your own edits to them, and a proxy of your own in place of the bundled nginx needs nothing new.
+
+Coming from 1.5.4 or earlier, read the **Upgrading** notes of every release in between too, oldest first. The commands are the same, and the migration and the conversion run whatever version you come from.
+
+An install without Docker upgrades with the commands in [Without Docker](docs/DEPLOYMENT.md#without-docker): its `npx prisma migrate deploy` runs the migration, and the restart after it converts the sheets.
+
+**If the migration fails.** The backend's log shows `Migration failed`, and `docker compose ps` shows the backend as `Restarting`. Your data is as it was before the upgrade. The database has noted a migration that did not finish, though, and the backend does not start until you clear that note and let the migration run again. The log gives the cause once, at the first failure, and the section linked below shows how to find it. Where there is a cause you can remove, such as a full disk, remove it first. Then:
+
+```bash
+docker compose run --rm -u appuser --entrypoint ./node_modules/.bin/prisma backend migrate resolve --rolled-back 20261112013825_name_systems_and_gm_role
+docker compose up -d
+```
+
+The first command should say the migration is marked as rolled back. The backend may then take a minute or two to come up, after which `docker compose ps` shows it as `healthy`. `docker compose exec` is no use here, because it needs a running backend. Without Docker, run `npx prisma migrate resolve --rolled-back 20261112013825_name_systems_and_gm_role` in the `backend` folder, then `npx prisma migrate deploy` again. If the migration fails a second time, go back to 1.6.0 as described next and open an issue with the last lines of `docker compose logs backend`. See [The backend keeps restarting, and its log says `Migration failed`](docs/DEPLOYMENT.md#the-backend-keeps-restarting-and-its-log-says-migration-failed).
+
+**Going back to 1.6.0 needs the backup from step 1.** 1.6.0 cannot read a database this release has renamed, so checking out the old code is not enough. From the CozyVTT folder, with your own backup's name in the second line:
+
+```bash
+docker compose stop backend
+./backend/scripts/restore.sh ./backups/cozyvtt_20260101_030000.sql.gz
+git checkout v1.6.0
+docker compose up -d --build
+```
+
+The backend is stopped first so that this release cannot upgrade the restored database again. The restore script asks you to type `yes`, and prints `Restore complete` when it is done; leave out the restart it then suggests, since the last line starts 1.6.0. Everyone signs in again afterwards. With a backup from the Admin Panel, a `.zip`, use these three lines in place of the second, then delete `restore-me.sql.gz`:
+
+```bash
+(umask 077; sudo unzip -p backend/backups/backup-2026-01-01T03-00-00.zip database.sql | gzip > restore-me.sql.gz)
+./backend/scripts/restore.sh restore-me.sql.gz
+sudo unzip -o backend/backups/backup-2026-01-01T03-00-00.zip 'uploads/*' -d backend/
+```
+
+The restore also takes back everything done since the upgrade. After going back, reload every open CozyVTT tab, since a page still open from this release sends 1.6.0 requests it refuses. To upgrade again later, run `git checkout main` before `git pull origin main`. Without Docker, stop the backend, restore the backup with `DATABASE_URL` set as [Via the included scripts](docs/DEPLOYMENT.md#via-the-included-scripts) shows, run `git checkout v1.6.0`, then run the commands in [Without Docker](docs/DEPLOYMENT.md#without-docker) from `cd backend` on, which build and start 1.6.0.
+
+**Campaign exports and character files go forward only.** A campaign archive or a character file made by any older version imports into this release with its game system, and a Horror d100 character file is converted as it is imported. The files this release writes carry the new names. 1.6.0 and older refuse such a character file, and import such an archive with no game system and without its drawings for the GM alone.
+
+**Backups from older versions still restore.** A backup made by any version from 1.5.0 to 1.6.0 restores into this release and ends up renamed and converted, as an upgraded instance does. The Admin Panel's restore does that before it finishes. After `restore.sh`, restart the backend straight away, because the running backend cannot read the restored database until it has. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
+
+#### What you will notice
+
+- **People who registered, and the administrator the setup wizard made, show when they last signed in.** In the Admin Panel's **Users** tab, an account that still shows **Never signed in** gets its date the next time its owner opens CozyVTT.
+
+- **Someone who uploaded a campaign picture but does not run the campaign may be asked to try again later before deleting or moving it.** That happens while handouts from before 1.6.0 are still being checked for the pictures they show.
+
+- **The game systems are now called 5E (SRD 5.1), Fantasy d20 (ORC) and Horror d100.** Every campaign, character and template keeps its system under the new name.
+
+- **The campaign's game master is now called the GM.** A player sees it in the **Campaign Roster**, in **Campaign Info** and in the chat's **To** list.
+
+- **The Admin Panel's Status card may say Degraded where it said Healthy.** Its **WS** part now tries a live connection from your browser, so behind a proxy that does not pass WebSocket connections it says **Polling only**. See [Minimum proxy requirements](docs/DEPLOYMENT.md#minimum-proxy-requirements).
+
+- **A Horror d100 character's characteristics are on a new scale: each old number divided by 5 and rounded to the nearest whole number.** A STR of 60 is now 12, and a click on it rolls at five times that, 60%.
+
+- **A Horror d100 character's APP is now CHA.** Its number is converted like the others, and EDU is now optional.
+
+- **Luck on a Horror d100 sheet is a roll at five times POW.** The Luck score a character had is kept in **Original values** and is no longer used.
+
+- **Every Horror d100 skill the rebuilt sheet lists keeps the value it had.** Some sit under new names, such as **Insight** for Psychology and **Fine Manipulation** for Locksmith.
+
+- **Charm, Intimidate, Survival and Art/Craft are under Own Skills where a character had used them.** One left at its starting value, with no specialisation, note or tick, is off the sheet and still listed in **Original values**.
+
+- **A Horror d100 character's hit points and power points are worked out again from the new characteristics.** The damage taken and the points spent are kept.
+
+- **A Horror d100 character's maximum Sanity is now 100 less its Knowledge (Blasphemous Lore), and at most 99.** Current Sanity above the new maximum comes down to it, and the Sanity numbers the character had are in **Original values**.
+
+- **MOV is 10 on every converted Horror d100 character.** You can change it in the editor.
+
+- **Each filled box of the Horror d100 Backstory tab is now a titled note on the Story tab.** So are a character's talents, its long-term insanity tick and the notes it had under Luck, and notes can be added, renamed, moved and removed.
+
+- **Original values, at the bottom of a converted character's Story tab, lists the numbers it had before the upgrade.** The character's owner and the campaign's GM see it, and nobody can change it. See [Horror d100](docs/USER_GUIDE.md#horror-d100).
+
+#### What to do afterwards, if it applies to you
+
+- **Reload any CozyVTT page left open through the upgrade.** Until you do, it can lose the GM's controls, and it shows a Horror d100 sheet wrongly and cannot save one.
+
+- **If you play Horror d100, ask each player to look over their character.** Any number on it can be set to what your table wants, and **Original values** shows what it was. See [Horror d100](docs/USER_GUIDE.md#horror-d100).
+
+- **If the backend log names a Horror d100 sheet that kept values it could not place, open that character.** The values are listed under **Kept as written** in its **Original values**, for its owner or the GM to put where they belong.
+
+- **If you copied very deeply nested folders into `backend/uploads/` by hand, make a new backup after the upgrade.** A restore now refuses a backup holding a name over 1,024 bytes; this version's **Create Backup** leaves such a file out and logs its name. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
+
+- **If a campaign has a picture or sound uploaded before 1.5.2 under a file name over 500 characters, export it again.** An archive made before this version leaves that file out when it is imported. See [Campaign Export & Import](docs/GM_GUIDE.md#campaign-export--import).
+
+- **If other people use your instance, keep About CozyVTT where they can open it.** The licences of the game rules CozyVTT uses ask for their credits, which that window shows, so a change of your own to the app must leave it in place. See [the hardening checklist](docs/DEPLOYMENT.md#hardening-checklist).
+
+### Added
+
+- **The GM can make a member a spectator, or a player again.** Choose **Player** or **Spectator** beside them on the **Members** tab of **Campaign Settings**, and their open page follows at once. Each button on a member's row is now big enough for a finger. See [Changing a member's role](docs/GM_GUIDE.md#changing-a-members-role).
+
+- **You can change your email address from your Profile & Settings page.** **Change Email** asks for your current password, and the old address is sent a notice when your instance sends email. Five tries an hour are allowed. See [Changing Your Email Address](docs/USER_GUIDE.md#changing-your-email-address).
+
+- **A player with no token on a lit map is told why it is black.** A line at the foot of the map tells them to ask the GM for a token to see through, in the spirit realm too. **Preview Player View** shows it. See [Why parts of the map are dark](docs/PLAYER_GUIDE.md#why-parts-of-the-map-are-dark).
+
+- **A 5E character can roll initiative with advantage.** Tick **Advantage on initiative** on the sheet's **Combat** tab, and initiative rolls two d20s and keeps the higher. A level of exhaustion or the Poisoned condition on the sheet cancels it. See [Rolling Your Own Initiative](docs/PLAYER_GUIDE.md#rolling-your-own-initiative).
+
+- **About CozyVTT shows the credits for the game rules it uses, and CozyVTT's own licence notices.** Open it from the dashboard, your profile, the sign-in page or a campaign's **Campaign Info**. See [Credits](docs/USER_GUIDE.md#credits).
+
+- **A Horror d100 sheet lists armor.** Each piece has a name, an armor value and notes, on the **Combat** tab. See [Horror d100](docs/USER_GUIDE.md#horror-d100).
+
+### Changed
+
+- **Changes for scripts and integrations.** See [API changes in 1.7.0](docs/api-changes/1.7.0.md).
+
+- **CozyVTT stores the game systems and the GM's role under its own names.** The upgrade renames them in your database, and campaign archives and character files written from now on carry the new names. Files from older versions still import; an older version does not read the new ones in full. See [Importing a Campaign](docs/GM_GUIDE.md#importing-a-campaign).
+
+- **The Horror d100 sheet is rebuilt on the open d100 rules.** Characteristics are on the rules' scale, with CHA in place of APP and EDU optional, and each rolls at five times its value. Hit points, power points, the damage modifier and maximum Sanity follow the rules' formulas. See [Horror d100](docs/USER_GUIDE.md#horror-d100).
+
+- **Every saved Horror d100 character and template is converted to the rebuilt sheet.** Each keeps its damage taken, its text and the value of every skill the rebuilt sheet has, and **Original values** on the Story tab shows the owner and the GM every number it had. See [Horror d100](docs/USER_GUIDE.md#horror-d100).
+
+- **The initiative tracker shows you its up and down arrows while you move through a combatant's row with the keyboard.** They show over the combatant's picture. A screen reader now names the combatant on each row's dice button and bin. See [Managing Turn Order](docs/GM_GUIDE.md#managing-turn-order).
+
+- **Mapmaker adds your rooms' walls in one step when you save.** A save with many rooms can no longer be stopped part-way by the request limit everyone on one internet connection shares. Mapmaker says how many walls the map could not take, and why. See [Drawing a map](docs/GM_GUIDE.md#drawing-a-map).
+
+- **Mapmaker shows a texture while you drag.** A **Brush** stroke, a filled **Rectangle** or **Ellipse** and a **Room**'s floor showed in their plain colour until you let go. They now show in the **Texture** they are painted in. See [Drawing a map](docs/GM_GUIDE.md#drawing-a-map).
+
+- **The backend no longer installs the unzipper package and the ten packages it brought.** Campaign imports and backup restores read archives with yauzl, which brings one. Every archive CozyVTT has written is read as before.
+
+- **Horror d100 skills are the open rules' list, in six categories, each with its base chance.** Skills with specialties, such as Firearm, Knowledge and Science, take the rows you add, **Own Skills** takes any other skill, and every skill has a line for notes. A value can be anything from 0 up. See [Horror d100](docs/USER_GUIDE.md#horror-d100).
+
+- **The Horror d100 Backstory tab is now the Story tab, with notes you title yourself.** **Add Note** adds one, and each can be renamed, moved up or down and removed. See [Horror d100](docs/USER_GUIDE.md#horror-d100).
+
+- **A Horror d100 weapon's damage takes `+dm` for the damage modifier.** `+DB` rolls it too, and a modifier of None adds nothing. **Add Weapon** starts a weapon as a fist, **Brawl** at `1D3+dm`, and each weapon has a line for notes. See [Horror d100](docs/USER_GUIDE.md#horror-d100).
+
+- **A Horror d100 roll is named for what it tests.** A click on STR rolls Effort, and the other characteristics roll Stamina, Idea, Luck, Agility, Charm and Knowledge, each at five times the characteristic. SIZ has no roll. See [Rolling from your sheet](docs/PLAYER_GUIDE.md#rolling-from-your-sheet).
+
+- **A Horror d100 character's hit points can go below 0.** The **−** and **−5** buttons on the roster card stopped at 0. The open rules keep count below it, so the card now shows a negative number. See [Campaign Info](docs/PLAYER_GUIDE.md#left-sidebar--campaign-info).
+
+- **Opening and saving a Horror d100 sheet changes only what you edit.** The editor used to work the derived numbers out again each time it opened.
+
+- **The token editor offers four Horror d100 conditions: Major Wound, Dying, Unconscious and Temporary Insanity.** The rebuilt sheet has no fifth. A token that carries it keeps it, shown as one you typed, and a character's tick for it became a note on the Story tab. See [Editing Tokens During Play](docs/GM_GUIDE.md#editing-tokens-during-play).
+
+- **A Horror d100 creature's sixth characteristic is labelled CHA.** It was APP, and no creature's numbers change. See [Saving Throws and Skills](docs/GM_GUIDE.md#saving-throws-and-skills).
+
+- **The example characters are rewritten.** The ready-made characters and the example character files are new, the Horror d100 detective spends the skill points the open d100 rules give a starting character, and the 5E **Background** box and **Create Campaign**'s name box show new examples. Characters you already made from them stay as they are.
+
+- **The token editor's Effects list no longer offers Hexed.** A token already marked **Hexed** keeps it, shown as a condition of your own. See [Editing Tokens During Play](docs/GM_GUIDE.md#editing-tokens-during-play).
+
+- **CozyVTT calls the campaign's game master the GM everywhere.** The screens, messages and guides say GM, and the invitation email, **Create Campaign** and an empty dashboard say game master. See the [GM Guide](docs/GM_GUIDE.md).
+
+- **The 5E sheet's text for each level of exhaustion is reworded.** The effects are the same. The examples under the spell save DC, in the Creature Library's and the Token Manager's name boxes and for a saved roll's name are new.
+
+- **The Creature Library shows the SRD 5.1's credit wherever its creatures may be shown.** The credit is the SRD's own sentence in larger type, with a line saying CozyVTT reformatted and reworded the material, and it shows for **Favorites** and for copies too. The source filter's **SRD (Official)** is now **SRD 5.1**.
+
+- **The three game systems have new names.** The fifth edition fantasy system is **5E (SRD 5.1)**, the three-action fantasy system is **Fantasy d20 (ORC)**, whose first **Theme Color** choice is now called **Royal Blue**, and the percentile horror system is **Horror d100**. See [Character Sheets by Game System](docs/USER_GUIDE.md#character-sheets-by-game-system).
+
+- **The third-party credits are now in `THIRD_PARTY_CREDITS.md`.** The file was `THIRD_PARTY_LICENSES.md`; its content is the same, and a bookmark to the old name needs the new one.
+
+### Removed
+
+- **The unfinished sheet for a fourth game system is gone.** The app never offered it, but a script could make campaigns, characters, templates and creatures for it. All are kept, with no game system: such a campaign plays as one with none, and such a character or template opens as a Flexible sheet. See [Unsupported system](docs/USER_GUIDE.md#unsupported-system).
+
+- **The Horror d100 sheet no longer has half and fifth values, a Luck score, Build, or a lore box of its own.** A character's old Luck score, Build and MOV are in **Original values**, and Knowledge (Blasphemous Lore) on the Skills tab holds the larger of the lore skill and the old box, at most 99. See [Horror d100](docs/USER_GUIDE.md#horror-d100).
+
+### Fixed
+
+- **A token moved just after you lost control of it goes back where it stands on your screen.** A move with the arrow keys, or a drag your screen still allowed, was refused but stayed where you put it until the token moved again or the page was reloaded.
+
+- **A campaign page that reconnects after you left, were removed or the campaign was deleted says so and goes to your dashboard.** It stayed on a table that no longer worked. Opening a campaign you are not in does the same. See [If you leave or are removed](docs/PLAYER_GUIDE.md#if-you-leave-or-are-removed).
+
+- **A campaign page joining the table as you leave the campaign says you left.** It used to say you were removed.
+
+- **The setup wizard's administrator and people who registered now show when they last signed in.** In the Admin Panel's **Users** tab they showed **Never signed in**, with **Invite** offered. Accounts already in use correct themselves when their owner next opens CozyVTT. See [User Accounts](docs/USER_GUIDE.md#user-accounts).
+
+- **Someone who uploaded a campaign picture but does not run the campaign, a former GM among them, can no longer delete or move it while a handout from before 1.6.0 still shows it.** Those handouts are checked first, and you are asked to try again later while some are unchecked. See [Viewing and Managing Assets](docs/USER_GUIDE.md#viewing-and-managing-assets).
+
+- **The notes under the portrait in the sheet editors stay under the portrait.** On a wider screen **Saves as personal token** ran into the field beside it, such as the Horror d100 **Age** box. They now wrap to the portrait's width.
+
+- **A Fantasy d20 sheet waits for you to choose its Class DC's Key Attribute.** New sheets started with Strength, and on a sheet with none the editor showed a different Class DC from the sheet. Both now read 10 until you choose one. See [Fantasy d20 (ORC)](docs/USER_GUIDE.md#fantasy-d20-orc).
+
+- **A Horror d100 creature can have characteristics over 30 and skills over 50.** The Creature Library and the token editor would not save them. A characteristic and a skill can now each be up to 999. See [Saving Throws and Skills](docs/GM_GUIDE.md#saving-throws-and-skills).
+
+- **In a 5E campaign, a creature made for another game system rolls a plain d20 for initiative.** Its Dexterity was read as a 5E score, which could give it up to +10. See [Adding Combatants](docs/GM_GUIDE.md#adding-combatants).
+
+- **Mapmaker's notice of room walls not added after a save reads correctly.** It had a capital letter mid-sentence when none were added, and a second full stop after some reasons. On a map that holds as many walls as it can, it now says to remove some before drawing the rest. See [Drawing a map](docs/GM_GUIDE.md#drawing-a-map).
+
+- **A turn the server refuses shows the token facing the way the server holds it, another member's turn included.** If someone else turned the token while your turn waited, the refusal showed the facing from before your turn until something on the map changed again. See [Turning a Token](docs/GM_GUIDE.md#turning-a-token).
+
+- **A quick third tap or click where you ended a wall line starts a new line there.** It did nothing with a mouse, on a zoomed-out touch screen or with **Snap to grid** off. A double tap or double-click no longer drops a wall polygon under three corners. See [The Wall Drawing Tool](docs/GM_GUIDE.md#the-wall-drawing-tool).
+
+- **The Admin Panel's Status card checks live connections from your browser.** Its **WS** light was green whenever the backend ran, even behind a proxy that refused live connections. Each part now says **Working** or **Down** in words, and **WS** can say **Polling only**. See [Health Check Endpoint](docs/DEPLOYMENT.md#health-check-endpoint).
+
+- **On a touch screen, Mapmaker shows the see-through stamp as soon as your finger touches the map.** It showed only once the finger slid, so you could not see where a tap would paint the stamp before lifting. See [Drawing a map](docs/GM_GUIDE.md#drawing-a-map).
+
+- **Done in Mapmaker finishes the polygon or curve you are drawing.** It dropped them. Each is painted as `Enter` paints it, and a polygon with fewer than three corners is kept for when you open Mapmaker again. See [Drawing a map](docs/GM_GUIDE.md#drawing-a-map).
+
+- **Mapmaker adds your rooms' walls where their floors are, even if the map's size is changed on another device while you save.** The walls went in at the size your screen still showed, away from the floors.
+
+- **Mapmaker puts down a selection you moved or pasted, and keeps it in your draft, when you switch to another tab or app.** A phone that closed the page in the background lost it, with no draft at all if it was your only change. See [Drawing a map](docs/GM_GUIDE.md#drawing-a-map).
+
+- **A damaged or hand-made backup or campaign archive no longer stops the server.** A backup holding a file name the server cannot write ended the backend, and an archive the import refused could too. Both are now refused with the reason, and nothing changes. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
+
+- **A damaged campaign archive is refused with a plain message.** One whose directory placed a file far past its end was answered as a server problem. The import window now says "The file is not a ZIP archive, or it is damaged." See [Campaign Export & Import](docs/GM_GUIDE.md#campaign-export--import).
+
+- **A campaign exports and imports with a picture or sound uploaded before 1.5.2 under a file name over 500 characters.** The import left that file out. The archive now carries the name shortened to 255 characters. See [Campaign Export & Import](docs/GM_GUIDE.md#campaign-export--import).
+
+- **After you remove a member, the keyboard focus stays in the Members list.** It fell to the page, so you had to tab from the top again. It now moves to the next member, or the one above when you removed the last. See [Removing a Player](docs/GM_GUIDE.md#removing-a-player).
+
+- **A creature's ability score of 0 stays 0 in the Creature Library and the token editor.** Typing 0, or emptying the box, changed it to 10. An emptied box now keeps its score, and one past the highest allowed drops to it when you leave the box. See [Saving Throws and Skills](docs/GM_GUIDE.md#saving-throws-and-skills).
+
+- **Campaign Info names your role as Player or Spectator.** **Your role** showed it in capitals, as PLAYER or SPECTATOR.
+
+- **What you draw with the wall tool on a touch screen shows at once.** A **Polygon**'s corners and edges stayed hidden, and walls kept their old colour after you picked a **Wall color**, until something else redrew the map. See [The Wall Drawing Tool](docs/GM_GUIDE.md#the-wall-drawing-tool).
+
+- **A creature's score boxes show the whole score.** In **Edit Token** a score of two or more digits could be cut off at the edge of its box. Scores of up to four digits now fit there and in the Creature Library's form. See [Editing Tokens During Play](docs/GM_GUIDE.md#editing-tokens-during-play).
+
+- **A backend stopped while it is still starting no longer takes ten and a half minutes to stop.** Stopped, restarted or upgraded while it waited for the database or ran its migrations, it ran until Docker ended it at that limit. It now stops once that step is done. See [Stopping and Starting](docs/DEPLOYMENT.md#stopping-and-starting).
+
+- **A roll's subtracted modifier shows with a minus.** Under a roll such as `1d20-1`, the small box for the modifier read "+1". It now reads "-1", and a multiplied or divided one reads "×2" or "÷2".
+
+- **The roll menu heads a Horror d100 character's first rolls Characteristics.** It read **Abilities**, which the sheet does not call them.
+
+- **Add Combatant names each token's kind as NPC, Player or Object.** It read "Npc".
+
+- **A GM's own secret roll says it is hidden from the players.** It said the GM could still see it, which is how it reads for a player's roll.
 
 ## [1.6.0] - 2026-11-09
 
@@ -36,9 +286,9 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 - **The chat has a To list above the message box.** It starts at **Everyone**, so a message goes to the whole table until someone chooses a person.
 - **On a phone or a tablet, the map's toolbar, the menus and many buttons are bigger, and text in boxes is at least 16 pixels high.** With a mouse they look as before.
 - **Players can draw on the map.** **Players may draw** is on in every campaign after the upgrade (turn it off in **Campaign Settings**, on the **General** tab), and drawings show over fog and the dark for everyone, so a note to keep from players needs **Only I can see this**.
-- **A D&D 5e or Pathfinder 2e sheet you can roll from has Roll mode in its header.** It starts at **Normal** each time the sheet opens, so a click rolls as before.
+- **A 5E or Fantasy d20 sheet you can roll from has Roll mode in its header.** It starts at **Normal** each time the sheet opens, so a click rolls as before.
 - **In a long session the chat holds the newest 400 messages.** **Load More**, at the top of the chat, brings back older ones.
-- **A player can no longer turn their token while the session is paused or has ended.** The DM turns any token at any time.
+- **A player can no longer turn their token while the session is paused or has ended.** The GM turns any token at any time.
 - **Below 1,024 pixels wide the campaign page has a phone layout, and the Desktop Required notice is gone.** That is a phone, most tablets held upright, or a narrow browser window at the usual text size.
 - **A player's Asset Library no longer lists the pictures of maps the table is not on.** Each comes back while the table is on a map using it.
 - **Just after the upgrade, a map picture in an older handout may not load for players.** The server reads each handout once, a few at a time as the table plays; opening the handout again afterwards shows the picture.
@@ -52,15 +302,15 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 ### Added
 
-- **Whisper to one person in the chat.** ([#45](https://github.com/CheekyChinchilla/CozyVTT/issues/45)) Choose someone in the **To** list above the chat box, or type `/w` and their name; only the two of you see it, and the DM sees a whisper only when they are one of the two. Whispers are stored like the rest of the chat, so whoever runs the server can read them in its database and backups. See [Whispering to one person](docs/USER_GUIDE.md#whispering-to-one-person).
+- **Whisper to one person in the chat.** ([#45](https://github.com/CheekyChinchilla/CozyVTT/issues/45)) Choose someone in the **To** list above the chat box, or type `/w` and their name; only the two of you see it, and the GM sees a whisper only when they are one of the two. Whispers are stored like the rest of the chat, so whoever runs the server can read them in its database and backups. See [Whispering to one person](docs/USER_GUIDE.md#whispering-to-one-person).
 
-- **Draw on the map.** ([#46](https://github.com/CheekyChinchilla/CozyVTT/issues/46)) **Draw**, in the map's toolbar, has a pen, lines, arrows, shapes and text labels that everyone on the map sees, over tokens, fog and the dark. The DM can keep a drawing to themselves with **Only I can see this**, and players draw while **Players may draw** is on, except while the session is paused or has ended. See [Drawing on the map](docs/DM_GUIDE.md#drawing-on-the-map) and [Drawing and pointing](docs/PLAYER_GUIDE.md#drawing-and-pointing).
+- **Draw on the map.** ([#46](https://github.com/CheekyChinchilla/CozyVTT/issues/46)) **Draw**, in the map's toolbar, has a pen, lines, arrows, shapes and text labels that everyone on the map sees, over tokens, fog and the dark. The GM can keep a drawing to themselves with **Only I can see this**, and players draw while **Players may draw** is on, except while the session is paused or has ended. See [Drawing on the map](docs/GM_GUIDE.md#drawing-on-the-map) and [Drawing and pointing](docs/PLAYER_GUIDE.md#drawing-and-pointing).
 
 - **A laser pointer for the map.** **Laser pointer**, in the drawing tools, draws a trail everyone sees as you drag, which fades within 3 seconds and is never kept. See [Drawing and pointing](docs/PLAYER_GUIDE.md#drawing-and-pointing).
 
-- **Draw a map in CozyVTT.** ([#46](https://github.com/CheekyChinchilla/CozyVTT/issues/46)) **Create Map** has **Draw a map**, a blank map you paint with **Mapmaker**: brushes, shapes, textures, rooms that add their own walls, stamps, fill, text and more. **Save** writes the painting over the map's picture after asking and keeps no earlier version, so download the picture first to keep it; an unsaved painting is kept as a draft in the browser. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+- **Draw a map in CozyVTT.** ([#46](https://github.com/CheekyChinchilla/CozyVTT/issues/46)) **Create Map** has **Draw a map**, a blank map you paint with **Mapmaker**: brushes, shapes, textures, rooms that add their own walls, stamps, fill, text and more. **Save** writes the painting over the map's picture after asking and keeps no earlier version, so download the picture first to keep it; an unsaved painting is kept as a draft in the browser. See [Drawing a map](docs/GM_GUIDE.md#drawing-a-map).
 
-- **Prepare a map while your players keep playing.** **Open to prepare**, on a map's card in the **Map Library**, opens a map on the DM's screen only; players are sent nothing of it until **Bring everyone here**. See [Preparing a map while the table plays](docs/DM_GUIDE.md#preparing-a-map-while-the-table-plays).
+- **Prepare a map while your players keep playing.** **Open to prepare**, on a map's card in the **Map Library**, opens a map on the GM's screen only; players are sent nothing of it until **Bring everyone here**. See [Preparing a map while the table plays](docs/GM_GUIDE.md#preparing-a-map-while-the-table-plays).
 
 - **The campaign page fits a phone.** ([#31](https://github.com/CheekyChinchilla/CozyVTT/issues/31)) Below 1,024 pixels wide the map fills the screen, with **Map**, **Chat**, **Dice**, **Initiative**, **Party** and **More** along the bottom, each opening its panel as a sheet over the map. Every control there is at least 44 by 44 pixels, and the on-screen keyboard never covers what you type. See [The campaign page on a phone or tablet](docs/USER_GUIDE.md#the-campaign-page-on-a-phone-or-tablet).
 
@@ -72,27 +322,27 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A roll from a character sheet shows that it went.** The stat pressed gives a short pulse, a phone that allows it gives a short buzz, and while the **Dice** panel is off the screen a message gives the result, such as "Longsword Attack: 17". See [Rolling from your sheet](docs/PLAYER_GUIDE.md#rolling-from-your-sheet).
 
-- **Roll with advantage or disadvantage from a sheet on a phone or a tablet.** On a D&D 5e or Pathfinder 2e sheet, press and hold a stat for its **Normal**, **Advantage** and **Disadvantage** menu. A D&D 5e or Pathfinder 2e sheet also has **Roll mode** in its header on every device, which applies to every check, save, skill and attack you roll from it until you change it or close the sheet. See [Rolling from your sheet](docs/PLAYER_GUIDE.md#rolling-from-your-sheet).
+- **Roll with advantage or disadvantage from a sheet on a phone or a tablet.** On a 5E or Fantasy d20 sheet, press and hold a stat for its **Normal**, **Advantage** and **Disadvantage** menu. A 5E or Fantasy d20 sheet also has **Roll mode** in its header on every device, which applies to every check, save, skill and attack you roll from it until you change it or close the sheet. See [Rolling from your sheet](docs/PLAYER_GUIDE.md#rolling-from-your-sheet).
 
 - **Move, turn and step through tokens from the keyboard.** Click a token to select it, then use the arrow keys to move it, **[** and **]** to turn it, **,** and **.** to step to the next token and **Enter** for its menu. Keyboard moves follow the same rules as the mouse. See [Moving Your Token](docs/PLAYER_GUIDE.md#moving-your-token).
 
-- **A list of the map's keyboard shortcuts.** Press **?** on the map, or click **Keyboard shortcuts** in the header, to see every key the map takes. See [Keyboard Shortcuts](docs/DM_GUIDE.md#keyboard-shortcuts).
+- **A list of the map's keyboard shortcuts.** Press **?** on the map, or click **Keyboard shortcuts** in the header, to see every key the map takes. See [Keyboard Shortcuts](docs/GM_GUIDE.md#keyboard-shortcuts).
 
 - **While you hold a token, the map shows how far it has come.** The bottom left of the map shows the distance, such as "Carried 15 ft (3 sq)", measured as the **Ruler** measures. See [Moving Your Token](docs/PLAYER_GUIDE.md#moving-your-token).
 
-- **Follow my selection in Player Preview.** The box beside **Preview Player View** offers **Follow my selection**, which shows what the token you select sees; it never falls back to your own view. See [Previewing the Player View](docs/DM_GUIDE.md#previewing-the-player-view).
+- **Follow my selection in Player Preview.** The box beside **Preview Player View** offers **Follow my selection**, which shows what the token you select sees; it never falls back to your own view. See [Previewing the Player View](docs/GM_GUIDE.md#previewing-the-player-view).
 
 - **The AoE Shape panel has a Snap to grid box.** Unticked, a shape goes exactly where you click or tap, which a finger or a stylus could not do before. On a touch screen, slide from a cone's or a line's origin to aim it. See [Measuring and Spell Areas](docs/PLAYER_GUIDE.md#measuring-and-spell-areas).
 
-- **On a touch screen the DM moves a combatant up or down the order with arrows on its row.** Dragging by touch does not work in every browser. See [Managing Turn Order](docs/DM_GUIDE.md#managing-turn-order).
+- **On a touch screen the GM moves a combatant up or down the order with arrows on its row.** Dragging by touch does not work in every browser. See [Managing Turn Order](docs/GM_GUIDE.md#managing-turn-order).
 
-- **Reset position puts the DM's tool panels back in their corner.** The bar above the **Fog of War**, **Walls** and **Lights** panels offers it once you have moved them.
+- **Reset position puts the GM's tool panels back in their corner.** The bar above the **Fog of War**, **Walls** and **Lights** panels offers it once you have moved them.
 
-- **The Walls panel has buttons for what took a key or a double-click.** **Done**, **Cancel**, **Add to selection** and **Delete segment** sit in the panel, and its **Undo** now does what **Ctrl+Z** does. See [The Wall Drawing Tool](docs/DM_GUIDE.md#the-wall-drawing-tool).
+- **The Walls panel has buttons for what took a key or a double-click.** **Done**, **Cancel**, **Add to selection** and **Delete segment** sit in the panel, and its **Undo** now does what **Ctrl+Z** does. See [The Wall Drawing Tool](docs/GM_GUIDE.md#the-wall-drawing-tool).
 
-- **Edit Token offers D&D 5e effects beside the conditions.** **Blessed**, **Concentrating**, **Hasted** and six more each have a badge no condition shares. See [Editing Tokens During Play](docs/DM_GUIDE.md#editing-tokens-during-play).
+- **Edit Token offers 5E effects beside the conditions.** **Blessed**, **Concentrating**, **Hasted** and six more each have a badge no condition shares. See [Editing Tokens During Play](docs/GM_GUIDE.md#editing-tokens-during-play).
 
-- **Give temporary hit points from a token's menu or the roster.** **Temporary HP...** asks how many and, when the creature already has some, whether to keep those or take the new ones. It is not offered for Call of Cthulhu. See [Granting Temporary Hit Points](docs/DM_GUIDE.md#granting-temporary-hit-points).
+- **Give temporary hit points from a token's menu or the roster.** **Temporary HP...** asks how many and, when the creature already has some, whether to keep those or take the new ones. It is not offered for Horror d100. See [Granting Temporary Hit Points](docs/GM_GUIDE.md#granting-temporary-hit-points).
 
 - **Players and spectators can leave a campaign.** **Leave Campaign**, under **Your role** in **Campaign Info**, asks first. Your characters go back to **My Characters**, and your notes and saved rolls stay readable on your dashboard. See [Leaving a campaign](docs/PLAYER_GUIDE.md#leaving-a-campaign).
 
@@ -102,11 +352,11 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Changes for scripts and integrations.** See [API changes in 1.6.0](docs/api-changes/1.6.0.md).
 
-- **A player can no longer turn their token while the session is paused or has ended, as with moving it.** The DM turns any token at any time, and a player can still change their token's conditions.
+- **A player can no longer turn their token while the session is paused or has ended, as with moving it.** The GM turns any token at any time, and a player can still change their token's conditions.
 
 - **Lighting on a very large map is worked out at a slightly lower resolution.** On a lit map of more than 16,777,216 pixels, such as 5,000 by 3,400, the edges of light and shadow are a little softer. That is the largest canvas Safari on an iPhone or iPad can hold.
 
-- **On a touch screen the ruler measures by taps.** The DM taps a start and an end; a player's ruler starts at their token and a tap sets the end. See [Measuring and Area Templates](docs/DM_GUIDE.md#measuring-and-area-templates) and [Measuring and Spell Areas](docs/PLAYER_GUIDE.md#measuring-and-spell-areas).
+- **On a touch screen the ruler measures by taps.** The GM taps a start and an end; a player's ruler starts at their token and a tap sets the end. See [Measuring and Area Templates](docs/GM_GUIDE.md#measuring-and-area-templates) and [Measuring and Spell Areas](docs/PLAYER_GUIDE.md#measuring-and-spell-areas).
 
 - **A click or a tap on a combatant's name in the initiative tracker opens its menu.** A double-click still opens a character's sheet at once.
 
@@ -140,7 +390,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A backup no longer holds a file that makes the restore refuse it.** A file in `backend/uploads` with two dots in a row or a backslash in its name is left out and named in the backend log; rename it to back it up. See [Via the Admin Panel](docs/DEPLOYMENT.md#via-the-admin-panel).
 
-- **An imported campaign's pictures and sounds keep their names, descriptions and tags.** Export the campaign again from a server running this version; an older archive does not carry them. See [Exporting a Campaign](docs/DM_GUIDE.md#exporting-a-campaign).
+- **An imported campaign's pictures and sounds keep their names, descriptions and tags.** Export the campaign again from a server running this version; an older archive does not carry them. See [Exporting a Campaign](docs/GM_GUIDE.md#exporting-a-campaign).
 
 - **A campaign export stopped part-way no longer keeps a file open in the backend.**
 
@@ -150,7 +400,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A password reset email asked for just before the backend stops is still sent.** A mail server slower than 2 seconds can still miss it; asking again after 5 minutes sends a new link.
 
-- **A DM who handed the DM seat over can no longer delete the new DM's map pictures.** A member who does not run the campaign may delete or move a file they uploaded only while nothing but their own characters, tokens and documents use it. See [Viewing and Managing Assets](docs/USER_GUIDE.md#viewing-and-managing-assets).
+- **A GM who handed the GM seat over can no longer delete the new GM's map pictures.** A member who does not run the campaign may delete or move a file they uploaded only while nothing but their own characters, tokens and documents use it. See [Viewing and Managing Assets](docs/USER_GUIDE.md#viewing-and-managing-assets).
 
 - **Deleting a picture asks first when a document can show it.** A text or Markdown document showing the picture by its address, such as a handout, is now listed in the question. See [Viewing and Managing Assets](docs/USER_GUIDE.md#viewing-and-managing-assets).
 
@@ -178,7 +428,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A token you have picked up keeps its hit-point bar, condition badges and rings** while it waits on its own square.
 
-- **A wall or a light the map has no room for is no longer drawn.** At 5,000 walls or 200 lights the tools refuse before drawing, and anything else the server refuses is taken off your map again. See [The Wall Drawing Tool](docs/DM_GUIDE.md#the-wall-drawing-tool).
+- **A wall or a light the map has no room for is no longer drawn.** At 5,000 walls or 200 lights the tools refuse before drawing, and anything else the server refuses is taken off your map again. See [The Wall Drawing Tool](docs/GM_GUIDE.md#the-wall-drawing-tool).
 
 - **A wall line you had started no longer waits, unseen, in another tool.** Choosing another tool drops it; the walls its clicks placed stay.
 
@@ -206,7 +456,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A tap on a menu over a divider between the page's columns works.**
 
-- **The initiative tracker opens a combatant's character sheet whatever map their token is on.** **Roll...** is still offered only for a combatant on the map on screen, and players' trackers are unchanged. See [A Combatant's Sheet and Rolls](docs/DM_GUIDE.md#a-combatants-sheet-and-rolls).
+- **The initiative tracker opens a combatant's character sheet whatever map their token is on.** **Roll...** is still offered only for a combatant on the map on screen, and players' trackers are unchanged. See [A Combatant's Sheet and Rolls](docs/GM_GUIDE.md#a-combatants-sheet-and-rolls).
 
 - **The AoE Shape panel no longer covers the map's toolbar with a mouse.**
 
@@ -224,7 +474,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **On a phone or a tablet a character sheet shows which stats roll.** The dice icons that showed only under a mouse pointer now show all the time.
 
-- **Character sheets and their editors fit a phone.** Below 640 pixels wide or 500 tall they take the whole screen, and the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible layouts are rearranged to fit a phone. See [The Character Editor](docs/USER_GUIDE.md#the-character-editor).
+- **Character sheets and their editors fit a phone.** Below 640 pixels wide or 500 tall they take the whole screen, and the 5E, Fantasy d20, Horror d100 and Flexible layouts are rearranged to fit a phone. See [The Character Editor](docs/USER_GUIDE.md#the-character-editor).
 
 - **Every tab of a character sheet can be reached on a phone.** Tabs wrap onto a second row where they do not fit.
 
@@ -234,13 +484,13 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Text dragged from one box to another in a character sheet opened from the map now lands there.**
 
-- **A Call of Cthulhu creature is no longer given D&D 5e's Challenge Rating and worked-out saves and skills.** The Creature Library and the token editor name its characteristics as its stat block does, and take its skills as printed. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
+- **A Horror d100 creature is no longer given 5E's Challenge Rating and worked-out saves and skills.** The Creature Library and the token editor name its characteristics as its stat block does, and take its skills as printed. See [Saving Throws and Skills](docs/GM_GUIDE.md#saving-throws-and-skills).
 
 - **Importing a character file made for a game system this CozyVTT doesn't have gives a message.** Choosing the file used to break the preview; it's now refused there, naming the system. See [Character Templates](docs/USER_GUIDE.md#character-templates).
 
-- **The Call of Cthulhu skills list puts its headings over its columns.**
+- **The Horror d100 skills list puts its headings over its columns.**
 
-- **A Call of Cthulhu age saved as text shows in the editor and is kept until you type a number.** An age already replaced by 0 is in a backup taken before that save.
+- **A Horror d100 age saved as text shows in the editor and is kept until you type a number.** An age already replaced by 0 is in a backup taken before that save.
 
 - **The My Characters page and the character editor's page no longer scroll sideways on a phone.**
 
@@ -256,7 +506,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Every map card in the Map Library can be deleted on a phone.**
 
-- **On a screen narrower than 1,024 pixels, the Creature Library's and Token Templates' forms open in place of the list.** See [Creating Custom Creatures](docs/DM_GUIDE.md#creating-custom-creatures).
+- **On a screen narrower than 1,024 pixels, the Creature Library's and Token Templates' forms open in place of the list.** See [Creating Custom Creatures](docs/GM_GUIDE.md#creating-custom-creatures).
 
 - **Create Custom in the Creature Library opens an empty form while a creature is being edited.**
 
@@ -292,7 +542,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 ### Security
 
-- **Players no longer see map pictures before the table goes there.** A map picture in a campaign's library shows to players and spectators only while their table is on a map using it; handouts the DM shares keep their pictures. See [Uploading Assets](docs/USER_GUIDE.md#uploading-assets).
+- **Players no longer see map pictures before the table goes there.** A map picture in a campaign's library shows to players and spectators only while their table is on a map using it; handouts the GM shares keep their pictures. See [Uploading Assets](docs/USER_GUIDE.md#uploading-assets).
 
 - **What one account can make the server hold for its live connections is bounded.** A signed-in account could make the server keep answers in memory until the backend passed its memory limit and restarted, dropping every table. Messages from one account are now rate limited, and a connection that stops reading is closed.
 
@@ -319,7 +569,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 - **A new map, token or avatar picture has size limits.** At most 16,384 pixels a side, and for an animation at most 1,000 frames; pictures already uploaded are kept as they are.
 - **Character sheets take your theme.** A dark theme no longer shows a pale card with light text on it.
 - **An invitation sent from the app runs out after 14 days.** One that has run out can be sent again, and **Campaign Settings → Members** lists the ones still open.
-- **A player rolls initiative once per fight.** A second roll is refused; the DM can still change the number.
+- **A player rolls initiative once per fight.** A second roll is refused; the GM can still change the number.
 - **A saved roll that cannot work is refused when it is used,** such as one that could divide by zero, with the reason; edit it to fix it.
 
 #### What to do afterwards, if it applies to you
@@ -336,11 +586,11 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **See and clear an account's sign-in lock from the Admin Panel.** In **Admin → Users** a locked account shows **Locked until**, and **Clear lock** lets it sign in at once with its usual password. See [Logging In](docs/USER_GUIDE.md#logging-in).
 
-- **A Call of Cthulhu investigator's contacts, and notes on Luck and wealth, can be edited.** **Edit** has a **Contacts** list on the **Possessions** tab, a note under **Luck Score** and **Wealth notes** under **Assets**.
+- **A Horror d100 character's contacts, and notes on Luck and wealth, can be edited.** **Edit** has a **Contacts** list on the **Possessions** tab, a note under **Luck Score** and **Wealth notes** under **Assets**.
 
-- **Specialised skills can be added to a Call of Cthulhu investigator.** Fighting, Firearms and science specialisations come from the rulebook's list at their base values, and **Add Language** and **Add Skill** add others.
+- **Specialised skills can be added to a Horror d100 character.** Fighting, Firearms and science specialisations come from the rulebook's list at their base values, and **Add Language** and **Add Skill** add others.
 
-- **A D&D 5e sheet shows an item's value, the character's carrying capacity and the player's name.**
+- **A 5E sheet shows an item's value, the character's carrying capacity and the player's name.**
 
 - **See and withdraw the invitations you have sent.** **Campaign Settings → Members** lists them under **Invited**, with an **×** to withdraw each, and an invitation now runs out after 14 days.
 
@@ -348,9 +598,9 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **Jump to newest in the chat and the Dice panel.** While you are scrolled up, a button at the bottom of the list takes you down to what has arrived.
 
-- **Open a combatant's sheet and roll for them from the initiative tracker.** ([#90](https://github.com/CheekyChinchilla/CozyVTT/issues/90)) Right-click a combatant for **View Character Sheet** and **Roll...**, or double-click a player character's row for their sheet. See [A Combatant's Sheet and Rolls](docs/DM_GUIDE.md#a-combatants-sheet-and-rolls).
+- **Open a combatant's sheet and roll for them from the initiative tracker.** ([#90](https://github.com/CheekyChinchilla/CozyVTT/issues/90)) Right-click a combatant for **View Character Sheet** and **Roll...**, or double-click a player character's row for their sheet. See [A Combatant's Sheet and Rolls](docs/GM_GUIDE.md#a-combatants-sheet-and-rolls).
 
-- **Tokens can be turned to face any direction.** ([#89](https://github.com/CheekyChinchilla/CozyVTT/issues/89)) Right-click a token for **Rotate Left** and **Rotate Right**, 45 degrees a turn; the DM can type an exact **Facing** in **Edit Token**. See [Turning a Token](docs/DM_GUIDE.md#turning-a-token).
+- **Tokens can be turned to face any direction.** ([#89](https://github.com/CheekyChinchilla/CozyVTT/issues/89)) Right-click a token for **Rotate Left** and **Rotate Right**, 45 degrees a turn; the GM can type an exact **Facing** in **Edit Token**. See [Turning a Token](docs/GM_GUIDE.md#turning-a-token).
 
 ### Changed
 
@@ -358,13 +608,13 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **A server admin moving someone's personal file into a campaign is written to the activity log,** under **Recent Admin Actions** on the Admin Panel's **Activity** tab.
 
-- **The placeholders in the D&D 5e and Pathfinder 2e editors' headers take the header's own colour.**
+- **The placeholders in the 5E and Fantasy d20 editors' headers take the header's own colour.**
 
 - **The Asset Library, the pickers and the Map Library load small previews of maps and tokens,** so a library of large maps opens faster. A picture imported from an archive, or uploaded before previews were made, is still shown full size.
 
 - **In Chrome, Edge, Safari and on phones, the document reader offers a PDF as a button to open it in a new tab.** Those browsers will not show a PDF inside the reader; Firefox on a computer still does.
 
-- **Only an asset's uploader can move it to their Personal library.** A campaign's DM can still delete such an asset and make the other moves.
+- **Only an asset's uploader can move it to their Personal library.** A campaign's GM can still delete such an asset and make the other moves.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The styles moved to Tailwind CSS 4, which uses features Firefox added in 128. Chrome and Edge 111 and Safari 16.4 are still enough, and Firefox ESR 128 and later are new enough.
 
@@ -372,7 +622,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **The backend no longer installs the mathjs package,** about 20 MB with its dependencies. Dice roll as before.
 
-- **The Call of Cthulhu read-only sheet no longer has a palette button.** Choose the header colour in **Edit**, as on the other sheets.
+- **The Horror d100 read-only sheet no longer has a palette button.** Choose the header colour in **Edit**, as on the other sheets.
 
 ### Fixed
 
@@ -430,7 +680,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **A new invitation appears on the dashboard without pressing Refresh.**
 
-- **An invitation names the campaign's DM,** where it named the owner.
+- **An invitation names the campaign's GM,** where it named the owner.
 
 - **Campaign Settings shows Danger Zone only to those who may delete the campaign:** its owner and administrators.
 
@@ -438,13 +688,13 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **Open Campaign after an import opens the campaign.**
 
-- **Remove from Campaign in the Campaign Roster removes the character, for the DM too.**
+- **Remove from Campaign in the Campaign Roster removes the character, for the GM too.**
 
 - **A character taken out of a campaign leaves the campaign page at once.**
 
-- **A chat cooldown the DM turns on during play reaches the players at the table,** as do the other saved **Campaign Settings**.
+- **A chat cooldown the GM turns on during play reaches the players at the table,** as do the other saved **Campaign Settings**.
 
-- **Saving Campaign Settings, removing a player and handing over the DM seat leave the table as it is.**
+- **Saving Campaign Settings, removing a player and handing over the GM seat leave the table as it is.**
 
 - **Sending an invitation leaves the page as it is.**
 
@@ -456,7 +706,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **The buttons on a character sheet's header read clearly on every header colour.**
 
-- **A DM opening a player's sheet sees the player's name.**
+- **A GM opening a player's sheet sees the player's name.**
 
 - **A sheet opened from the Characters page no longer offers rolls it cannot make.**
 
@@ -466,9 +716,9 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **The header colour you pick is drawn everywhere a sheet uses it.**
 
-- **The built-in character templates follow the rules.** Characters already made from a template keep their numbers; the Call of Cthulhu editor works an investigator's out again when it is next saved.
+- **The built-in character templates follow the rules.** Characters already made from a template keep their numbers; the Horror d100 editor works a character's out again when it is next saved.
 
-- **The Pathfinder 2e and Call of Cthulhu editors say which name is missing** before a save is refused.
+- **The Fantasy d20 and Horror d100 editors say which name is missing** before a save is refused.
 
 - **A feature listed twice is kept twice.**
 
@@ -498,77 +748,77 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **A screen reader names every box in the three character editors, and the boxes stop at the length a sheet stores.**
 
-- **A Call of Cthulhu investigator whose CON and SIZ add up to less than 10 can be saved.**
+- **A Horror d100 character whose CON and SIZ add up to less than 10 can be saved.**
 
-- **A Call of Cthulhu investigator's own language follows EDU.**
+- **A Horror d100 character's own language follows EDU.**
 
-- **The Call of Cthulhu sheet shows the derived attributes an investigator's characteristics give.**
+- **The Horror d100 sheet shows the derived attributes a character's characteristics give.**
 
-- **A Call of Cthulhu investigator's token picture is checked and named after the investigator.**
+- **A Horror d100 character's token picture is checked and named after the character.**
 
-- **A Call of Cthulhu weapon rolls its damage bonus and its skill's current value.** Damage such as "1d3+DB" rolls the damage bonus.
+- **A Horror d100 weapon rolls its damage bonus and its skill's current value.** Damage such as "1d3+DB" rolls the damage bonus.
 
-- **The Call of Cthulhu read-only sheet reads clearly.**
+- **The Horror d100 read-only sheet reads clearly.**
 
-- **Every Call of Cthulhu skill rolls from the sheet, named once.**
+- **Every Horror d100 skill rolls from the sheet, named once.**
 
-- **A Call of Cthulhu box can be cleared and retyped.**
+- **A Horror d100 box can be cleared and retyped.**
 
-- **A Call of Cthulhu investigator stored without skills can be saved.**
+- **A Horror d100 character stored without skills can be saved.**
 
-- **A Call of Cthulhu investigator with POW 100 can be saved, and current Sanity stays within the maximum.**
+- **A Horror d100 character with POW 100 can be saved, and current Sanity stays within the maximum.**
 
-- **Cthulhu Mythos typed on a Call of Cthulhu sheet lowers maximum Sanity.**
+- **The lore skill typed on a Horror d100 sheet lowers maximum Sanity.**
 
-- **A Call of Cthulhu major wound threshold rounds up.**
+- **A Horror d100 major wound threshold rounds up.**
 
-- **A Pathfinder 2e ancestry or class with 0 hit points counts as 0.**
+- **A Fantasy d20 ancestry or class with 0 hit points counts as 0.**
 
-- **An item's value keeps fractions of a gold piece on the D&D 5e and Pathfinder 2e sheets.**
+- **An item's value keeps fractions of a gold piece on the 5E and Fantasy d20 sheets.**
 
-- **The Pathfinder 2e sheet and editor agree on more of a character.**
+- **The Fantasy d20 sheet and editor agree on more of a character.**
 
-- **Pathfinder 2e spell slots never show more used than there are.**
+- **Fantasy d20 spell slots never show more used than there are.**
 
-- **A Pathfinder 2e lore named with "Lore" rolls under its own name.**
+- **A Fantasy d20 lore named with "Lore" rolls under its own name.**
 
-- **The Pathfinder 2e sheet shows and rolls the saves, Perception and skills its own numbers give.**
+- **The Fantasy d20 sheet shows and rolls the saves, Perception and skills its own numbers give.**
 
-- **A Pathfinder 2e check penalty lowers the skill however it is typed.**
+- **A Fantasy d20 check penalty lowers the skill however it is typed.**
 
-- **The Pathfinder 2e focus pool holds what your character has.**
+- **The Fantasy d20 focus pool holds what your character has.**
 
-- **A Pathfinder 2e feat with no level is listed first on the sheet.**
+- **A Fantasy d20 feat with no level is listed first on the sheet.**
 
-- **A Pathfinder 2e feat from a built-in template opens with its text in the editor.**
+- **A Fantasy d20 feat from a built-in template opens with its text in the editor.**
 
-- **A Pathfinder 2e character stored with spellcasting but no spell attack or spell DC can be saved.**
+- **A Fantasy d20 character stored with spellcasting but no spell attack or spell DC can be saved.**
 
-- **A Pathfinder 2e spell DC uses its own item bonus, and one spellcasting rank sets both spell attack and spell DC.** A character whose DC changes because of this gets a note above the sheet when it opens.
+- **A Fantasy d20 spell DC uses its own item bonus, and one spellcasting rank sets both spell attack and spell DC.** A character whose DC changes because of this gets a note above the sheet when it opens.
 
-- **Pathfinder 2e Bulk follows the rules on the sheet and in the editor.**
+- **Fantasy d20 Bulk follows the rules on the sheet and in the editor.**
 
-- **A Pathfinder 2e character whose AC, Class DC or Spell DC works out under 10 can be saved.**
+- **A Fantasy d20 character whose AC, Class DC or Spell DC works out under 10 can be saved.**
 
-- **Every Pathfinder 2e Add Feat button has its colour.**
+- **Every Fantasy d20 Add Feat button has its colour.**
 
-- **The D&D 5e editor says when it has brought a stored number within range.**
+- **The 5E editor says when it has brought a stored number within range.**
 
-- **The D&D 5e editor says what to fix before a save is refused.**
+- **The 5E editor says what to fix before a save is refused.**
 
-- **A row added by mistake no longer stops a D&D 5e sheet from saving.**
+- **A row added by mistake no longer stops a 5E sheet from saving.**
 
-- **A D&D 5e character's Proficiency Bonus follows their level.** See [Levelling up (D&D 5e)](docs/PLAYER_GUIDE.md#levelling-up-dd-5e).
+- **A 5E character's Proficiency Bonus follows their level.** See [Levelling up (5E)](docs/PLAYER_GUIDE.md#levelling-up-5e).
 
-- **A D&D 5e sheet stops adding skills and damage rolls where it can still be saved.**
+- **A 5E sheet stops adding skills and damage rolls where it can still be saved.**
 
-- **Unticking Requires Attunement on a D&D 5e item ends its attunement.**
+- **Unticking Requires Attunement on a 5E item ends its attunement.**
 
-- **A D&D 5e sheet's Total Weight counts items with no weight or quantity.**
+- **A 5E sheet's Total Weight counts items with no weight or quantity.**
 
-- **Naming a D&D 5e spellcasting ability raises the spell save DC and spell attack.** A sheet saved before with the ability empty shows a negative **Other bonus** on its Spells tab; set it back to 0.
+- **Naming a 5E spellcasting ability raises the spell save DC and spell attack.** A sheet saved before with the ability empty shows a negative **Other bonus** on its Spells tab; set it back to 0.
 
-- **A D&D 5e character stored without its saving throws can be saved from the editor.**
+- **A 5E character stored without its saving throws can be saved from the editor.**
 
 - **Coloured messages, labels, text and buttons read clearly in every theme.**
 
@@ -586,13 +836,13 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **An asset card's View, Download and Delete buttons can be reached with Tab and are always shown on a touch screen.**
 
-- **The DM can reorder initiative and edit a value from the keyboard.**
+- **The GM can reorder initiative and edit a value from the keyboard.**
 
 - **Screen readers hear new dice rolls and the connection status, and the dice panel's boxes and windows have names.**
 
 - **The map's Fog of War, Walls and Lights panels open and fold from the keyboard.**
 
-- **The DM's side panels work from the keyboard and are announced as dialogs.**
+- **The GM's side panels work from the keyboard and are announced as dialogs.**
 
 - **With reduce motion turned on, windows and notifications fade out where they are.**
 
@@ -646,9 +896,9 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **Changing a creature's ability scores or Challenge Rating moves its saves and skills, and saves them.**
 
-- **A Pathfinder 2e stat block shows the creature's level, its attribute modifiers and Fort, Ref and Will.**
+- **A Fantasy d20 stat block shows the creature's level, its attribute modifiers and Fort, Ref and Will.**
 
-- **Stat blocks in Flexible and Shadowrun campaigns print negative saves and skills properly.**
+- **Stat blocks in Flexible campaigns and those of a fourth game system print negative saves and skills properly.**
 
 - **The Creature Library and Token Templates say why a save was refused, and their boxes stop at the server's limits.**
 
@@ -666,7 +916,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **A Player token from the Token Manager can stand for a character,** chosen from a **Character** list.
 
-- **A token's conditions follow the campaign's game system, and you can type your own.** See [Editing Tokens During Play](docs/DM_GUIDE.md#editing-tokens-during-play).
+- **A token's conditions follow the campaign's game system, and you can type your own.** See [Editing Tokens During Play](docs/GM_GUIDE.md#editing-tokens-during-play).
 
 - **A token added, changed or removed reaches everyone at once, from wherever it was changed.**
 
@@ -682,7 +932,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **Moving a token on a lit map with many walls no longer holds up the server.** On a map of 1,000 walls, a move seen by 12 players took about 345 ms of the server's time and now takes about 21.
 
-- **The DM tool panels stay on the map,** and double-clicking the bar above them puts them back in their corner.
+- **The GM tool panels stay on the map,** and double-clicking the bar above them puts them back in their corner.
 
 - **A light's colour can be typed into the Lights panel.**
 
@@ -700,7 +950,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **Fog of war fades away over the squares you reveal.**
 
-- **The AoE Shape tool's cone has the right shape for your game:** as wide as it is long in D&D 5e, a quarter circle in Pathfinder 2e.
+- **The AoE Shape tool's cone has the right shape for your game:** as wide as it is long in 5E, a quarter circle in Fantasy d20.
 
 - **Walls, doors and lights stay on the map's picture when you change its Width, Height or Grid Size.**
 
@@ -722,7 +972,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **The light tool's Select does nothing during a preview.**
 
-- **The DM's spirit token button on the map toolbar says what a click does.**
+- **The GM's spirit token button on the map toolbar says what a click does.**
 
 - **The right mouse button pans the map under every wall, fog and light tool, and opens no menu there.**
 
@@ -760,7 +1010,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **A saved roll shows its name in the dice log.**
 
-- **Coming back after a dropped connection brings back what the DM changed meanwhile.**
+- **Coming back after a dropped connection brings back what the GM changed meanwhile.**
 
 - **Coming back after a long disconnect fills in the chat messages you missed,** up to 500.
 
@@ -814,7 +1064,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **A game tab left open is disconnected when its sign-in ends.**
 
-- **A character saved as a template leaves the player's name and the Keeper's Notes behind.**
+- **A character saved as a template leaves the player's name and the GM's Notes behind.**
 
 - **A picture whose campaign was deleted no longer has its details shown to everyone.**
 
@@ -961,7 +1211,7 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **The browser tab shows your instance's name,** and the Timezone box is gone from the setup wizard and **Admin Panel → Settings**.
 
-- **Only an administrator can import the D&D 5e SRD creatures, and Invite Player finds people by name.** Type at least 2 letters of a display name.
+- **Only an administrator can import the 5E SRD creatures, and Invite Player finds people by name.** Type at least 2 letters of a display name.
 
 - **New limits, set far above what a table uses,** on characters, templates, invitation emails, sheet lists and uploads. What is already saved stays.
 
@@ -991,7 +1241,7 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **Deleting an account now deletes its avatar and the personal files nothing uses.** Campaign files and shared documents stay, with no owner, and so does a personal file a campaign uses, which the campaign cannot show until an administrator moves it there. Accounts deleted earlier keep their files; find them with **No Uploader (account deleted)** on the Admin Panel's **Assets** tab.
 
-- **A player removed from a campaign can still read their notes and saved rolls from it,** on their dashboard under **Notes From Campaigns You Have Left**. See [Removing a Player](docs/DM_GUIDE.md#removing-a-player).
+- **A player removed from a campaign can still read their notes and saved rolls from it,** on their dashboard under **Notes From Campaigns You Have Left**. See [Removing a Player](docs/GM_GUIDE.md#removing-a-player).
 
 - **The bundled nginx, and the web server inside the frontend image, now use nginx's stable 1.30 releases.**
 
@@ -1021,9 +1271,9 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **A Flexible sheet already stored in a shape its page could not read opens again, and can be put right.**
 
-- **The D&D 5e Spells tab opens for every caster, and spell slots are held to 20 of each level.**
+- **The 5E Spells tab opens for every caster, and spell slots are held to 20 of each level.**
 
-- **The D&D 5e "other bonus" boxes for initiative, passive Perception, spell save DC and spell attack take -30 to +30.**
+- **The 5E "other bonus" boxes for initiative, passive Perception, spell save DC and spell attack take -30 to +30.**
 
 - **The name written on a character sheet is held to 200 characters, like the name a character is created with.**
 
@@ -1031,7 +1281,7 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **The Import Campaign window works with a screen reader and the keyboard.**
 
-- **A screen reader names the D&D 5e editor's Alignment and Background boxes.**
+- **A screen reader names the 5E editor's Alignment and Background boxes.**
 
 - **Saving a text or Markdown document can no longer leave it empty or cut off.**
 
@@ -1047,9 +1297,9 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **The instance always keeps an administrator, whatever happens at the same moment.**
 
-- **Deleting the account of someone who runs a campaign they did not create is refused until they hand the DM seat on.**
+- **Deleting the account of someone who runs a campaign they did not create is refused until they hand the GM seat on.**
 
-- **A campaign keeps exactly one DM when its seat changes hands at the same moment as something else.**
+- **A campaign keeps exactly one GM when its seat changes hands at the same moment as something else.**
 
 - **The Custom theme shows the colours that were picked.**
 
@@ -1115,7 +1365,7 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **A Universal VTT import that fails while saving leaves nothing behind.**
 
-- **Universal VTT imports use less of the server's memory, and wait their turn when several arrive at once.** An import waits at most 20 seconds for its turn and runs for at most 30. See [Importing a Universal VTT file](docs/DM_GUIDE.md#importing-a-universal-vtt-file).
+- **Universal VTT imports use less of the server's memory, and wait their turn when several arrive at once.** An import waits at most 20 seconds for its turn and runs for at most 30. See [Importing a Universal VTT file](docs/GM_GUIDE.md#importing-a-universal-vtt-file).
 
 - **Stopping or upgrading CozyVTT while the Admin Dashboard is making a backup now lets the backup finish,** for up to 10 minutes.
 
@@ -1135,13 +1385,13 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **The deployment guide's steps for an install without Docker work as written.**
 
-- **The User, Player and DM Guides were checked against the app and corrected.**
+- **The User, Player and GM Guides were checked against the app and corrected.**
 
 - **The User Guide says how a token is moved.**
 
-- **The Player Guide no longer says a token is dragged, and no longer lists Shadowrun.**
+- **The Player Guide no longer says a token is dragged, and no longer lists a fourth game system.**
 
-- **The DM Guide says how a token is moved and which tokens send a player to the spirit realm.**
+- **The GM Guide says how a token is moved and which tokens send a player to the spirit realm.**
 
 - **The guides for people working on CozyVTT match the code again.**
 
@@ -1159,13 +1409,13 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **A refused character sheet save names the boxes to fix, in the editor at the table as well.**
 
-- **The lists on a D&D 5e, Pathfinder 2e or Call of Cthulhu sheet hold up to 500 entries.** A sheet already stored with more keeps loading, and its next save names the list to shorten.
+- **The lists on a 5E, Fantasy d20 or Horror d100 sheet hold up to 500 entries.** A sheet already stored with more keeps loading, and its next save names the list to shorten.
 
-- **Pathfinder 2e item bonuses are held to -30 to +30, and spell slots to 20 a rank.**
+- **Fantasy d20 item bonuses are held to -30 to +30, and spell slots to 20 a rank.**
 
 - **An Ogg sound file recorded in Opus can now be uploaded, and Ogg files carrying FLAC or Speex now play.** A FLAC or Speex file uploaded before that does not play has to be uploaded again.
 
-- **The Creature Library credits the D&D 5e SRD whenever it lists SRD creatures.**
+- **The Creature Library credits the 5E SRD whenever it lists SRD creatures.**
 
 ### Security
 
@@ -1209,19 +1459,19 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **Only someone who could delete a document can rewrite it, and only someone who could delete a global asset can take it out of the library.**
 
-- **A DM's change to a player's token picture changes only the tokens in campaigns that DM runs.**
+- **A GM's change to a player's token picture changes only the tokens in campaigns that GM runs.**
 
-- **Call of Cthulhu Keeper's Notes are now the Keeper's alone.**
+- **Horror d100 GM's Notes are now the GM's alone.**
 
-- **Players' browsers are no longer told which doors are locked or where the lights that are off are.** See [What players' browsers receive](docs/DM_GUIDE.md#what-players-browsers-receive).
+- **Players' browsers are no longer told which doors are locked or where the lights that are off are.** See [What players' browsers receive](docs/GM_GUIDE.md#what-players-browsers-receive).
 
 - **Pictures in a document or note load only from the asset library, and links open in a new tab.** See [Safety](docs/USER_GUIDE.md#safety).
 
-- **A map picture uploaded from Create Map goes to your personal library unless you choose the campaign's.** Pictures already in the campaign's library stay there; to hide one, move it to **Personal** in the Asset Library. See [Adding Maps to Your Campaign](docs/DM_GUIDE.md#adding-maps-to-your-campaign).
+- **A map picture uploaded from Create Map goes to your personal library unless you choose the campaign's.** Pictures already in the campaign's library stay there; to hide one, move it to **Personal** in the Asset Library. See [Adding Maps to Your Campaign](docs/GM_GUIDE.md#adding-maps-to-your-campaign).
 
-- **A DM can have the instance send 20 invitation emails an hour, and the email's subject no longer quotes the campaign.**
+- **A GM can have the instance send 20 invitation emails an hour, and the email's subject no longer quotes the campaign.**
 
-- **The Invite Player dialog searches by name, and no longer lists everyone on the instance.** See [Inviting Players](docs/DM_GUIDE.md#inviting-players).
+- **The Invite Player dialog searches by name, and no longer lists everyone on the instance.** See [Inviting Players](docs/GM_GUIDE.md#inviting-players).
 
 - **Display names no longer keep invisible characters.**
 
@@ -1282,11 +1532,11 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 
 #### What you will notice
 
-- **New limits, set far above what a table or a DM preparing a campaign does.** A map is 1 to 500 squares a side with up to 1,000 tokens, a stat block up to 64 KB, and each account may preview, import and export 20 campaign archives an hour; existing maps over these keep loading. Fog of war and explored areas are refused on a map of more than 250,000 squares.
+- **New limits, set far above what a table or a GM preparing a campaign does.** A map is 1 to 500 squares a side with up to 1,000 tokens, a stat block up to 64 KB, and each account may preview, import and export 20 campaign archives an hour; existing maps over these keep loading. Fog of war and explored areas are refused on a map of more than 250,000 squares.
 - **Deleting something now asks first,** and shows where a picture or sound is still used.
 - **A PDF is no longer accepted as a map picture.** PDF map pictures you already have are kept.
 - **CozyVTT now accepts a Universal VTT file of up to 75 MB** with the default map limit. The bundled nginx still stops one over 55 MB unless you raise `NGINX_MAX_BODY_SIZE`; see [Upload Size Limits](docs/DEPLOYMENT.md#upload-size-limits).
-- **D&D 5e skills and saving throws have a box for other bonuses.** Opening an existing sheet in the editor puts any difference there, so no total changes.
+- **5E skills and saving throws have a box for other bonuses.** Opening an existing sheet in the editor puts any difference there, so no total changes.
 - **Edits lost before this release are not brought back by it.** A backup from before the loss is the only way back.
 
 #### What to do afterwards, if it applies to you
@@ -1352,15 +1602,15 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 
 - **The deployment guide's section on the API documentation is corrected.**
 
-- **The DM Guide's map export and campaign import sections match the app.**
+- **The GM Guide's map export and campaign import sections match the app.**
 
 - **The Characters page shows a character as you last saved it.** ([#40](https://github.com/CheekyChinchilla/CozyVTT/issues/40))
 
 - **Saving in the Character Editor no longer copies the whole sheet into the browser's console.**
 
-- **Opening a D&D 5e sheet's editor and cancelling leaves the sheet as it was.**
+- **Opening a 5E sheet's editor and cancelling leaves the sheet as it was.**
 
-- **A D&D 5e sheet with cantrips typed in counts as saved once you save it.**
+- **A 5E sheet with cantrips typed in counts as saved once you save it.**
 
 - **What you type while a sheet is saving is kept.**
 
@@ -1370,7 +1620,7 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 
 - **Saving a Flexible sheet keeps everything stored in it.**
 
-- **A colour you pick for a D&D 5e or Pathfinder 2e sheet stays picked while you edit.**
+- **A colour you pick for a 5E or Fantasy d20 sheet stays picked while you edit.**
 
 - **Players can no longer see through a wall that has the same identifier as another.**
 
@@ -1386,13 +1636,13 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 
 - **Typing in the chat box, or any other text box, no longer edits the map's walls.**
 
-- **The DM's map tool panels keep one width.**
+- **The GM's map tool panels keep one width.**
 
 - **Walls, doors and lights can be drawn on a map opened over plain HTTP from another device.**
 
-- **The DM's map shows doors players open, and the DM's next wall edit no longer closes them again.**
+- **The GM's map shows doors players open, and the GM's next wall edit no longer closes them again.**
 
-- **Handing over the DM seat no longer mixes up the spirit realm for the two people involved.**
+- **Handing over the GM seat no longer mixes up the spirit realm for the two people involved.**
 
 - **Reconnecting brings back doors and lights changed while you were away.**
 
@@ -1400,19 +1650,19 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 
 - **Saving Edit Map no longer removes the map's spirit layer picture.**
 
-- **D&D 5e features that share a name are all kept.** One already lost is only in a backup taken before.
+- **5E features that share a name are all kept.** One already lost is only in a backup taken before.
 
-- **Call of Cthulhu: Dodge keeps the points put into it.** A Dodge already reset has to be typed in again, or restored from a backup.
+- **Horror d100: Dodge keeps the points put into it.** A Dodge already reset has to be typed in again, or restored from a backup.
 
 - **Editing a token template no longer deletes its hit points.** Hit points already lost have to be entered again in **Max HP**.
 
-- **Pathfinder 2e characters made from a built-in template keep their skill bonuses.** One saved with the lower numbers gets them back when next saved in the editor.
+- **Fantasy d20 characters made from a built-in template keep their skill bonuses.** One saved with the lower numbers gets them back when next saved in the editor.
 
 - **Typing a list into a character sheet works.**
 
-- **D&D 5e: an older sheet's languages show under Languages.** A language already saved under Weapons has to be moved by hand.
+- **5E: an older sheet's languages show under Languages.** A language already saved under Weapons has to be moved by hand.
 
-- **D&D 5e: skills and saving throws can include bonuses the sheet cannot work out, and keep them.** A bonus an earlier save removed has to be typed in again, or restored from a backup.
+- **5E: skills and saving throws can include bonuses the sheet cannot work out, and keep them.** A bonus an earlier save removed has to be typed in again, or restored from a backup.
 
 - **Moving a character's older fields no longer deletes what it has not moved.** Run `migrate:sheet-fields` and check its report before saving such a character in the editor; content lost before the upgrade is only in a backup.
 
@@ -1434,11 +1684,11 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 
 ### Security
 
-- **One player can no longer flood the chat, hit points, hit dice or token moves.** Each has a limit per player far above what a table sends; the DM's chat cooldown still works on top.
+- **One player can no longer flood the chat, hit points, hit dice or token moves.** Each has a limit per player far above what a table sends; the GM's chat cooldown still works on top.
 
 - **One account can no longer hold unlimited live connections, or rejoin a campaign in a loop.** An account may have 40 open at once.
 
-- **The DM's live controls have limits too.**
+- **The GM's live controls have limits too.**
 
 - **A dice roll's character name and purpose are limited in length,** 200 and 300 characters.
 
@@ -1499,7 +1749,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 - **Existing lit maps keep line-of-sight lighting.** They get **Global Illumination** switched on, though unlit ground is now fully dark where it was nearly dark; turn it off in Edit Map or the Lights panel when you want lights and darkvision to matter.
 - **A player or spectator with no token on a lit map sees nothing.** To let a spectator watch a lit map, turn dynamic lighting off for that map.
 - **Players' maps remember explored areas,** in grey, on lit maps. It is on for existing maps.
-- **A token belongs to whoever is set as its controller.** A character's token set to **Nobody (DM controls)**, or to someone else, gives its player no sight on a lit map and cannot be seen by them through fog; choose them in **Edit Token → Controlled By** if they should have it.
+- **A token belongs to whoever is set as its controller.** A character's token set to **Nobody (GM controls)**, or to someone else, gives its player no sight on a lit map and cannot be seen by them through fog; choose them in **Edit Token → Controlled By** if they should have it.
 - **Character sheets drop fields their game system does not define,** the next time each sheet is saved. Fields written by sheets before 1.3.0 are moved to where the sheet reads them, and where that place already holds something, the older copy is dropped.
 
 #### What to do afterwards, if it applies to you
@@ -1534,17 +1784,17 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 ### Added
 
-- **Obscure a token's identity.** Right-click a token for **Obscure Identity**: players who do not control it see a grey shape called "Unknown creature", and nothing else about it reaches their browsers. See [Obscuring a Token's Identity](docs/DM_GUIDE.md#obscuring-a-tokens-identity).
+- **Obscure a token's identity.** Right-click a token for **Obscure Identity**: players who do not control it see a grey shape called "Unknown creature", and nothing else about it reaches their browsers. See [Obscuring a Token's Identity](docs/GM_GUIDE.md#obscuring-a-tokens-identity).
 
-- **Maps remember what each player has explored.** On a map with dynamic lighting, **Remember Explored Areas** in Edit Map turns it on for a map, and **Reset explored areas** in the Fog of War panel clears it. See [Explored Areas](docs/DM_GUIDE.md#explored-areas).
+- **Maps remember what each player has explored.** On a map with dynamic lighting, **Remember Explored Areas** in Edit Map turns it on for a map, and **Reset explored areas** in the Fog of War panel clears it. See [Explored Areas](docs/GM_GUIDE.md#explored-areas).
 
-- **Tokens have darkvision,** set in grid squares in the Token Manager or Edit Token. See [Darkvision](docs/DM_GUIDE.md#darkvision).
+- **Tokens have darkvision,** set in grid squares in the Token Manager or Edit Token. See [Darkvision](docs/GM_GUIDE.md#darkvision).
 
-- **Preview the map through a token,** or **All player tokens** for the whole party. See [Previewing the Player View](docs/DM_GUIDE.md#previewing-the-player-view).
+- **Preview the map through a token,** or **All player tokens** for the whole party. See [Previewing the Player View](docs/GM_GUIDE.md#previewing-the-player-view).
 
-- **The DM can delete the campaign's own documents** from the Campaign documents panel.
+- **The GM can delete the campaign's own documents** from the Campaign documents panel.
 
-- **Fog of war can be turned on or off for each map,** at the top of the Fog of War panel or in Edit Map. See [Turning Fog On or Off](docs/DM_GUIDE.md#turning-fog-on-or-off).
+- **Fog of war can be turned on or off for each map,** at the top of the Fog of War panel or in Edit Map. See [Turning Fog On or Off](docs/GM_GUIDE.md#turning-fog-on-or-off).
 
 - **Each vibe period can play its own music,** chosen in the period editor. Notes typed into the old audio box are dropped the next time the periods are saved.
 
@@ -1552,7 +1802,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Tied initiative keeps the order combatants were added in.**
 
-- **Dynamic lighting limits what players see.** A player sees what their tokens' darkvision reaches and what a light lights. **Global Illumination** keeps the older line-of-sight behaviour, and is on for maps made before this release. See [Enabling Dynamic Lighting](docs/DM_GUIDE.md#enabling-dynamic-lighting).
+- **Dynamic lighting limits what players see.** A player sees what their tokens' darkvision reaches and what a light lights. **Global Illumination** keeps the older line-of-sight behaviour, and is on for maps made before this release. See [Enabling Dynamic Lighting](docs/GM_GUIDE.md#enabling-dynamic-lighting).
 
 - **Preview Player View shows one chosen player's view.**
 
@@ -1564,7 +1814,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 ### Fixed
 
-- **Deleting an account works.** The person's chat, rolls and uploads stay, no longer linked to anyone. A campaign they created with no other DM must be handed over or deleted first.
+- **Deleting an account works.** The person's chat, rolls and uploads stay, no longer linked to anyone. A campaign they created with no other GM must be handed over or deleted first.
 
 - **Display names are checked by the server,** 1 to 50 characters.
 
@@ -1574,25 +1824,25 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Character sheets store only the fields their game system defines.**
 
-- **Saving a sheet no longer undoes hit point changes the DM made.**
+- **Saving a sheet no longer undoes hit point changes the GM made.**
 
 - **A save refused over a bad value keeps your edits.**
 
 - **An emptied text box no longer stops a sheet saving.**
 
-- **D&D 5e characters made before 1.3.0 show their proficiencies and languages.**
+- **5E characters made before 1.3.0 show their proficiencies and languages.**
 
-- **A D&D 5e character without spellcasting details can be saved.**
+- **A 5E character without spellcasting details can be saved.**
 
-- **Pathfinder 2e spells no longer stop a sheet saving.**
+- **Fantasy d20 spells no longer stop a sheet saving.**
 
-- **Pathfinder 2e spell slots show how many are used.**
+- **Fantasy d20 spell slots show how many are used.**
 
-- **Pathfinder 2e feat descriptions show on the read-only sheet.**
+- **Fantasy d20 feat descriptions show on the read-only sheet.**
 
-- **Call of Cthulhu skills inside a group can be edited.**
+- **Horror d100 skills inside a group can be edited.**
 
-- **Call of Cthulhu possession notes keep their dashes.**
+- **Horror d100 possession notes keep their dashes.**
 
 - **A short colour code such as `#fff` works as a sheet's header colour.**
 
@@ -1660,7 +1910,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **A combatant whose token or map is deleted now leaves the order.**
 
-- **Resuming a paused session keeps what the DM did during the break.**
+- **Resuming a paused session keeps what the GM did during the break.**
 
 - **Role changes take effect on open pages at once.**
 
@@ -1682,7 +1932,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Player Preview looks only through tokens the players would have.**
 
-- **Player Preview hides the DM's light markers.** Leave the preview to move or edit a light.
+- **Player Preview hides the GM's light markers.** Leave the preview to move or edit a light.
 
 - **Backups made from the Admin Dashboard restore again,** including backups made on 1.4.0 and backups from an older version into a newer one.
 
@@ -1764,7 +2014,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Saving someone else's character no longer reveals its game system.**
 
-- **Maps the DM has not shown yet are private to the DM.** Players and spectators get only the campaign's current map, though art in the campaign's asset library stays visible to every member.
+- **Maps the GM has not shown yet are private to the GM.** Players and spectators get only the campaign's current map, though art in the campaign's asset library stays visible to every member.
 
 - **Players are not told about combatants on a map the table is not showing.**
 
@@ -1774,19 +2024,19 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Deleting a campaign hands its library to the uploaders and deletes the campaign in one step.**
 
-- **Only the DM can add assets to a campaign's library, by uploading or by moving.** Players may still add token art.
+- **Only the GM can add assets to a campaign's library, by uploading or by moving.** Players may still add token art.
 
 - **A picture can only be used by someone allowed to read it.**
 
 - **Exports include only files the person exporting may open.**
 
-- **The creature and token template libraries can be read only by the DM.**
+- **The creature and token template libraries can be read only by the GM.**
 
 - **The campaign overview no longer shows players a map's spirit-layer image address.**
 
 - **Campaign settings are checked before they are saved.**
 
-- **Only the DM's chat messages are shown as DM messages.**
+- **Only the GM's chat messages are shown as GM messages.**
 
 - **A live connection is only ever in one campaign.**
 
@@ -1808,7 +2058,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **A spectator never controls a token and cannot change a character.**
 
-- **A spectator cannot move or edit a token through the API, and only the DM can resize a token.**
+- **A spectator cannot move or edit a token through the API, and only the GM can resize a token.**
 
 - **A player opening or closing a door can only change whether it is open.**
 
@@ -1849,21 +2099,21 @@ git pull origin main
 docker compose up -d --build
 ```
 
-**One new optional setting.** `MAX_DOCUMENT_SIZE_MB` sets the largest document a DM can upload and defaults to **50 MB** if you do not set it, so you can ignore it unless you want a different limit. It lives beside the other size limits under **Admin → Settings → Upload Size Limits**. Rulebooks are large, so if you raise it, raise `NGINX_MAX_BODY_SIZE` to match, or the bundled proxy will reject the upload before it reaches CozyVTT.
+**One new optional setting.** `MAX_DOCUMENT_SIZE_MB` sets the largest document a GM can upload and defaults to **50 MB** if you do not set it, so you can ignore it unless you want a different limit. It lives beside the other size limits under **Admin → Settings → Upload Size Limits**. Rulebooks are large, so if you raise it, raise `NGINX_MAX_BODY_SIZE` to match, or the bundled proxy will reject the upload before it reaches CozyVTT.
 
 There is no manual data migration for this release.
 
 ### Added
 
-- **Walls can be selected and moved.** Click, Shift-click, drag a box or press Ctrl+A, then drag or nudge with the arrow keys. This is also the fix when a map's walls do not sit on its artwork. See [Selecting and Moving Walls](docs/DM_GUIDE.md#selecting-and-moving-walls).
+- **Walls can be selected and moved.** Click, Shift-click, drag a box or press Ctrl+A, then drag or nudge with the arrow keys. This is also the fix when a map's walls do not sit on its artwork. See [Selecting and Moving Walls](docs/GM_GUIDE.md#selecting-and-moving-walls).
 
-- **Rulebooks and handouts, readable inside CozyVTT.** ([#39](https://github.com/CheekyChinchilla/CozyVTT/issues/39)) A **Documents** section on the dashboard holds PDF, plain text and Markdown documents, uploaded or written in CozyVTT, and a DM shares them with a campaign. Adds a `documents/` folder under your uploads directory. See [Documents](docs/USER_GUIDE.md#documents).
+- **Rulebooks and handouts, readable inside CozyVTT.** ([#39](https://github.com/CheekyChinchilla/CozyVTT/issues/39)) A **Documents** section on the dashboard holds PDF, plain text and Markdown documents, uploaded or written in CozyVTT, and a GM shares them with a campaign. Adds a `documents/` folder under your uploads directory. See [Documents](docs/USER_GUIDE.md#documents).
 
 - **Save the rolls you keep retyping.** ([#47](https://github.com/CheekyChinchilla/CozyVTT/issues/47)) **Saved**, beneath the dice buttons, keeps up to fifty named rolls per campaign, seen by you alone. See [Rolling Dice](docs/USER_GUIDE.md#rolling-dice).
 
-- **The DM can hand the game to someone else.** ([#33](https://github.com/CheekyChinchilla/CozyVTT/issues/33)) The **crown** in **Campaign Settings → Members** moves the DM seat, live. The campaign's owner keeps **Owner Settings** to delete it or take the seat back. See [Handing the game to someone else](docs/DM_GUIDE.md#handing-the-game-to-someone-else).
+- **The GM can hand the game to someone else.** ([#33](https://github.com/CheekyChinchilla/CozyVTT/issues/33)) The **crown** in **Campaign Settings → Members** moves the GM seat, live. The campaign's owner keeps **Owner Settings** to delete it or take the seat back. See [Handing the game to someone else](docs/GM_GUIDE.md#handing-the-game-to-someone-else).
 
-- **Hit dice can be spent from the sheet and the roll menu.** ([#43](https://github.com/CheekyChinchilla/CozyVTT/issues/43)) A click rolls one die plus Constitution and counts it off; apply the healing with the roster's **+**. See [Spending a hit die on a short rest (D&D 5e)](docs/PLAYER_GUIDE.md#spending-a-hit-die-on-a-short-rest-dd-5e).
+- **Hit dice can be spent from the sheet and the roll menu.** ([#43](https://github.com/CheekyChinchilla/CozyVTT/issues/43)) A click rolls one die plus Constitution and counts it off; apply the healing with the roster's **+**. See [Spending a hit die on a short rest (5E)](docs/PLAYER_GUIDE.md#spending-a-hit-die-on-a-short-rest-5e).
 
 - **A roll of your own, from your own token.** **Custom Roll** sits at the foot of your character's roll menu, filed under your character.
 
@@ -1911,7 +2161,7 @@ There is no manual data migration for this release.
 
 - **The atmosphere track list only offers tracks that will actually play.**
 
-- **Atmosphere audio from the DM's own library now plays for the whole table.**
+- **Atmosphere audio from the GM's own library now plays for the whole table.**
 
 - **An uploaded audio file can no longer be served as a web page.**
 
@@ -1931,9 +2181,9 @@ There is no manual data migration for this release.
 
 - **Chat history goes all the way back again.** ([#44](https://github.com/CheekyChinchilla/CozyVTT/issues/44))
 
-- **A roll now says who it is for, not just who pressed the button,** with **(DM rolled)** beside a roll the DM made for someone.
+- **A roll now says who it is for, not just who pressed the button,** with **(GM rolled)** beside a roll the GM made for someone.
 
-- **Only you and your DM can roll your character's dice.** ([#42](https://github.com/CheekyChinchilla/CozyVTT/issues/42)) Others can still read your sheet.
+- **Only you and your GM can roll your character's dice.** ([#42](https://github.com/CheekyChinchilla/CozyVTT/issues/42)) Others can still read your sheet.
 
 - **The backup script runs on Linux and macOS.**
 
@@ -1953,25 +2203,25 @@ As with any release that migrates, take a database dump first, since migrations 
 ./backend/scripts/backup.sh
 ```
 
-**Pathfinder 2e tables have one command to run afterwards.** The starter templates used to fill in fields the sheet never read, and this moves that content to where it is displayed:
+**Fantasy d20 tables have one command to run afterwards.** The starter templates used to fill in fields the sheet never read, and this moves that content to where it is displayed:
 
 ```bash
 docker compose exec backend npm run migrate:sheet-fields
 ```
 
-Add `-- --dry-run` first if you would like to see what it would change. D&D 5e sheets need nothing; they are read correctly as they are.
+Add `-- --dry-run` first if you would like to see what it would change. 5E sheets need nothing; they are read correctly as they are.
 
 **One change worth telling your players about.** Dynamic lighting now requires line of sight: a lit room is only visible to someone who can actually see into it. If your maps relied on a light revealing a room to the whole table, those rooms will now stay dark until a character can see them.
 
 ### Added
 
-- **Notes of your own, in a new Notes tab.** Up to two hundred Markdown notes per campaign, saved as you type and private to you, the DM included. See [Your Own Notes](docs/USER_GUIDE.md#your-own-notes).
+- **Notes of your own, in a new Notes tab.** Up to two hundred Markdown notes per campaign, saved as you type and private to you, the GM included. See [Your Own Notes](docs/USER_GUIDE.md#your-own-notes).
 
-- **You can add skills of your own to a D&D 5e sheet,** under **Your Own Skills**, for tool proficiencies or homebrew skills. See [Skills the sheet doesn't have (D&D 5e)](docs/PLAYER_GUIDE.md#skills-the-sheet-doesnt-have-dd-5e).
+- **You can add skills of your own to a 5E sheet,** under **Your Own Skills**, for tool proficiencies or homebrew skills. See [Skills the sheet doesn't have (5E)](docs/PLAYER_GUIDE.md#skills-the-sheet-doesnt-have-5e).
 
-- **The notes your DM writes at the end of a session are finally readable,** in **Past Sessions** on the **Session** tab, for the whole campaign. Notes written before this release appear too, so a DM who used the box as a private reminder should read them first; the pencil on each entry edits or clears it. See [Editing or clearing a past session's notes](docs/DM_GUIDE.md#editing-or-clearing-a-past-sessions-notes).
+- **The notes your GM writes at the end of a session are finally readable,** in **Past Sessions** on the **Session** tab, for the whole campaign. Notes written before this release appear too, so a GM who used the box as a private reminder should read them first; the pencil on each entry edits or clears it. See [Editing or clearing a past session's notes](docs/GM_GUIDE.md#editing-or-clearing-a-past-sessions-notes).
 
-- **The Call of Cthulhu sheet can record what the rules ask an investigator to track:** conditions, Cthulhu Mythos and spells, appearance, and Keeper's Notes.
+- **The Horror d100 sheet can record what the rules ask a character to track:** conditions, the lore skill and spells, appearance, and GM's Notes.
 
 - **A weapon you add yourself can carry properties,** the eleven from the rules or your own.
 
@@ -1989,7 +2239,7 @@ Add `-- --dry-run` first if you would like to see what it would change. D&D 5e s
 
 - **Spell save DC and spell attack are worked out for you,** each with an **Other bonus** box. Numbers you had typed are kept as that bonus.
 
-- **A misleading promise about secret rolls has been corrected.** The box reads **"hidden from other players"**: the DM has always seen secret rolls.
+- **A misleading promise about secret rolls has been corrected.** The box reads **"hidden from other players"**: the GM has always seen secret rolls.
 
 - **The roster's "Reassign to Player" menu entry is gone.** It never did anything.
 
@@ -2003,45 +2253,45 @@ Add `-- --dry-run` first if you would like to see what it would change. D&D 5e s
 
 - **Players can see the map and the token art again.** A picture a campaign uses can be seen by everyone in that campaign.
 
-- **Character sheets now show the features and proficiencies they were built with.** Pathfinder 2e characters need the one command in the upgrade notes.
+- **Character sheets now show the features and proficiencies they were built with.** Fantasy d20 characters need the one command in the upgrade notes.
 
-- **Pathfinder 2e sheets show the right Armor Class, Class DC and Initiative.**
+- **Fantasy d20 sheets show the right Armor Class, Class DC and Initiative.**
 
 - **Your character keeps the name you gave it.**
 
 - **Characters no longer claim to be wizards.**
 
-- **A Pathfinder 2e sheet no longer breaks when a strike has no proficiency recorded.**
+- **A Fantasy d20 sheet no longer breaks when a strike has no proficiency recorded.**
 
-- **The Pathfinder 2e sheet shows everything it lets you record,** with deity and alignment added.
+- **The Fantasy d20 sheet shows everything it lets you record,** with deity and alignment added.
 
-- **A Pathfinder 2e character with a ritual can be saved again.**
+- **A Fantasy d20 character with a ritual can be saved again.**
 
 - **Adding a feature to a sheet works, and a deleted one stays deleted.**
 
-- **A D&D 5e sheet with an empty Hit Dice total opens again.**
+- **A 5E sheet with an empty Hit Dice total opens again.**
 
-- **Your D&D 5e languages stay where you put them.**
+- **Your 5E languages stay where you put them.**
 
 - **Hit points changed on a character sheet show up straight away.**
 
 - **A character created for a campaign now actually appears in it.**
 
-- **The DM can put any player's character on the map,** by dragging from the roster or with **Add to Map**.
+- **The GM can put any player's character on the map,** by dragging from the roster or with **Add to Map**.
 
 - **Your own secret rolls stay in your list,** with a **Secret** button to hide them.
 
-- **The roll picker now offers the rolls a Pathfinder 2e or Call of Cthulhu character actually has.**
+- **The roll picker now offers the rolls a Fantasy d20 or Horror d100 character actually has.**
 
 - **Pointing at the dark no longer tells you what is standing in it.**
 
-- **You cannot lose your own token underneath someone else's.** Creatures no longer share a square, and a creature at zero hit points is drawn faded and can be stood on; the DM may still stack tokens. See [Two creatures can't stand in the same square](docs/PLAYER_GUIDE.md#two-creatures-cant-stand-in-the-same-square).
+- **You cannot lose your own token underneath someone else's.** Creatures no longer share a square, and a creature at zero hit points is drawn faded and can be stood on; the GM may still stack tokens. See [Two creatures can't stand in the same square](docs/PLAYER_GUIDE.md#two-creatures-cant-stand-in-the-same-square).
 
 - **Messages from the map are readable again.**
 
 - **A token added to the initiative tracker starts with no initiative.**
 
-- **A DM can now mark an NPC with any of the fifteen D&D 5e conditions.**
+- **A GM can now mark an NPC with any of the fifteen 5E conditions.**
 
 - **The setup wizard now keeps the settings it asks you for.**
 
@@ -2095,7 +2345,7 @@ As with any release that migrates, take a database dump first, since migrations 
 
 - **Clicking a character in your gallery opens it for reading, not for editing,** with **Edit** on the sheet.
 
-- **Players joining and leaving no longer post to chat.** A green or grey dot beside each name in the **Campaign Roster** shows who is in the session. A DM can clear old notices with the eraser button on the chat panel.
+- **Players joining and leaving no longer post to chat.** A green or grey dot beside each name in the **Campaign Roster** shows who is in the session. A GM can clear old notices with the eraser button on the chat panel.
 
 ### Fixed
 
@@ -2123,17 +2373,17 @@ As with any release that migrates, take a database dump first, since migrations 
 
 - **The close button on the character sheet window is back on the window.**
 
-- **Players can roll their own initiative,** from their row in the tracker or **Roll Initiative** on their token, once the DM has added them and until combat starts. See [Rolling Your Own Initiative](docs/PLAYER_GUIDE.md#rolling-your-own-initiative).
+- **Players can roll their own initiative,** from their row in the tracker or **Roll Initiative** on their token, once the GM has added them and until combat starts. See [Rolling Your Own Initiative](docs/PLAYER_GUIDE.md#rolling-your-own-initiative).
 
 - **Token conditions are readable on the map.** ([#27](https://github.com/CheekyChinchilla/CozyVTT/issues/27)) Each shows as a two-letter badge, and hovering a token names its conditions in full.
 
-- **Initiative rolls now follow each game system's rules.** D&D 5e adds Dexterity and an **Initiative other bonus**, Pathfinder 2e the stat its **Uses:** names, and Call of Cthulhu sets DEX order with no roll. D&D 5e characters made before keep the total they had.
+- **Initiative rolls now follow each game system's rules.** 5E adds Dexterity and an **Initiative other bonus**, Fantasy d20 the stat its **Uses:** names, and Horror d100 sets DEX order with no roll. 5E characters made before keep the total they had.
 
-- **Passive Perception is right on a D&D 5e sheet, expertise included.** ([#26](https://github.com/CheekyChinchilla/CozyVTT/issues/26)) An **Other bonus** box takes the Observant feat and the like.
+- **Passive Perception is right on a 5E sheet, expertise included.** ([#26](https://github.com/CheekyChinchilla/CozyVTT/issues/26)) An **Other bonus** box takes a feat's bonus and the like.
 
 - **Renaming a character updates it everywhere.**
 
-- **Call of Cthulhu characteristics are in the same order whether you are reading or editing.**
+- **Horror d100 characteristics are in the same order whether you are reading or editing.**
 
 - **The token right-click menu is only as wide as it needs to be, and no longer lists "Roll…" twice.**
 
@@ -2199,19 +2449,19 @@ One optional follow-up:
 
 - **Hovering an initiative row highlights that token on the map, and the other way round.**
 
-- **Creature saving throws and skills are worked out for you** from proficiency, ability scores and Challenge Rating, with overrides for homebrew. Existing creatures keep their exact numbers. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
+- **Creature saving throws and skills are worked out for you** from proficiency, ability scores and Challenge Rating, with overrides for homebrew. Existing creatures keep their exact numbers. See [Saving Throws and Skills](docs/GM_GUIDE.md#saving-throws-and-skills).
 
 ### Changed
 
-- **Creature rolls now depend on your game system.** Call of Cthulhu and Shadowrun offer **Custom Roll** only.
+- **Creature rolls now depend on your game system.** Horror d100 and a fourth game system offer **Custom Roll** only.
 
-- **Pathfinder 2e creatures use Pathfinder's own structure:** Fortitude, Reflex and Will, a Level, and attribute modifiers, entered as printed.
+- **Fantasy d20 creatures use the system's own structure:** Fortitude, Reflex and Will, a Level, and attribute modifiers, entered as printed.
 
-- **The Creature Library now shows your campaign's game system by default,** with **All game systems** in Filters, and the seeding button reads **Import D&D 5e SRD**.
+- **The Creature Library now shows your campaign's game system by default,** with **All game systems** in Filters, and the seeding button reads **Import 5E SRD**.
 
 - **Challenge Rating is chosen from a list.**
 
-- **Fog of war is now a box selection instead of a brush,** snapped to whole squares. The brush and its size slider are gone; revealed areas carry over. See [Revealing and Hiding](docs/DM_GUIDE.md#revealing-and-hiding).
+- **Fog of war is now a box selection instead of a brush,** snapped to whole squares. The brush and its size slider are gone; revealed areas carry over. See [Revealing and Hiding](docs/GM_GUIDE.md#revealing-and-hiding).
 
 ### Fixed
 
@@ -2277,9 +2527,9 @@ If your instance has SMTP configured, **Admin → Users** gains an **Invite User
 
 - **Stat blocks are readable on the dark themes.**
 
-- **The Pathfinder and Call of Cthulhu stat block accents render.**
+- **The Fantasy d20 and Horror d100 stat block accents render.**
 
-- **Faint labels on character sheets and the DM's map panels are readable.**
+- **Faint labels on character sheets and the GM's map panels are readable.**
 
 - **Admin-issued temporary passwords now stop working once used.** Until it is replaced, the account can only change its password.
 
@@ -2355,7 +2605,7 @@ A modernisation release: faster real-time play, a resizable session workspace, a
 
 - **Chat, Dice, Initiative and Session are full-height tabs,** with an unread badge on Chat.
 
-- **The DM's header buttons are grouped icon buttons** with tooltips.
+- **The GM's header buttons are grouped icon buttons** with tooltips.
 
 - **Buttons and dialogs share one look,** and follow the theme throughout.
 
@@ -2393,13 +2643,13 @@ Initial public release.
 
 ### Added
 
-- **A self-hosted tabletop for several campaigns at once,** each run by its own DM, with Admin, DM and Player roles, a setup wizard, an admin dashboard with backups, and registration with optional admin approval.
+- **A self-hosted tabletop for several campaigns at once,** each run by its own GM, with Admin, GM and Player roles, a setup wizard, an admin dashboard with backups, and registration with optional admin approval.
 
 - **16 colour themes, a custom theme builder and 8 open-licence fonts,** chosen per user, with the admin's choice as the default and on the sign-in page. Branding images are replaced in `frontend/public/`.
 
 - **Sign-in with email and password, two-factor authentication with backup codes,** Remember me for 30 days, password reset by email or a temporary password from an admin, request limits, and file checks on every upload.
 
-- **Character sheets for D&D 5e, Pathfinder 2e and Call of Cthulhu 7e,** and a Flexible sheet for any other system.
+- **Character sheets for 5E, Fantasy d20 and Horror d100,** and a Flexible sheet for any other system.
 
 - **Campaigns and sessions:** invitations, the roster, starting, pausing and ending a session, session notes, and campaign export and import.
 
@@ -2417,4 +2667,4 @@ Initial public release.
 
 - **Docker Compose deployment** with an internal network, a development stack, structured logs, a `/health` check, configurable ports, and support for a reverse proxy of your own.
 
-Known limitations at release: assets could not be moved between scopes, the global asset manager permission had no admin control, branding had no upload screen, a campaign could not be imported without its tokens, there was no built-in log rotation, the Shadowrun 6e sheet was unfinished, and accessibility had not been audited.
+Known limitations at release: assets could not be moved between scopes, the global asset manager permission had no admin control, branding had no upload screen, a campaign could not be imported without its tokens, there was no built-in log rotation, the sheet of a fourth game system was unfinished, and accessibility had not been audited.

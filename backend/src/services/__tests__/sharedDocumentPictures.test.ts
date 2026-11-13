@@ -6,9 +6,9 @@
  * What a document names is kept when it is written: only the start of its
  * text is read, a fixed number of addresses is kept from it, each naming an
  * asset that exists. A document stored before that is read a few at a time
- * by the requests, each once. Only a document whose text the campaign's DM
+ * by the requests, each once. Only a document whose text the campaign's GM
  * controls counts: a global one someone else uploaded does not, even linked
- * by the DM.
+ * by the GM.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -37,22 +37,22 @@ import {
 jest.setTimeout(60000);
 
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-doc-pictures-'));
-let dmId: string;
+let gmId: string;
 let otherId: string;
 let campaignId: string;
 let elsewhereId: string;
 const docIds: string[] = [];
 
 beforeAll(async () => {
-  dmId = (await createTestUser({ displayName: 'Scan DM' })).id;
+  gmId = (await createTestUser({ displayName: 'Scan GM' })).id;
   otherId = (await createTestUser({ displayName: 'Scan Global Manager' })).id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Scan' })).id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Scan' })).id;
   elsewhereId = (await createTestCampaign(otherId, { name: 'Scan elsewhere' })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: otherId, campaignId, role: 'PLAYER', characterIds: [] },
-      { userId: otherId, campaignId: elsewhereId, role: 'DM', characterIds: [] },
+      { userId: otherId, campaignId: elsewhereId, role: 'GM', characterIds: [] },
     ],
   });
 });
@@ -61,7 +61,7 @@ afterAll(async () => {
   await prisma.campaignDocument.deleteMany({ where: { campaignId } });
   await prisma.asset.deleteMany({ where: { OR: [{ id: { in: docIds } }, { campaignId: { in: [campaignId, elsewhereId] } }] } });
   await cleanupCampaigns([campaignId, elsewhereId]);
-  await cleanupUsers([dmId, otherId]);
+  await cleanupUsers([gmId, otherId]);
   await prisma.$disconnect();
   fs.rmSync(DIR, { recursive: true, force: true });
 });
@@ -77,7 +77,7 @@ async function pictures(count: number, inCampaign = campaignId): Promise<string[
   const ids = Array.from({ length: count }, () => randomUUID());
   await prisma.asset.createMany({
     data: ids.map((id) => ({
-      id, type: 'MAP' as const, scope: 'CAMPAIGN' as const, campaignId: inCampaign, uploadedById: dmId, filename: `${id}.png`,
+      id, type: 'MAP' as const, scope: 'CAMPAIGN' as const, campaignId: inCampaign, uploadedById: gmId, filename: `${id}.png`,
       originalName: `${id}.png`, mimeType: 'image/png', fileSize: 1, filePath: path.join(DIR, `${id}.png`), name: id,
     })),
   });
@@ -85,7 +85,7 @@ async function pictures(count: number, inCampaign = campaignId): Promise<string[
 }
 
 /**
- * A Markdown document of a campaign's, written by `uploadedById` (the DM
+ * A Markdown document of a campaign's, written by `uploadedById` (the GM
  * unless said), stored as one from before what documents name was kept: a
  * row and a file, not read.
  */
@@ -95,7 +95,7 @@ async function campaignDocument(text: string | Buffer, options: { uploadedById?:
   fs.writeFileSync(filePath, text);
   const doc = await prisma.asset.create({
     data: {
-      type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId: options.inCampaign ?? campaignId, uploadedById: options.uploadedById ?? dmId,
+      type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId: options.inCampaign ?? campaignId, uploadedById: options.uploadedById ?? gmId,
       filename, originalName: filename, mimeType: 'text/markdown', fileSize: fs.statSync(filePath).size, filePath, name: filename,
     },
   });
@@ -293,7 +293,7 @@ describe('a campaign with many handouts', () => {
     const handouts = Array.from({ length: 300 }, (_, i) => ({ id: randomUUID(), filePath: path.join(DIR, `many-${i}-${randomUUID()}.md`) }));
     await prisma.asset.createMany({
       data: handouts.map(({ id, filePath }) => ({
-        id, type: 'DOCUMENT' as const, scope: 'CAMPAIGN' as const, campaignId, uploadedById: dmId, filename: path.basename(filePath),
+        id, type: 'DOCUMENT' as const, scope: 'CAMPAIGN' as const, campaignId, uploadedById: gmId, filename: path.basename(filePath),
         originalName: path.basename(filePath), mimeType: 'text/markdown', fileSize: 1, filePath, name: id, picturesReadAt: new Date(),
       })),
     });
@@ -333,7 +333,7 @@ describe('a campaign whose handouts were written after the tables were last anal
       const handouts = Array.from({ length: 300 }, () => randomUUID());
       await prisma.asset.createMany({
         data: handouts.map((id) => ({
-          id, type: 'DOCUMENT' as const, scope: 'CAMPAIGN' as const, campaignId, uploadedById: dmId, filename: `${id}.md`,
+          id, type: 'DOCUMENT' as const, scope: 'CAMPAIGN' as const, campaignId, uploadedById: gmId, filename: `${id}.md`,
           originalName: `${id}.md`, mimeType: 'text/markdown', fileSize: 1, filePath: path.join(DIR, `${id}.md`), name: id, picturesReadAt: new Date(),
         })),
       });
@@ -370,16 +370,16 @@ describe('a campaign whose handouts were written after the tables were last anal
   });
 });
 
-describe('a document of another campaign the DM runs', () => {
-  // That campaign's later DM could rewrite it, and add the address of any
+describe('a document of another campaign the GM runs', () => {
+  // That campaign's later GM could rewrite it, and add the address of any
   // picture of this campaign they were once shown.
-  it('counts for nothing in this one, even linked to it by the DM', async () => {
-    const otherCampaign = (await createTestCampaign(dmId, { name: 'Scan other table' })).id;
+  it('counts for nothing in this one, even linked to it by the GM', async () => {
+    const otherCampaign = (await createTestCampaign(gmId, { name: 'Scan other table' })).id;
     try {
-      await prisma.campaignMembership.create({ data: { userId: dmId, campaignId: otherCampaign, role: 'DM', characterIds: [] } });
+      await prisma.campaignMembership.create({ data: { userId: gmId, campaignId: otherCampaign, role: 'GM', characterIds: [] } });
       const [picture] = await pictures(1);
       const docId = await campaignDocument(address(picture), { inCampaign: otherCampaign });
-      await prisma.campaignDocument.create({ data: { campaignId, assetId: docId, linkedById: dmId } });
+      await prisma.campaignDocument.create({ data: { campaignId, assetId: docId, linkedById: gmId } });
       await recordDocumentPictures(docId, new Set([picture]));
       const found = await picturesInSharedDocuments([campaignId], new Set([picture]));
       expect(found.get(campaignId)?.has(picture) ?? false).toBe(false);
@@ -390,19 +390,19 @@ describe('a document of another campaign the DM runs', () => {
     }
   });
 
-  it("still counts the DM's own document linked to it", async () => {
+  it("still counts the GM's own document linked to it", async () => {
     const [picture] = await pictures(1);
     const filename = `own-${randomUUID()}.md`;
     const filePath = path.join(DIR, filename);
     fs.writeFileSync(filePath, address(picture));
     const doc = await prisma.asset.create({
       data: {
-        type: 'DOCUMENT', scope: 'USER', campaignId: null, uploadedById: dmId, filename, originalName: filename,
+        type: 'DOCUMENT', scope: 'USER', campaignId: null, uploadedById: gmId, filename, originalName: filename,
         mimeType: 'text/markdown', fileSize: 60, filePath, name: filename,
       },
     });
     docIds.push(doc.id);
-    await prisma.campaignDocument.create({ data: { campaignId, assetId: doc.id, linkedById: dmId } });
+    await prisma.campaignDocument.create({ data: { campaignId, assetId: doc.id, linkedById: gmId } });
     await recordDocumentPictures(doc.id, new Set([picture]));
     const found = await picturesInSharedDocuments([campaignId], new Set([picture]));
     expect(found.get(campaignId)?.has(picture)).toBe(true);
@@ -417,7 +417,7 @@ describe("a document from before that no campaign's handouts hold", () => {
     fs.writeFileSync(filePath, address(picture));
     const doc = await prisma.asset.create({
       data: {
-        type: 'DOCUMENT', scope: 'USER', campaignId: null, uploadedById: dmId, filename, originalName: filename,
+        type: 'DOCUMENT', scope: 'USER', campaignId: null, uploadedById: gmId, filename, originalName: filename,
         mimeType: 'text/markdown', fileSize: 60, filePath, name: filename,
       },
     });
@@ -434,7 +434,7 @@ describe("a document from before that no campaign's handouts hold", () => {
 });
 
 describe('a global document someone else uploaded', () => {
-  it('counts for nothing, even linked by the DM', async () => {
+  it('counts for nothing, even linked by the GM', async () => {
     const [picture] = await pictures(1);
     const filename = `global-${randomUUID()}.md`;
     const filePath = path.join(DIR, filename);
@@ -446,7 +446,7 @@ describe('a global document someone else uploaded', () => {
       },
     });
     docIds.push(doc.id);
-    await prisma.campaignDocument.create({ data: { campaignId, assetId: doc.id, linkedById: dmId } });
+    await prisma.campaignDocument.create({ data: { campaignId, assetId: doc.id, linkedById: gmId } });
     await recordDocumentPictures(doc.id, new Set([picture]));
     const found = await picturesInSharedDocuments([campaignId], new Set([picture]));
     expect(found.get(campaignId)?.has(picture) ?? false).toBe(false);

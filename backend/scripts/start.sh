@@ -4,6 +4,20 @@
 
 set -e
 
+# Until the last line hands over to node, this script is the container's first
+# process, and the first process ignores a signal it has no handler for: a
+# `docker compose stop`, `restart` or upgrade while the backend was still
+# starting waited out the whole stop_grace_period in docker-compose.yml. These
+# handlers stop it once the step it is on is done (bash runs a trap after the
+# command in the foreground), so a migration under way is never cut off. The
+# root phase below starts this script again as appuser, which sets them again.
+stop_while_starting() {
+  echo "🛑 Stopped while starting, before the backend was running."
+  exit "$1"
+}
+trap 'stop_while_starting 143' TERM
+trap 'stop_while_starting 130' INT
+
 # If running as root (production Docker with bind mounts), fix ownership of
 # mounted directories then drop to the unprivileged appuser via su-exec.
 # This is needed because Docker bind mounts are owned by the host (usually root),
@@ -102,7 +116,9 @@ if ./node_modules/.bin/prisma migrate deploy; then
   echo "✅ Migrations completed successfully"
 else
   echo "❌ Error: Migration failed"
-  echo "   Run 'docker compose exec -u appuser backend ./node_modules/.bin/prisma migrate status' to diagnose"
+  echo "   The first failure above names the cause. To list the migrations while the backend restarts, run on the host:"
+  echo "   docker compose run --rm -u appuser --entrypoint ./node_modules/.bin/prisma backend migrate status"
+  echo "   How to recover: docs/DEPLOYMENT.md, 'The backend keeps restarting, and its log says Migration failed'"
   exit 1
 fi
 

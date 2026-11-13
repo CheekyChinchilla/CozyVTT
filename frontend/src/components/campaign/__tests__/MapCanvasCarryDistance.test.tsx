@@ -20,7 +20,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
   };
   const sent: Array<[string, unknown]> = [];
@@ -53,7 +53,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
   const noop = () => undefined;
   const campaign = {
     id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, status: 'ACTIVE',
-    memberships: [{ userId: 'me', role: 'DM', user: { displayName: 'Me' } }, { userId: 'alice', role: 'PLAYER', user: { displayName: 'Alice' } }],
+    memberships: [{ userId: 'me', role: 'GM', user: { displayName: 'Me' } }, { userId: 'alice', role: 'PLAYER', user: { displayName: 'Alice' } }],
     characters: [], maps: [{ id: 'map-a', name: 'Map A' }],
   };
   return {
@@ -67,7 +67,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -149,7 +149,7 @@ function token(id: string, name: string, x: number, y: number, extra: Partial<To
   } as unknown as Token;
 }
 
-const goblin = (extra: Partial<Token> = {}) => token('tok-goblin', 'Goblin Scout', 0, 19, extra);
+const goblin = (extra: Partial<Token> = {}) => token('tok-goblin', 'Goblin', 0, 19, extra);
 
 /** The centre of square (x, y), at 100% and no pan. */
 const at = (x: number, y: number) => ({ clientX: x * 50 + 25, clientY: (19 - y) * 50 + 25 });
@@ -184,7 +184,7 @@ beforeAll(() => {
 beforeEach(() => {
   h.sent.length = 0;
   act(() => { useGameStore.getState().clearGameState(); });
-  h.set({ userRole: 'DM', currentMap: mapWith() });
+  h.set({ userRole: 'GM', currentMap: mapWith() });
 });
 
 describe('with a mouse', () => {
@@ -334,7 +334,7 @@ describe('with a finger', () => {
     finger.leave(surface());
 
     const card = screen.getByRole('button', { name: 'Close details' }).closest('.glass-panel') as HTMLElement;
-    expect(within(card).getByText('Goblin Scout')).toBeInTheDocument();
+    expect(within(card).getByText('Goblin')).toBeInTheDocument();
     expect(within(card).getByText(/^Carried /)).toBeInTheDocument();
     expect(carried()).toBe('Carried 0 ft (0 sq)');
   });
@@ -368,7 +368,7 @@ describe('on the compact layout', () => {
     finger.up(surface(), at(0, 19));
     finger.leave(surface());
 
-    expect(within(dock()).getByText('Goblin Scout')).toBeInTheDocument();
+    expect(within(dock()).getByText('Goblin')).toBeInTheDocument();
     expect(within(dock()).getByText(/^Carried /)).toBeInTheDocument();
   });
 });

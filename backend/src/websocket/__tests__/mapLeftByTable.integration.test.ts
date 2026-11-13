@@ -6,7 +6,7 @@
  * resend of a map that had passed its "is it current" check could still put
  * the table back on it, and a member's explored memory of any map went to
  * their own screens. Each now asks whether the map is the table's at the
- * moment it sends. A DM's report of another member's memory of a map the
+ * moment it sends. A GM's report of another member's memory of a map the
  * table is not on is not stored either: only Player Preview sends one, and
  * a preview shows the table's map.
  *
@@ -25,28 +25,28 @@ const email = (name: string) => `left-${name}-${runId}@test.cozyvtt.local`;
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let villageId: string;
 let cryptId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 const GOBLIN = 'goblin';
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Left ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Left ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Left ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -65,7 +65,7 @@ beforeAll(async () => {
   })).id;
   cryptId = (await prisma.map.create({ data: { ...base, name: 'Crypt', tokens: [] } })).id;
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 beforeEach(() => prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: villageId } }));
@@ -76,17 +76,17 @@ afterAll(async () => {
   await prisma.mapExploration.deleteMany({ where: { mapId: { in: [villageId, cryptId] } } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
-/** The table goes to the crypt from somewhere else: another tab of the DM's, or a script. */
+/** The table goes to the crypt from somewhere else: another tab of the GM's, or a script. */
 const tableGoesToTheCrypt = () => prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: cryptId } });
 
 describe("a drag still going on the map the table has left", () => {
-  it('stops reaching players at the switch, and still reaches the DM', async () => {
-    const mover = await server.connectAndAuth(dmCookie, campaignId);
-    const otherDmTab = await server.connectAndAuth(dmCookie, campaignId);
+  it('stops reaching players at the switch, and still reaches the GM', async () => {
+    const mover = await server.connectAndAuth(gmCookie, campaignId);
+    const otherGmTab = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const firstFrame = waitForEvent<{ x: number }>(player, 'token.moved');
@@ -97,21 +97,21 @@ describe("a drag still going on the map the table has left", () => {
     await tableGoesToTheCrypt();
     await pause(50);
     const nothing = expectNoEvent(player, 'token.moved', 600);
-    const toTheDm = waitForEvent<{ x: number }>(otherDmTab, 'token.moved');
+    const toTheGm = waitForEvent<{ x: number }>(otherGmTab, 'token.moved');
     // Within the second the drag's audience is kept for.
     mover.emit('token.move', { tokenId: GOBLIN, mapId: villageId, x: 3, y: 1 });
-    expect((await toTheDm).x).toBe(3);
+    expect((await toTheGm).x).toBe(3);
     await nothing;
 
     mover.disconnect();
-    otherDmTab.disconnect();
+    otherGmTab.disconnect();
     player.disconnect();
   });
 });
 
 describe('a drag let go on the map the table has left', () => {
   it('tells players nothing more of it, the token going included', async () => {
-    const mover = await server.connectAndAuth(dmCookie, campaignId);
+    const mover = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const firstFrame = waitForEvent<{ x: number }>(player, 'token.moved');
@@ -132,41 +132,41 @@ describe('a drag let go on the map the table has left', () => {
 });
 
 describe('a map resent after the table has left it', () => {
-  it('reaches nobody, the DM included', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+  it('reaches nobody, the GM included', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const village = await prisma.map.findUniqueOrThrow({ where: { id: villageId } });
     await tableGoesToTheCrypt();
-    const quiet = Promise.all([expectNoEvent(dm, 'map.changed', 500), expectNoEvent(player, 'map.changed', 500)]);
+    const quiet = Promise.all([expectNoEvent(gm, 'map.changed', 500), expectNoEvent(player, 'map.changed', 500)]);
     await broadcastMapData(server.io, campaignId, village);
     await quiet;
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('reaches everyone for the map the table is on', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const village = await prisma.map.findUniqueOrThrow({ where: { id: villageId } });
-    const heard = Promise.all([waitForEvent<{ mapId: string }>(dm, 'map.changed'), waitForEvent<{ mapId: string }>(player, 'map.changed')]);
+    const heard = Promise.all([waitForEvent<{ mapId: string }>(gm, 'map.changed'), waitForEvent<{ mapId: string }>(player, 'map.changed')]);
     await broadcastMapData(server.io, campaignId, village);
     expect((await heard).map((e) => e.mapId)).toEqual([villageId, villageId]);
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
 
 describe("a member's explored memory of a map", () => {
-  /** A DM socket whose Player Preview shows the player. */
+  /** A GM socket whose Player Preview shows the player. */
   async function previewing(mapId: string) {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const answered = waitForEvent(dm, 'exploration:state');
-    dm.emit('exploration:request', { mapId, userId: playerId });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const answered = waitForEvent(gm, 'exploration:state');
+    gm.emit('exploration:request', { mapId, userId: playerId });
     await answered;
-    return dm;
+    return gm;
   }
 
-  it('the table is not on reaches only the DM previewing them, not their own screen', async () => {
+  it('the table is not on reaches only the GM previewing them, not their own screen', async () => {
     const preview = await previewing(cryptId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const quiet = expectNoEvent(player, 'exploration:state', 500);
@@ -187,23 +187,23 @@ describe("a member's explored memory of a map", () => {
   });
 });
 
-describe("the DM's report of a player's explored memory", () => {
+describe("the GM's report of a player's explored memory", () => {
   const remembered = (mapId: string) => prisma.mapExploration.count({ where: { mapId, userId: playerId } });
 
   it('of a map the table is not on is not stored, and answered with no error', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const quiet = expectNoEvent(dm, 'error', 1500);
-    dm.emit('exploration:reveal', { mapId: cryptId, userId: playerId, cells: [3, 4] });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const quiet = expectNoEvent(gm, 'error', 1500);
+    gm.emit('exploration:reveal', { mapId: cryptId, userId: playerId, cells: [3, 4] });
     await quiet;
     expect(await remembered(cryptId)).toBe(0);
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('of the map the table is on is stored', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    dm.emit('exploration:reveal', { mapId: villageId, userId: playerId, cells: [3, 4] });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    gm.emit('exploration:reveal', { mapId: villageId, userId: playerId, cells: [3, 4] });
     for (let i = 0; i < 30 && (await remembered(villageId)) === 0; i += 1) await pause(100);
     expect(await remembered(villageId)).toBe(1);
-    dm.disconnect();
+    gm.disconnect();
   });
 });

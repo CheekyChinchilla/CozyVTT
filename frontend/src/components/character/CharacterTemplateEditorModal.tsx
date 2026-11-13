@@ -241,6 +241,7 @@ export default function CharacterTemplateEditorModal({
             onCancel={requestClose}
             onDirtyChange={setSheetDirty}
             allowTokenPicture={false}
+            isTemplate
           />
         </div>
       </div>

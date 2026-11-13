@@ -1,11 +1,8 @@
 """No tracked text file names another company's product for a feature of ours.
 
-Paint is described in its own words; naming the commercial program it
-resembles invites a trademark question for no gain. The same names are refused
-in commit messages by the local commit check. CozyVTT's look is described in
-its own words too, never as inspired by an animation studio's films, and a
-planned feature by what it is, never by what another tabletop program calls
-it. The patterns are kept encoded, so the repository carries no product name
+Paint is described in its own words, CozyVTT's look in its own words too, and
+a planned feature by what it is. The same names are refused in commit messages
+by the local commit check. The patterns are kept encoded, so the repository carries no product name
 even here; a type foundry credited for a font is not one.
 """
 
@@ -39,7 +36,7 @@ def lines_naming(pattern):
 
 
 class ProductNames(unittest.TestCase):
-    def test_no_tracked_text_file_names_the_commercial_paint_program(self):
+    def test_no_tracked_text_file_names_another_paint_program(self):
         self.assertEqual(lines_naming(NAMES), [])
 
     def test_no_tracked_text_file_names_the_animation_studio(self):

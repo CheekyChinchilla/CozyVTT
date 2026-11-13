@@ -1,13 +1,13 @@
 /**
- * The DM's wall undo history.
+ * The GM's wall undo history.
  *
  * MapCanvas stays mounted across a map switch, so the history did too: after
  * an edit on one map and a switch to another, Undo handed back the first
  * map's walls, and MapCanvas sent them as the new map's whole wall list. A
  * map switch now starts a fresh history.
  *
- * A change that is not one of the DM's own edits, such as a player opening a
- * door, is carried into every entry, so undoing the DM's last edit does not
+ * A change that is not one of the GM's own edits, such as a player opening a
+ * door, is carried into every entry, so undoing the GM's last edit does not
  * close the door again for everyone.
  */
 
@@ -83,7 +83,7 @@ describe('carry', () => {
     const door: WallSegment = { ...wall('d1'), type: 'door-closed' };
     const { result } = renderHook(() => useWallHistory([]));
     act(() => { result.current.reset([door, wall('w1', 100)]); });
-    // The DM moves the door.
+    // The GM moves the door.
     act(() => { result.current.push([{ ...door, x1: 10, x2: 60 }, wall('w1', 100)]); });
     // A player opens it.
     act(() => { result.current.carry((walls) => walls.map((w) => (w.id === 'd1' ? { ...w, type: 'door-open' } : w))); });

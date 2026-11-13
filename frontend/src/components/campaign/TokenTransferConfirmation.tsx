@@ -2,7 +2,7 @@
 // Which tokens go along when the table moves
 //
 // Shown before the table is moved to another map, from the Map Library's
-// Set Active and from Bring everyone here while the DM prepares a map: the
+// Set Active and from Bring everyone here while the GM prepares a map: the
 // tokens on the table's map, to tick the ones that go with it.
 // ============================================
 

@@ -8,49 +8,53 @@ import React, { Suspense, lazy } from 'react';
 import { GameSystem } from '../../types';
 import { CharacterSheetProps } from './types';
 import { FlexibleCharacterSheet } from './FlexibleCharacterSheet';
+import { UnsupportedSystemSheet } from './UnsupportedSystemSheet';
 import { CharacterSheetLoadingSpinner } from './LoadingSpinner';
 import { CharacterSheetErrorBoundary } from './ErrorBoundary';
 
 // Lazy-loaded game system character sheets
-const DnD5eSheet = lazy(() => import('./dnd5e/DnD5eCharacterSheet'));
-const Pathfinder2eSheet = lazy(() => import('./pathfinder2e/Pathfinder2eCharacterSheet'));
-const Shadowrun6eSheet = lazy(() => import('./shadowrun6e/Shadowrun6eCharacterSheet'));
-const CallOfCthulhu7eSheet = lazy(() => import('./call-of-cthulhu-7e/CallOfCthulhu7eCharacterSheet'));
+const FifthEditionSheet = lazy(() => import('./fifth-edition/FifthEditionCharacterSheet'));
+const FantasyD20Sheet = lazy(() => import('./fantasy-d20/FantasyD20CharacterSheet'));
+const HorrorD100Sheet = lazy(() => import('./horror-d100/HorrorD100CharacterSheet'));
 
-export type CharacterSheetRouterProps = CharacterSheetProps;
+export interface CharacterSheetRouterProps extends CharacterSheetProps {
+  /**
+   * Whether the sheet is a template's. Only the sheet of a system this build
+   * does not know reads it, to name a template in its line.
+   */
+  isTemplate?: boolean;
+}
 
 /**
  * CharacterSheetRouter Component
  *
  * Routes to the appropriate character sheet based on character.gameSystem.
- * - D&D 5e → DnD5eCharacterSheet
- * - Pathfinder 2e → Pathfinder2eCharacterSheet
- * - Shadowrun 6e → Shadowrun6eCharacterSheet
- * - Call of Cthulhu 7e → CallOfCthulhu7eCharacterSheet
+ * - 5E → FifthEditionCharacterSheet
+ * - Fantasy d20 → FantasyD20CharacterSheet
+ * - Horror d100 → HorrorD100CharacterSheet
  * - null/undefined → FlexibleCharacterSheet (system-agnostic JSON editor)
+ * - a code this build does not know → UnsupportedSystemSheet (read-only)
  *
  * Uses React.lazy() for code splitting - each game system's sheet is loaded
  * only when needed, reducing initial bundle size.
  */
-export const CharacterSheetRouter: React.FC<CharacterSheetRouterProps> = (
-  props
-) => {
+export const CharacterSheetRouter: React.FC<CharacterSheetRouterProps> = ({
+  isTemplate = false,
+  ...props
+}) => {
   const { character } = props;
 
   // Render appropriate sheet based on game system
   const renderSheet = () => {
     switch (character.gameSystem) {
-      case GameSystem.DND_5E:
-        return <DnD5eSheet {...props} />;
+      case GameSystem.FIFTH_EDITION:
+        return <FifthEditionSheet {...props} />;
 
-      case GameSystem.PATHFINDER_2E:
-        return <Pathfinder2eSheet {...props} />;
+      case GameSystem.FANTASY_D20:
+        return <FantasyD20Sheet {...props} />;
 
-      case GameSystem.SHADOWRUN_6E:
-        return <Shadowrun6eSheet {...props} />;
-
-      case GameSystem.CALL_OF_CTHULHU_7E:
-        return <CallOfCthulhu7eSheet {...props} />;
+      case GameSystem.HORROR_D100:
+        return <HorrorD100Sheet {...props} />;
 
       case null:
       case undefined:
@@ -58,11 +62,8 @@ export const CharacterSheetRouter: React.FC<CharacterSheetRouterProps> = (
         return <FlexibleCharacterSheet {...props} />;
 
       default:
-        // Unknown game system - fall back to flexible sheet
-        console.warn(
-          `Unknown game system: ${character.gameSystem}. Falling back to FlexibleCharacterSheet.`
-        );
-        return <FlexibleCharacterSheet {...props} />;
+        // A system CozyVTT no longer supports: its data, read-only.
+        return <UnsupportedSystemSheet character={character} isTemplate={isTemplate} />;
     }
   };
 

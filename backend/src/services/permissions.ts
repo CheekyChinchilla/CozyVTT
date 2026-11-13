@@ -25,7 +25,7 @@ function isAdmin(platformRole: PlatformRole): boolean {
  * May this member act on this token: move it, and change the fields a player
  * is allowed to change.
  *
- * The DM always; a player only when the token names them in `controlledBy`;
+ * The GM always; a player only when the token names them in `controlledBy`;
  * a spectator never. That last clause is why `controlledBy` alone is not the
  * test: it is set once and not cleared when someone is demoted, so a spectator
  * can still hold a token from before. One predicate for the REST update route
@@ -36,13 +36,13 @@ export function canControlToken(
   controlledBy: string | null | undefined,
   userId: string | undefined
 ): boolean {
-  if (role === 'DM') return true;
+  if (role === 'GM') return true;
   return role === 'PLAYER' && !!userId && controlledBy === userId;
 }
 
 /**
  * May this member be given tokens to control: a player of the campaign, and
- * nobody else. The DM controls every token without being named on one, and
+ * nobody else. The GM controls every token without being named on one, and
  * a spectator controls nothing, so `controlledBy` may only ever name a
  * player. Asked before a token is created or handed over, and before a
  * character's owner is made the default controller of a token bound to it,
@@ -59,7 +59,7 @@ export async function canHoldTokens(campaignId: string, userId: string): Promise
 }
 
 /**
- * May this member move tokens right now. The DM always: setting the scene
+ * May this member move tokens right now. The GM always: setting the scene
  * between sessions is theirs. A player not while the session is paused or
  * has ended, which is what the client greys the drag out for and the guides
  * promise; until the server asked too, a scripted client moved its token
@@ -68,7 +68,7 @@ export async function canHoldTokens(campaignId: string, userId: string): Promise
  * which asks it for a turn (`rotation`) too.
  */
 export function canMoveTokensNow(role: string | undefined, campaignStatus: string): boolean {
-  if (role === 'DM') return true;
+  if (role === 'GM') return true;
   return sessionLetsPlayersAct(campaignStatus);
 }
 
@@ -89,7 +89,7 @@ export { WHISPER_SELF_REFUSAL, WHISPER_RECIPIENT_REFUSAL } from '../validators/c
 
 /**
  * Who a member may whisper to: any current member of the campaign but
- * themselves, spectators and the DM included. The sender's own right is the
+ * themselves, spectators and the GM included. The sender's own right is the
  * right to chat, which every member has. Returns the recipient's id and
  * display name, for the message sent to both, or null when they may not be
  * whispered to. The chat handler refuses a whisper to oneself before asking,
@@ -109,8 +109,8 @@ export async function whisperRecipient(
 }
 
 /**
- * May this member read this map: the DM any map of the campaign; anyone else
- * only the map the campaign is showing. A prepared map is the DM's until they
+ * May this member read this map: the GM any map of the campaign; anyone else
+ * only the map the campaign is showing. A prepared map is the GM's until they
  * switch to it, with its artwork, walls, lights and whatever tokens were left
  * visible on it. One rule for the map routes, the walls, lights, fog and
  * exploration requests, the campaign fetch's map list, and the asset reads a
@@ -121,7 +121,7 @@ export function canReadMap(
   mapId: string,
   currentMapId: string | null | undefined
 ): boolean {
-  if (role === 'DM') return true;
+  if (role === 'GM') return true;
   return !!currentMapId && mapId === currentMapId;
 }
 
@@ -152,21 +152,21 @@ export async function canDeleteCampaign(
 }
 
 /**
- * Check whether a user may hand the DM seat to another member.
+ * Check whether a user may hand the GM seat to another member.
  *
  * Three people can, and they are not the same person by necessity:
- * - the sitting DM, handing off deliberately;
+ * - the sitting GM, handing off deliberately;
  * - the campaign owner, who keeps this even while playing as a player, so a
  *   campaign they own cannot be locked away from them by whoever holds the seat;
- * - a platform admin, the escape hatch for a DM who left without handing over.
+ * - a platform admin, the escape hatch for a GM who left without handing over.
  *
- * Ownership and the DM role are separate facts and a transfer moves only the
- * role, so the owner check reads `ownerId` and the DM check reads the
- * membership. Deliberately not the `campaignDM` middleware: that loads the
+ * Ownership and the GM role are separate facts and a transfer moves only the
+ * role, so the owner check reads `ownerId` and the GM check reads the
+ * membership. Deliberately not the `campaignGM` middleware: that loads the
  * caller's membership first and refuses a non-member outright, which would shut
  * out an admin who is not at the table.
  */
-export async function canTransferDM(
+export async function canTransferGM(
   userId: string,
   campaignId: string,
   platformRole: PlatformRole,
@@ -194,27 +194,27 @@ export async function canTransferDM(
     select: { role: true },
   });
 
-  return membership?.role === 'DM';
+  return membership?.role === 'GM';
 }
 
 /**
- * Who may roll dice: the DM and players. A spectator watches, and may talk in
+ * Who may roll dice: the GM and players. A spectator watches, and may talk in
  * chat, but a roll of theirs would land in the table's log and history. Takes
  * the socket's role as stored, a plain string, like canControlToken.
  */
 export function canRollDice(campaignRole: string | undefined): boolean {
-  return campaignRole === 'DM' || campaignRole === 'PLAYER';
+  return campaignRole === 'GM' || campaignRole === 'PLAYER';
 }
 
 /**
- * Who may open or close a door: the DM and players. A spectator watches the
- * map and does not touch it. The DM may also move, redraw or lock a door, and
+ * Who may open or close a door: the GM and players. A spectator watches the
+ * map and does not touch it. The GM may also move, redraw or lock a door, and
  * change any other wall; a player may change nothing about a door but whether
  * it is open, which the wall handler enforces on top of this. Takes the
  * socket's role as stored, a plain string, like canRollDice.
  */
 export function canToggleDoor(campaignRole: string | undefined): boolean {
-  return campaignRole === 'DM' || campaignRole === 'PLAYER';
+  return campaignRole === 'GM' || campaignRole === 'PLAYER';
 }
 
 /**
@@ -235,7 +235,7 @@ type ScopeDecision =
  *
  * - USER: anyone signed in, into their own library.
  * - GLOBAL: an admin, or a user granted globalAssetManager.
- * - CAMPAIGN: the campaign's DM. Tokens are the one exception, because a player
+ * - CAMPAIGN: the campaign's GM. Tokens are the one exception, because a player
  *   uploads their own character's token art.
  *
  * Returns the refusal's status and message so a caller can answer exactly as
@@ -278,11 +278,11 @@ export async function canPlaceAssetAtScope(
   }
   // A player may add token art, since they upload their own character's; a
   // spectator adds nothing to a campaign's library.
-  if (membership.role !== 'DM' && !(type === 'TOKEN' && membership.role === 'PLAYER')) {
+  if (membership.role !== 'GM' && !(type === 'TOKEN' && membership.role === 'PLAYER')) {
     return {
       allowed: false,
       status: 403,
-      message: 'Only the Dungeon Master can upload campaign assets',
+      message: 'Only the GM can upload campaign assets',
     };
   }
   return { allowed: true, campaignId };
@@ -294,13 +294,13 @@ const MAP_PICTURES_SELECT = {
 } as const satisfies Prisma.MapSelect;
 type MapPictures = Prisma.MapGetPayload<{ select: typeof MAP_PICTURES_SELECT }>;
 
-/** What the map-picture rule knows of one campaign, for one member who is not its DM. */
+/** What the map-picture rule knows of one campaign, for one member who is not its GM. */
 export interface CampaignMapPictures {
   /** Every asset a map of the campaign names as its picture, base layer or spirit layer. */
   named: ReadonlySet<string>;
   /** Those the current map shows this member: its picture and base layer, and its spirit layer if they see that plane. */
   shown: ReadonlySet<string>;
-  /** Pictures a document shared with the campaign embeds: the DM chose to show them to its members. */
+  /** Pictures a document shared with the campaign embeds: the GM chose to show them to its members. */
   inSharedDocuments: ReadonlySet<string>;
   /**
    * Pictures a map at another of the member's tables shows them (picturesAtTables),
@@ -326,7 +326,7 @@ function picturesShownBy(map: MapPictures, seesSpiritPlane: boolean): string[] {
 }
 
 /**
- * The pictures of a campaign's maps as one member who is not its DM sees
+ * The pictures of a campaign's maps as one member who is not its GM sees
  * them. `maps` may be every map of the campaign or only those naming the
  * assets in question: a map that names none of them changes no answer.
  * Addresses are read with extractAssetId, the reader the write routes check
@@ -349,7 +349,7 @@ export function campaignMapPictures(
 
 /**
  * Whether a campaign asset is kept from a member of that campaign who is not
- * its DM: a player or a spectator. A map's picture, base layer or spirit
+ * its GM: a player or a spectator. A map's picture, base layer or spirit
  * layer, and a map picture no map uses yet, is theirs to see only while a
  * table they sit at is on a map that shows it to them, and anything they
  * uploaded themselves always. Token art and every other asset are left alone.
@@ -365,7 +365,7 @@ export function campaignMapPictures(
  * listed a picture exactly when it opens for them. Final for a member:
  * nothing else they can point at opens it, since a player could set their
  * character's picture to a map's while the table was there and keep it after
- * the table left. Only maps, which the DM alone sets, and the DM's shared
+ * the table left. Only maps, which the GM alone sets, and the GM's shared
  * documents count.
  */
 export function mapPictureHidden(
@@ -390,12 +390,12 @@ interface Tables {
 /**
  * For each picture a table the user sits at is on, the campaigns whose
  * table it is: the current map of each of their campaigns, the ones they
- * run included, with its spirit layer only where they see that plane (a DM
+ * run included, with its spirit layer only where they see that plane (a GM
  * always does). A map a table is not on counts for nothing, so a picture is
  * not kept by putting it on a map of one's own.
  */
 function picturesOnTables(tables: Tables): Map<string, Set<string>> {
-  const runs = new Set(tables.memberships.filter((m) => m.role === 'DM').map((m) => m.campaignId));
+  const runs = new Set(tables.memberships.filter((m) => m.role === 'GM').map((m) => m.campaignId));
   const showing = new Map<string, Set<string>>();
   for (const map of tables.maps) {
     if (tables.currentMapOf.get(map.campaignId) !== map.id) continue;
@@ -476,7 +476,7 @@ async function mapsNamingOtherFiles(campaignIds: string[]): Promise<Array<MapPic
 
 /**
  * The campaign assets the map-picture rule keeps from this user in the given
- * campaigns, all of them ones where the user is a member who is not the DM.
+ * campaigns, all of them ones where the user is a member who is not the GM.
  * Returns asset ids, for a listing to leave out. In a fixed number of
  * queries however many campaigns: worked out one campaign at a time, a
  * player in many made the asset list run hundreds.
@@ -515,7 +515,7 @@ export async function mapPictureAssetIdsHiddenFrom(userId: string, campaignIds: 
 
 /**
  * The same rule for one asset of `campaignId`, read by a member who is not
- * its DM. One query when no map names the asset (token art, a picture not
+ * its GM. One query when no map names the asset (token art, a picture not
  * yet on a map) and the rule shows it; the user's other tables and the
  * campaign's shared documents are read only for a picture the campaign's own
  * table keeps from them.
@@ -558,14 +558,14 @@ async function mapPictureHiddenInCampaign(
 /**
  * Check whether something in a campaign this user belongs to uses an asset.
  *
- * Access to an image follows its **use**, not only its upload. A DM may pick a
+ * Access to an image follows its **use**, not only its upload. A GM may pick a
  * map out of their own asset library — the picker lists personal assets with no
  * campaign filter — and that map then *is* the campaign's battlemap. Until this
  * existed, every player got 403 on it and saw "Failed to load map image", and
  * token art fell back to plain initial circles for the same reason. The
- * campaign's atmosphere track is the same story in sound: the DM picks it, each
+ * campaign's atmosphere track is the same story in sound: the GM picks it, each
  * player's browser fetches it, and a personal track was silent for everyone
- * but the DM.
+ * but the GM.
  *
  * Deliberately not solved by re-scoping the asset to the campaign on use:
  * `Asset.scope` carries a single campaignId, and one map is commonly shared by
@@ -611,17 +611,17 @@ async function assetUsedInUserCampaign(
   if (campaignIds.length === 0) return false;
 
   // A map's use counts for a player only while the campaign is showing that
-  // map (canReadMap): a prepared map is the DM's until they switch to it,
-  // artwork and token art included. The DM's campaigns count every map.
-  const dmCampaignIds = shared.filter((m) => m.role === 'DM').map((m) => m.campaignId);
-  const memberCampaignIds = shared.filter((m) => m.role !== 'DM').map((m) => m.campaignId);
+  // map (canReadMap): a prepared map is the GM's until they switch to it,
+  // artwork and token art included. The GM's campaigns count every map.
+  const gmCampaignIds = shared.filter((m) => m.role === 'GM').map((m) => m.campaignId);
+  const memberCampaignIds = shared.filter((m) => m.role !== 'GM').map((m) => m.campaignId);
   const currentMapIds = memberCampaignIds.length === 0
     ? []
     : (await prisma.campaign.findMany({ where: { id: { in: memberCampaignIds } }, select: { currentMapId: true } }))
         .map((c) => c.currentMapId)
         .filter((id): id is string => id !== null);
   const readableMaps: Prisma.MapWhereInput = {
-    OR: [{ campaignId: { in: dmCampaignIds } }, { id: { in: currentMapIds } }],
+    OR: [{ campaignId: { in: gmCampaignIds } }, { id: { in: currentMapIds } }],
   };
 
   // A map's own layers first: that is the common case, and it answers without
@@ -672,7 +672,7 @@ async function assetUsedInUserCampaign(
     return true;
   }
 
-  // The track a campaign is playing. The DM sets it and every player's browser
+  // The track a campaign is playing. The GM sets it and every player's browser
   // fetches it, so it is used by the whole table for as long as it is set.
   // Stored inside the campaign's vibeSettings JSON.
   const ambience = await prisma.campaign.findFirst({
@@ -692,7 +692,7 @@ async function assetUsedInUserCampaign(
   // each request for an asset the campaign does not use read all of them.
   const mentioning = await prisma.$queryRaw<Array<{ tokens: unknown }>>`
     SELECT tokens FROM "Map"
-    WHERE ("campaignId" = ANY(${dmCampaignIds}::text[]) OR id = ANY(${currentMapIds}::text[]))
+    WHERE ("campaignId" = ANY(${gmCampaignIds}::text[]) OR id = ANY(${currentMapIds}::text[]))
       AND tokens::text LIKE ${`%${escapeLikePattern(assetId)}%`}`;
   return mentioning.some((map) =>
     readTokens(map.tokens as Prisma.JsonValue).some((token) => names(token?.imageUrl))
@@ -738,7 +738,7 @@ export async function canReadAsset(
     const membership = await prisma.campaignMembership.findUnique({
       where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
     });
-    if (membership?.role === 'DM') return true;
+    if (membership?.role === 'GM') return true;
     if (membership) return !(await mapPictureHiddenInCampaign(asset, asset.campaignId, userId));
     // Scoped to one campaign, but a map in another may point at it.
     if (await assetUsedInUserCampaign(asset.id, userId, asset.uploadedById)) return true;
@@ -758,7 +758,7 @@ export async function canReadAsset(
  *
  * - GLOBAL: an admin, or its uploader while they still manage global assets.
  * - USER: its uploader, or an admin.
- * - CAMPAIGN: its uploader while still a member, the campaign's DM, or an
+ * - CAMPAIGN: its uploader while still a member, the campaign's GM, or an
  *   admin. A campaign asset stays with the campaign once its uploader leaves.
  *   One with no campaign recorded is an admin's alone.
  *
@@ -791,7 +791,7 @@ export async function mayChangeAsset(
         where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
         select: { role: true },
       }))?.role ?? null);
-  return (isOwner && role !== null) || role === 'DM';
+  return (isOwner && role !== null) || role === 'GM';
 }
 
 /** What mayChangeAsset reads about a user: whether they manage global assets, and their role in each campaign. */
@@ -815,7 +815,7 @@ export async function assetChangeFactsFor(userId: string): Promise<AssetChangeFa
 /**
  * Whether a document has been shared with a campaign this user belongs to.
  *
- * A document is private to its uploader until a DM links it to a campaign, and
+ * A document is private to its uploader until a GM links it to a campaign, and
  * the link is the only thing that opens it to that campaign's members. Checked
  * last, after the cheaper questions, and only for the scopes where privacy is
  * in question at all.

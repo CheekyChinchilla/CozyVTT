@@ -11,7 +11,7 @@ import { apiErrorMessage } from '@/utils/errors';
 
 /**
  * The one way this page moves the table to a map: the Map Library's Set
- * Active, and Bring everyone here while the DM prepares a map. Offers the
+ * Active, and Bring everyone here while the GM prepares a map. Offers the
  * tokens on the table's map to bring along (`pending`, answered with
  * `confirm` or `cancel`), then asks the guards on the map on screen (an
  * editor with unsaved work), now that the switch is certain, makes the map

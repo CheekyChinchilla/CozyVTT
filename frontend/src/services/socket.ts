@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import type { ManagerOptions, SocketOptions } from 'socket.io-client';
 import { socketTarget } from '@/utils/socketTarget';
 import { api } from '@/services/api';
 import { apiErrorStatus, errorMessage } from '@/utils/errors';
@@ -31,7 +32,7 @@ import type {
   CharacterHpUpdateEvent,
   CharacterTemporaryHpEvent,
   CharacterHpUpdatedBroadcast,
-  DmTransferredBroadcast,
+  GmTransferredBroadcast,
   MemberRoleChangedBroadcast,
   HitDiceSpendEvent,
   CombatState,
@@ -42,6 +43,7 @@ import type {
   InitiativeReorderEvent,
   MapPingEvent,
   MapPingedBroadcast,
+  AccessRevoked,
 } from '@/types';
 import type {
   DrawingAddEvent,
@@ -73,6 +75,27 @@ import type {
 const { origin: SOCKET_ORIGIN, path: SOCKET_PATH } = socketTarget(
   import.meta.env.VITE_SOCKET_URL
 );
+
+/**
+ * Where and how a page reaches the live connection: the campaign page's
+ * connect below, and the Admin Panel's check of live connections
+ * (services/liveConnectionCheck), which must find what a table would find.
+ * A fresh object each time, so neither can change the other's.
+ */
+export function liveConnectionTarget(): { origin: string; options: Partial<ManagerOptions & SocketOptions> } {
+  return {
+    origin: SOCKET_ORIGIN,
+    options: {
+      path: SOCKET_PATH,
+      withCredentials: true,
+      transports: ['websocket', 'polling'],
+      // Polling when the WebSocket is refused, as by a proxy that does not
+      // pass the browser's host name, which the page's policy names for it:
+      // a slower table, where without this there was none.
+      tryAllTransports: true,
+    },
+  };
+}
 
 type EventCallback<T = unknown> = (data: T) => void;
 
@@ -117,8 +140,10 @@ class SocketClient {
   private signInRefused = false;
   /**
    * The server said this connection may no longer use its campaign
-   * (`campaign.access.revoked`): removed, the campaign deleted, or the
-   * sign-in ended. Nothing is reconnected after that; the page says why.
+   * (`campaign.access.revoked`): removed, left, the campaign deleted, the
+   * sign-in ended, or a join refused because the user is not a member
+   * (`not-member`) or the campaign is gone. Nothing is reconnected after
+   * that; the page says why.
    */
   private accessRevoked = false;
   /**
@@ -243,14 +268,9 @@ class SocketClient {
 
       this.connectionTimer = connectionTimeout;
 
-      this.socket = io(SOCKET_ORIGIN, {
-        path: SOCKET_PATH,
-        withCredentials: true,
-        transports: ['websocket', 'polling'],
-        // Polling when the WebSocket is refused, as by a proxy that does not
-        // pass the browser's host name, which the page's policy names for it:
-        // a slower table, where without this there was none.
-        tryAllTransports: true,
+      const target = liveConnectionTarget();
+      this.socket = io(target.origin, {
+        ...target.options,
         reconnection: true,
         reconnectionDelay: this.reconnectDelay,
         reconnectionDelayMax: 30000,       // Cap backoff at 30s
@@ -332,8 +352,14 @@ class SocketClient {
 
       // The connection's access has ended, with the reason: the page shows
       // it (useAccessRevoked), and the disconnect that may follow is final.
-      this.socket.on('campaign.access.revoked', () => {
+      // A join refused because the user is not a member or the campaign is
+      // gone is answered this way too, and ends the connect under way.
+      this.socket.on('campaign.access.revoked', (revoked: AccessRevoked) => {
         this.accessRevoked = true;
+        if (this.joined) return;
+        clearTimeout(connectionTimeout);
+        this.isConnecting = false;
+        reject(new Error(revoked.message));
       });
 
       // Error events from server
@@ -515,7 +541,7 @@ class SocketClient {
     this.addListener('dice.rolled.secret', callback);
   }
 
-  /** Clear the dice history for everyone (the DM's), and wait for the answer. */
+  /** Clear the dice history for everyone (the GM's), and wait for the answer. */
   clearDiceHistory(): Promise<DoneAck> {
     return this.askFor<DoneAck>('dice.clearHistory', undefined, ROLL_ANSWER_TIMEOUT_MS, 'No answer from the server');
   }
@@ -693,11 +719,11 @@ class SocketClient {
   }
 
   /**
-   * The DM seat moved. Everyone in the campaign hears this, because everyone's
+   * The GM seat moved. Everyone in the campaign hears this, because everyone's
    * view of who may do what changes with it — not just the two people involved.
    */
-  onDmTransferred(callback: EventCallback<DmTransferredBroadcast>) {
-    this.addListener('campaign.dm.transferred', callback);
+  onGmTransferred(callback: EventCallback<GmTransferredBroadcast>) {
+    this.addListener('campaign.gm.transferred', callback);
   }
 
   /**
@@ -797,7 +823,7 @@ class SocketClient {
     return this.askFor<DoneAck>('drawing:clear_mine', data, DRAWING_ANSWER_TIMEOUT_MS, 'No answer from the server');
   }
 
-  /** Erase every drawing on a map (the DM's), and wait for the answer. */
+  /** Erase every drawing on a map (the GM's), and wait for the answer. */
   clearDrawings(data: DrawingClearEvent): Promise<DoneAck> {
     return this.askFor<DoneAck>('drawing:clear', data, DRAWING_ANSWER_TIMEOUT_MS, 'No answer from the server');
   }

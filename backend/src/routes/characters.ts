@@ -7,7 +7,9 @@ import { holdCharacter, addToMemberCharacters, removeFromMemberCharacters, remov
 import type { Prisma } from '@prisma/client';
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { canReferenceAsset, isTokenPicture } from '../services/permissions';
-import { GameSystem } from '../game-systems';
+import {
+  GAME_SYSTEM_NOT_SUPPORTED, isSupportedGameSystem,
+} from '../game-systems';
 import {
   validateCharacterData,
   validateFlexibleSheet,
@@ -19,8 +21,8 @@ import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/char
 import { TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE } from '../validators/tokens';
 import { broadcastToCampaign, emitCharacterUpdated } from '../websocket/utils';
 import {
-  characterForReader, clearKeeperNotes, hasKeeperNotes, isKeeperOf, sheetKeepingKeeperNotes, sheetWithoutKeeperNotes,
-} from '../utils/keeperNotes';
+  characterForReader, clearGmNotes, hasGmNotes, isGmOf, sheetKeepingGmNotes, sheetWithoutGmNotes,
+} from '../utils/gmNotes';
 import { resendInitiative } from '../websocket/handlers/initiative';
 import logger from '../utils/logger';
 import { cutText } from '../utils/cutText';
@@ -32,6 +34,8 @@ import { systemsCompatible } from '../utils/gameSystemCompatibility';
 import { holdOwnerCreates } from '../utils/ownerLimit';
 import { getCharacterTemplate } from '../utils/character-templates';
 import { FLEXIBLE_TEMPLATES } from '../utils/character-templates/flexible-templates';
+import { normaliseGameSystem } from '../legacy/gameSystemAliases';
+import { isHorrorD100, sheetAsRead, sheetAsSent, sheetKeepingConversionRecord } from '../legacy/sheetConversion';
 
 const router = Router();
 
@@ -59,7 +63,7 @@ const FLEXIBLE_SHEET_REFUSED = 'Character data does not match the Flexible sheet
 
 /**
  * The most characters one account may own, copies included. Each one can be
- * up to the 1 MB body limit. A player keeps a handful and a DM who builds
+ * up to the 1 MB body limit. A player keeps a handful and a GM who builds
  * sheets for a table in advance a few dozen; 1,000 is far above either.
  */
 export const MAX_CHARACTERS_PER_USER = 1000;
@@ -177,14 +181,15 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         });
       }
 
+      const campaignSystem = campaign.gameSystem;
       if (!gameSystem) {
-        finalGameSystem = campaign.gameSystem;
+        finalGameSystem = campaignSystem;
       }
 
       // Created into a campaign, it joins it, so it is held to the rule that
       // assigning and accepting an invitation apply.
-      if (!systemsCompatible(finalGameSystem, campaign.gameSystem)) {
-        return res.status(400).json(gameSystemMismatch(finalGameSystem, campaign.gameSystem));
+      if (!systemsCompatible(finalGameSystem, campaignSystem)) {
+        return res.status(400).json(gameSystemMismatch(finalGameSystem, campaignSystem));
       }
     }
 
@@ -198,11 +203,14 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       where: { id: userId },
       select: { displayName: true },
     });
+    // A Horror d100 sheet in the shape before 1.7.0, a character file an
+    // older version exported among them, is converted to the rebuilt sheet.
     // A sheet in the shape of a version before 1.3.0 has its older fields
     // moved where the sheet reads them first, since validation drops them.
+    const sent = sheetAsSent(finalGameSystem, data);
     const dataWithIdentity = applyIdentityToSheet(
       finalGameSystem,
-      migrateLegacySheetFields(finalGameSystem, data) as Record<string, unknown> | undefined,
+      migrateLegacySheetFields(finalGameSystem, sent) as Record<string, unknown> | undefined,
       name,
       owner?.displayName ?? ''
     );
@@ -225,6 +233,9 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
           })),
         });
       }
+      // A conversion record is kept as validated: the one this conversion
+      // wrote, or the one the request carries, as a character file exported
+      // from 1.7.0 does (legacy/sheetConversion.ts).
       sheetData = validationResult.data;
     } else if (data !== undefined) {
       // A Flexible sheet, checked as sent: the identity step above would turn
@@ -254,10 +265,10 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
     }
 
-    // Keeper's Notes are written only by the Keeper: the DM of the campaign
+    // GM's Notes are written only by the GM of the campaign
     // the character is created in. Anyone else's are not stored.
-    const keeper = await isKeeperOf(userId, campaignId || null);
-    if (!keeper) sheetData = sheetWithoutKeeperNotes(finalGameSystem ?? null, sheetData);
+    const isGm = await isGmOf(userId, campaignId || null);
+    if (!isGm) sheetData = sheetWithoutGmNotes(finalGameSystem ?? null, sheetData);
 
     // Both halves in one transaction. Written separately, a failure between
     // them would produce exactly the state this fixes: a character carrying a
@@ -285,7 +296,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
 
     return res.status(201).json({
       message: 'Character created successfully',
-      character: characterForReader(character, keeper),
+      character: characterForReader(character, isGm),
     });
   } catch (error) {
     if (error instanceof CharacterLimitReached) {
@@ -338,7 +349,9 @@ router.get(
   authenticated,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { gameSystem, templateName } = req.params;
+      const { templateName } = req.params;
+      // A system's value from an older version is read as its new one.
+      const gameSystem = normaliseGameSystem(req.params.gameSystem) ?? req.params.gameSystem;
 
       // Handle flexible templates (no game system)
       if (!gameSystem || gameSystem === 'null' || gameSystem === 'undefined') {
@@ -362,15 +375,12 @@ router.get(
       }
 
       // Validate game system
-      if (!Object.values(GameSystem).includes(gameSystem as GameSystem)) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: `Invalid game system: ${gameSystem}`,
-        });
+      if (!isSupportedGameSystem(gameSystem)) {
+        return res.status(400).json({ error: 'Validation Error', message: GAME_SYSTEM_NOT_SUPPORTED });
       }
 
       // Get the template
-      const template = getCharacterTemplate(gameSystem as GameSystem, templateName);
+      const template = getCharacterTemplate(gameSystem, templateName);
 
       return res.status(200).json({
         message: 'Template retrieved successfully',
@@ -390,7 +400,7 @@ router.get(
  * GET /api/characters/:id
  * Get a specific character
  * Requires: Authentication
- * Authorization: Character owner OR campaign DM (if character is in a campaign)
+ * Authorization: Character owner OR campaign GM (if character is in a campaign)
  */
 router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -426,8 +436,8 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     }
 
     // The reader's place in the character's campaign: whether they may read
-    // it there, and whether they are its Keeper (its DM), who alone is sent
-    // the Keeper's Notes.
+    // it there, and whether they are its GM, who alone is sent
+    // the GM's Notes.
     const membership = character.campaignId
       ? await prisma.campaignMembership.findUnique({
           where: {
@@ -438,19 +448,19 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           },
         })
       : null;
-    const keeper = membership?.role === 'DM';
+    const isGm = membership?.role === 'GM';
 
     // Check authorization: owner can always view
     if (character.userId === userId) {
-      return res.status(200).json({ character: characterForReader(character, keeper) });
+      return res.status(200).json({ character: characterForReader(character, isGm) });
     }
 
     // If character is in a campaign, check if requester is a campaign member
-    // All campaign members can VIEW characters, but only owner/DM can EDIT
-    // Any campaign member (DM, PLAYER, SPECTATOR) can view characters in
+    // All campaign members can VIEW characters, but only owner/GM can EDIT
+    // Any campaign member (GM, player or spectator) can view characters in
     // the campaign, while the owner is still a member of it.
     if (character.campaignId && membership && (await ownerStillIn(character.userId, character.campaignId))) {
-      return res.status(200).json({ character: characterForReader(character, keeper) });
+      return res.status(200).json({ character: characterForReader(character, isGm) });
     }
 
     // Anyone else is answered as if it were not there.
@@ -513,14 +523,17 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
 
     // The validator reports rather than throws; a bad sheet is a 200 with
     // the reasons, as documented, since asking is not an error.
-    // Judged on the sheet as its owner is sent it: a report on the Keeper's
-    // Notes would tell a player something of what is written there. A
-    // Flexible character (no game system) is held to the Flexible layout.
-    const ownSheet = (await isKeeperOf(userId, character.campaignId))
-      ? character.data
-      : sheetWithoutKeeperNotes(character.gameSystem, character.data);
-    const result = character.gameSystem
-      ? validateCharacterData(character.gameSystem, ownSheet)
+    const system = character.gameSystem;
+    // Judged on the sheet as its owner is sent it: a report on the GM's
+    // Notes would tell a player something of what is written there, and a
+    // Horror d100 sheet still in the shape before 1.7.0 is judged converted.
+    // A Flexible character (no game system) is held to the Flexible layout.
+    const sentSheet = sheetAsRead(system, character.data);
+    const ownSheet = (await isGmOf(userId, character.campaignId))
+      ? sentSheet
+      : sheetWithoutGmNotes(system, sentSheet);
+    const result = system
+      ? validateCharacterData(system, ownSheet)
       : validateFlexibleSheet(ownSheet);
     if (result.success) {
       return res.status(200).json({ isValid: true });
@@ -546,7 +559,7 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
  * PUT /api/characters/:id
  * Update a character
  * Requires: Authentication
- * Authorization: Character owner OR campaign DM (if character is in a campaign)
+ * Authorization: Character owner OR campaign GM (if character is in a campaign)
  */
 router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -581,7 +594,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
     }
 
-    // Check authorization: the owner, or the DM of the character's campaign.
+    // Check authorization: the owner, or the GM of the character's campaign.
     // A spectator in that campaign may not edit even their own character: a
     // token bound to it follows the sheet on every screen (its bar, its
     // downed fade, its picture), and spectators change nothing at the table.
@@ -598,10 +611,10 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     }
     const isAuthorized =
       character.userId === userId ||
-      (membership?.role === 'DM' && character.campaignId !== null && (await ownerStillIn(character.userId, character.campaignId)));
-    // The Keeper (the DM of the character's campaign) alone reads and writes
-    // the Keeper's Notes.
-    const keeper = membership?.role === 'DM';
+      (membership?.role === 'GM' && character.campaignId !== null && (await ownerStillIn(character.userId, character.campaignId)));
+    // The GM of the character's campaign alone reads and writes
+    // the GM's Notes.
+    const isGm = membership?.role === 'GM';
 
     if (!isAuthorized) {
       return res.status(403).json({
@@ -619,17 +632,22 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
     }
 
+    const sheetSystem = character.gameSystem;
+
     // Validate the sheet against its game system's schema, or the Flexible
     // layout when it has none. What gets stored is the schema's parsed output,
     // so a key the sheet does not declare never reaches the database. A sheet
     // still carrying fields from before 1.3.0 has them moved where the sheet
     // reads them first, or that would drop their content before
     // `migrate:sheet-fields` could move it.
+    // A Horror d100 sheet in the shape before 1.7.0, from a tab opened
+    // before the upgrade or a script, is converted to the rebuilt sheet first.
     let sheetData: unknown = data;
-    if (character.gameSystem && data !== undefined) {
+    const sent = sheetAsSent(sheetSystem, data);
+    if (sheetSystem && data !== undefined) {
       const validationResult = validateCharacterData(
-        character.gameSystem,
-        migrateLegacySheetFields(character.gameSystem, data)
+        sheetSystem,
+        migrateLegacySheetFields(sheetSystem, sent)
       );
       if (!validationResult.success) {
         return res.status(400).json({
@@ -662,13 +680,18 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       tokenImageUrl?: string | null;
     } = {};
     if (name !== undefined) updateData.name = name;
-    // A save by anyone but the Keeper keeps the Keeper's Notes as stored,
+    // A save by anyone but the GM keeps the GM's Notes as stored,
     // whatever it sent for them.
-    const keepsKeeperNotes = data !== undefined && !keeper && hasKeeperNotes(character.gameSystem);
+    const keepsGmNotes = data !== undefined && !isGm && hasGmNotes(character.gameSystem);
+    // Every save keeps the stored conversion record, whoever saves and
+    // whatever the request sent for it, and writes none the stored sheet
+    // does not have.
+    const sheetToStore = (storedData: Prisma.JsonValue) => {
+      const withRecord = sheetKeepingConversionRecord(sheetSystem, sheetData, storedData);
+      return keepsGmNotes ? sheetKeepingGmNotes(character.gameSystem, withRecord, storedData) : withRecord;
+    };
     if (data !== undefined) {
-      updateData.data = toJson(
-        keepsKeeperNotes ? sheetKeepingKeeperNotes(character.gameSystem, sheetData, character.data) : sheetData
-      );
+      updateData.data = toJson(sheetToStore(character.data));
     }
 
     // Keep the `name` column in step with the name typed on the sheet.
@@ -703,7 +726,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     if (loadedAt !== undefined) {
       // Saved only if the character is still the version the caller loaded.
       // Checked in the write itself, so a change landing after the read above
-      // is caught too. Without it, a sheet open while the DM took hit points
+      // is caught too. Without it, a sheet open while the GM took hit points
       // put the old number back on its next save.
       const { count } = await prisma.character.updateMany({
         where: { id, updatedAt: new Date(loadedAt) },
@@ -717,16 +740,17 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         });
       }
       updatedCharacter = await prisma.character.findUniqueOrThrow({ where: { id }, include: withCampaign });
-    } else if (keepsKeeperNotes) {
-      // Saved whatever changed in between, so the notes kept are the ones
-      // stored at the moment of the write, under the row's lock: a Keeper's
-      // edit landing after the read above is not put back.
+    } else if (keepsGmNotes || (data !== undefined && isHorrorD100(sheetSystem))) {
+      // Saved whatever changed in between, so the GM's notes and the
+      // conversion record kept are the ones stored at the moment of the
+      // write, under the row's lock: a GM's edit or the conversion of the
+      // stored sheet landing after the read above is not put back.
       updatedCharacter = await prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Character" WHERE id = ${id} FOR UPDATE`;
         const fresh = await tx.character.findUniqueOrThrow({ where: { id }, select: { data: true } });
         return tx.character.update({
           where: { id },
-          data: { ...updateData, data: toJson(sheetKeepingKeeperNotes(character.gameSystem, sheetData, fresh.data)) },
+          data: data === undefined ? updateData : { ...updateData, data: toJson(sheetToStore(fresh.data)) },
           include: withCampaign,
         });
       });
@@ -741,14 +765,14 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     // A map token stores its own COPY of the character's image, taken when it
     // was placed — there is no Token table, tokens live as JSON on the map. So
     // changing the sheet's token image left every placed token showing the old
-    // picture until the DM removed and re-added it.
+    // picture until the GM removed and re-added it.
     //
     // This has to happen here rather than from the client: `imageUrl` is a
-    // DM-only field on PUT /maps/:id/tokens/:tokenId, so a player editing their
+    // GM-only field on PUT /maps/:id/tokens/:tokenId, so a player editing their
     // own character would be refused.
     //
     // Only the image is synced. A token's NAME is deliberately left alone: the
-    // DM may have renamed it ("Aldra (charmed)", or A/B for duplicates) and
+    // GM may have renamed it ("Aldra (charmed)", or A/B for duplicates) and
     // silently overwriting that on the player's next save would be its own bug.
     let tokensChanged = false;
     const campaignsWithChangedTokens = new Set<string>();
@@ -764,7 +788,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         // cover, because a character reaches a mismatched state easily:
         // unassigning it nulls `campaignId` and leaves its tokens where they
         // were, a character with tokens in two campaigns can only point at one
-        // of them, and a DM placing a player's character writes the token's
+        // of them, and a GM placing a player's character writes the token's
         // `characterId` without touching the character. In every one of those
         // the player saw their new picture on the sheet while the token kept the
         // old one, and only removing and re-adding the token helped.
@@ -782,9 +806,9 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         // Whose tokens this edit may repaint. The owner's: every campaign
         // bound to the character, except one where the owner is only a
         // spectator, since spectators change nothing at the table and this is
-        // the one write of theirs that would otherwise reach it. A DM editing
-        // a player's character: only the campaigns that DM runs. The tokens a
-        // character left in another campaign are that campaign's, and its DM
+        // the one write of theirs that would otherwise reach it. A GM editing
+        // a player's character: only the campaigns that GM runs. The tokens a
+        // character left in another campaign are that campaign's, and its GM
         // did not choose the picture.
         const editorRoles = new Map(
           (await prisma.campaignMembership.findMany({
@@ -794,7 +818,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
         );
         const isOwner = character.userId === userId;
         const mayRepaint = (campaignId: string) =>
-          isOwner ? editorRoles.get(campaignId) !== 'SPECTATOR' : editorRoles.get(campaignId) === 'DM';
+          isOwner ? editorRoles.get(campaignId) !== 'SPECTATOR' : editorRoles.get(campaignId) === 'GM';
 
         for (const map of boundMaps) {
           if (!mayRepaint(map.campaignId)) continue;
@@ -903,7 +927,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
     return res.status(200).json({
       message: 'Character updated successfully',
-      character: characterForReader(updatedCharacter, keeper),
+      character: characterForReader(updatedCharacter, isGm),
     });
   } catch (error) {
     logger.error('Error updating character', { err: error });
@@ -1014,8 +1038,8 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
 
     const unassigning = !campaignId || campaignId === '';
 
-    // The owner assigns and unassigns their character. The DM of the
-    // campaign it is in may also take it out of that campaign, as the DM
+    // The owner assigns and unassigns their character. The GM of the
+    // campaign it is in may also take it out of that campaign, as the GM
     // guide says; it stays with its owner. A character still naming a
     // campaign its owner has left is the owner's alone, as for reading and
     // editing it. Nobody else may do either.
@@ -1024,13 +1048,13 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
         && (await prisma.campaignMembership.findUnique({
           where: { userId_campaignId: { userId, campaignId: character.campaignId } },
           select: { role: true },
-        }))?.role === 'DM'
+        }))?.role === 'GM'
         && (await ownerStillIn(character.userId, character.campaignId));
       if (!runsItsCampaign) {
         return res.status(403).json({
           error: 'Forbidden',
           message: unassigning
-            ? 'Only the character owner, or the DM of its campaign, can take it out of a campaign'
+            ? 'Only the character owner, or the GM of its campaign, can take it out of a campaign'
             : 'Only the character owner can assign this character to a campaign',
         });
       }
@@ -1117,15 +1141,15 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
     // Moved under the character's lock, from the campaign it is in as it
     // stands then: off the owner's list there, onto the new one's. Read
     // before the lock, a move made meanwhile left it listed in both. Coming
-    // from another campaign, or from none, it leaves the Keeper's Notes
-    // behind: they are the last Keeper's, and the owner may be this
-    // campaign's DM.
+    // from another campaign, or from none, it leaves the GM's Notes
+    // behind: they are the last GM's, and the owner may be this
+    // campaign's GM.
     const { updatedCharacter, fromCampaignId } = await prisma.$transaction(async (tx) => {
       const held = await holdCharacter(tx, id);
       const fromCampaignId = held?.campaignId ?? null;
       if (fromCampaignId && fromCampaignId !== campaignId) await removeFromMemberCharacters(tx, userId, fromCampaignId, id);
       await addToMemberCharacters(tx, userId, campaignId, id);
-      if (fromCampaignId !== campaignId) await clearKeeperNotes(tx, id);
+      if (fromCampaignId !== campaignId) await clearGmNotes(tx, id);
       const updatedCharacter = await tx.character.update({
         where: { id },
         data: { campaignId },
@@ -1148,7 +1172,7 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
 
     return res.status(200).json({
       message: 'Character assigned to campaign successfully',
-      character: characterForReader(updatedCharacter, membership.role === 'DM'),
+      character: characterForReader(updatedCharacter, membership.role === 'GM'),
     });
   } catch (error) {
     logger.error('Error assigning character to campaign', { err: error });
@@ -1197,11 +1221,12 @@ router.post('/:id/copy', authenticated, async (req: AuthenticatedRequest, res: R
       });
     }
 
-    // Create a copy with modified name. Not the Keeper's Notes: they are the
-    // Keeper's, and the copy is in no campaign. The copy's name goes into the
+    // Create a copy with modified name. Not the GM's Notes: they are the
+    // GM's, and the copy is in no campaign. The copy's name goes into the
     // sheet too: a save takes the sheet's name for the record.
+    // A Horror d100 sheet still in the shape before 1.7.0 is copied converted.
     const name = copyName(originalCharacter.name);
-    const sheet = sheetWithoutKeeperNotes(originalCharacter.gameSystem, originalCharacter.data);
+    const sheet = sheetWithoutGmNotes(originalCharacter.gameSystem, sheetAsRead(originalCharacter.gameSystem, originalCharacter.data));
     const stored = readJsonObject(sheet);
     const copiedSheet = originalCharacter.gameSystem && stored
       ? applyIdentityToSheet(originalCharacter.gameSystem, stored, name, '')
