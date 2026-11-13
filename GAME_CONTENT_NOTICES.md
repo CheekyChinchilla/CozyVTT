@@ -8,7 +8,7 @@ The game rules CozyVTT uses, the licences they are under, and the credits those 
 - **Example characters** for each system: the ready-made characters the app offers and the files in `Examples/`. Their rules names come from the open rules, and their descriptions are in CozyVTT's own words.
 - **Creatures an administrator imports** into the Creature Library. The server fetches them from the [Open5e API](https://open5e.com), asking for the SRD 5.1 only, and stores them in that instance's own database. CozyVTT's code holds none of them.
 
-Everything else in CozyVTT is the project's own work. Third-party software and fonts are credited in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) and [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
+Everything else in CozyVTT is the project's own work. Third-party software and fonts are credited in [THIRD_PARTY_CREDITS.md](THIRD_PARTY_CREDITS.md) and [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
 
 ## 5E (SRD 5.1)
 

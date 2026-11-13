@@ -2,7 +2,7 @@
  * The licence documents, checked against the lockfiles.
  *
  * THIRD_PARTY_NOTICES.txt names the packages each half of CozyVTT runs and
- * every licence among them, and THIRD_PARTY_LICENSES.md the main libraries it
+ * every licence among them, and THIRD_PARTY_CREDITS.md the main libraries it
  * is built on. Both are written by hand, and they drifted: versions two
  * releases old, packages no longer used, one listed twice, dependencies
  * missing, and the frontend counted as unlicensed. These checks fail when a
@@ -141,8 +141,8 @@ describe.each(['frontend', 'backend'] as const)('THIRD_PARTY_NOTICES.txt, for th
   });
 });
 
-describe('THIRD_PARTY_LICENSES.md', () => {
-  const doc = read('THIRD_PARTY_LICENSES.md');
+describe('THIRD_PARTY_CREDITS.md', () => {
+  const doc = read('THIRD_PARTY_CREDITS.md');
   const tables = doc.slice(doc.indexOf('## Campaign Export/Import Libraries'));
 
   /** The package and project behind each library the tables name. */

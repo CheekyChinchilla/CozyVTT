@@ -10,7 +10,7 @@ Game systems and the game master's role are called by their current names throug
 
 ---
 
-## [Unreleased]
+## [1.7.0] - 2026-11-12
 
 ### Upgrading from 1.6.0
 
@@ -187,6 +187,8 @@ The restore also takes back everything done since the upgrade. After going back,
 - **The Creature Library shows the SRD 5.1's credit wherever its creatures may be shown.** The credit is the SRD's own sentence in larger type, with a line saying CozyVTT reformatted and reworded the material, and it shows for **Favorites** and for copies too. The source filter's **SRD (Official)** is now **SRD 5.1**.
 
 - **The three game systems have new names.** The fifth edition fantasy system is **5E (SRD 5.1)**, the three-action fantasy system is **Fantasy d20 (ORC)**, whose first **Theme Color** choice is now called **Royal Blue**, and the percentile horror system is **Horror d100**. See [Character Sheets by Game System](docs/USER_GUIDE.md#character-sheets-by-game-system).
+
+- **The third-party credits are now in `THIRD_PARTY_CREDITS.md`.** The file was `THIRD_PARTY_LICENSES.md`; its content is the same, and a bookmark to the old name needs the new one.
 
 ### Removed
 
