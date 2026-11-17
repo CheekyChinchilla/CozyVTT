@@ -104,6 +104,9 @@ src/
 │   ├── setup.ts       The setup gate: everything but /api/setup and /health is refused
 │   │                  until setup has run; asks the database only until it hears it has
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
+│   ├── apiKeys.ts         Personal API keys: the session skipped for a key request, the key checked and
+│   │                      made its owner's, and the route gate held to the key's permissions
+│   │                      (services/apiKeyPermissions.ts)
 │   ├── adminMfa.ts        Gates an administrator without MFA past their deadline (services/adminMfaPolicy.ts);
 │   │                      re-reads the admin's role on every request
 │   ├── originCheck.ts     Refuses a change a browser sent from another site (HTTP and the socket handshake)
@@ -254,13 +257,14 @@ Real-time gameplay logic lives in the per-domain `websocket/handlers/*` modules;
 3. `originCheck`: a change a browser sent from another site is refused
 4. `bodyParsers`: JSON up to 1 MB, and an empty body for a request that sent none, then `refuseNulCharacters` (`nulCharacter.ts`): 400 for a body, key, path or query string holding U+0000, which PostgreSQL cannot store in text or jsonb, a password field of the routes that read one (`PASSWORD_FIELDS`) excepted. The upload routes run it again once their form is read, and the live table refuses such an event in `events.ts` (`socket.use`); a campaign archive's text is imported without the character
 5. On `/api`, the restore gate (`restoreGate.ts`), ahead of the session lookup
-6. The session (`express-session` over the PostgreSQL store)
+6. The session (`express-session` over the PostgreSQL store), skipped for a request that sends `X-API-Key` (`skipSessionForApiKeys`)
 7. The setup gate, which lets only `/health` and `/api/setup` through until setup has run
 8. `GET /health`, answered here, with no rate limit
 9. On `/api`, the general rate limiter (`RATE_LIMIT_MAX_REQUESTS` a minute per address, 300 by default; express-rate-limit counts an IPv6 address by its /56 network)
-10. On `/api`, the password-change gate, then the administrator MFA gate
-11. The routers: setup, config, auth, users, admin, campaigns (with macros and documents), characters, character templates, invitations, assets, and the maps, creatures and token templates nested under `/api/campaigns/:campaignId`
-12. A JSON 404 for anything no router answered, then `errorHandler`: 413 for a body over the limit and 400 for one that is not valid JSON, and a JSON 500 for anything else a route throws or a promise it returns rejects with, Error or not; when the answer has already started, it logs the error and leaves Express to end the connection
+10. On `/api`, the API key check (`authenticateApiKey`): a request with `X-API-Key` becomes the key's owner, on a session that is never stored, or is refused
+11. On `/api`, the password-change gate, then the administrator MFA gate
+12. The routers: setup, config, auth, users, admin, campaigns (with macros and documents), characters, character templates, invitations, API keys, assets, and the maps, creatures and token templates nested under `/api/campaigns/:campaignId`
+13. A JSON 404 for anything no router answered, then `errorHandler`: 413 for a body over the limit and 400 for one that is not valid JSON, and a JSON 500 for anything else a route throws or a promise it returns rejects with, Error or not; when the answer has already started, it logs the error and leaves Express to end the connection
 
 Inside a router, each route names its own guards (`middleware/compose.ts`; the admin router mounts its two for every route) and any limiter of its own, then checks its body with Zod.
 
@@ -486,6 +490,7 @@ erDiagram
         PlatformRole platformRole
         bool globalAssetManager
         bool templateEditor
+        bool apiKeysEnabled
         bool isApproved
         bool mfaEnabled
         bool mustChangePassword
@@ -498,6 +503,15 @@ erDiagram
         string userId FK
         datetime expiresAt
         bool used
+    }
+
+    ApiKey {
+        string id PK
+        string userId FK
+        string keyHash
+        string prefix
+        json permissions
+        datetime expiresAt
     }
 
     Campaign {
@@ -730,6 +744,7 @@ erDiagram
     User ||--o{ CampaignInvitation : "is invited"
     Campaign ||--o{ CampaignInvitation : "has"
     User ||--o{ PasswordResetToken : "has"
+    User ||--o{ ApiKey : "holds"
     User ||--o{ Character : "owns"
     User ||--o{ CharacterTemplate : "published"
     Campaign ||--o{ Character : "has assigned"
@@ -810,6 +825,17 @@ sequenceDiagram
 ```
 
 A session expires after an hour with no requests (`SESSION_MAX_AGE`; "Remember me" makes it 30 days), and each request starts the hour again. It also ends `REMEMBER_ME_MAX_AGE` (30 days) after it was made, however active: `signedInAt` is set at sign-in and checked by the guards, `GET /api/auth/me` (which shares the guards' check, `withinSignInLimitOr401`) and the socket handshake (`services/signedIn.ts`), and a session from before the field existed is stamped when next seen. A guard that refuses an aged-out sign-in also ends that sign-in's live connections. Each socket caches `signedInAt` at the handshake, and `websocket/signInSweep.ts`, started with the Socket.io server and stopped when it closes, ends every minute each socket past the limit, and every fifth minute also reads each socket's session from the store (`socketSignIn` in `websocket/auth.ts`) and ends those whose sign-in is gone, each with `campaign.access.revoked` and a disconnect. A session the store cannot read is left connected, logged once a sweep; joining a campaign treats it as ended. Each completed sign-in (the password step without two-factor authentication, the code step with it, a registration that signs the person in, and the setup wizard) goes through `recordSignIn` in `routes/auth.ts`, which stamps the account's `lastLoginAt` (`GET /api/auth/me` stamps one still empty, for an account signed in before every sign-in was stamped) and removes the account's oldest sessions beyond 20 (`capLoginSessions`), and the session row holds the user id and role, `signedInAt`, `mustChangePassword` and the MFA pending fields. Two kinds of activity make no requests, so they ping `GET /api/auth/ping` every ten minutes through `services/sessionKeepAlive.ts`: the campaign page while its live connection is up, and an editor with unsaved changes, a character sheet editor or Mapmaker with paint not saved, through `hooks/useUnsavedWorkGuard.ts` (at once when the changes appear too, since the hour may be nearly up). When a request answers 401 on a page that needs a session, the API client's interceptor normally sends the browser to the sign-in page, carrying the page as `?next=` so signing in returns to it (`utils/returnTo.ts` follows only a path on this origin that is not a public page). While such an editor holds unsaved changes it does not: `services/unsavedWork.ts` keeps the page where it is and marks the browser signed out, and the editor says so, with a link to sign in in a new tab. The session cookie is shared between tabs, so the editor's Save works once that sign-in is done. A sign-in that reached its age limit answers with `code: 'SIGN_IN_EXPIRED'`, and its sentence is kept in `sessionStorage` (`services/signInNotice.ts`) for the sign-in page to show once. The calls that check the current password or a code while signed in (change password, delete account, MFA disable, backup codes, MFA setup, an email change) answer 401 for a wrong one; they pass `skipAuthRedirect`, and their forms show the message. The sign-in check at page load treats only a refusal (a 4xx other than 408 and 429) as signed out; no answer or a server error shows "Can't reach the server" on protected pages and retries. A sign-in that succeeds meanwhile cancels the retry and clears the notice, and the answer to a check still on its way is dropped (`authEpoch` in `contexts/AuthContext.tsx`).
+
+### Personal API keys
+
+A script or another tool can call the REST API with a personal API key, sent as `X-API-Key: cozy_...`. The key acts as the person who made it, narrowed to the permissions they gave it; the guards, the password-change and administrator MFA gates and every handler's own checks run for it as for its owner's sign-in, so it never does more than they could.
+
+- **Who holds keys.** Administrators, and anyone an administrator turns `User.apiKeysEnabled` on for; never an account awaiting approval. `SystemSettings.apiKeysEnabled` turns them off for everyone: every key is refused and the management routes answer 403, except revoking and an administrator's list of every key, so a leaked key can be found and revoked before keys go on again. Both are read on every key request, so taking either away stops existing keys at once (`services/apiKeys.ts`).
+- **What is stored.** `cozy_` and 32 random bytes; the `ApiKey` row keeps its SHA-256 hash (unique, the lookup's index), the first 12 characters to tell keys apart, its permissions, an optional expiry and when it was last used, written at most once a minute. The key itself is in the answer that makes or replaces it and nowhere else. Keys go with their owner's account.
+- **A key request never uses a session.** `skipSessionForApiKeys` wraps the session middleware, so a request that sends the header loads, saves and renews none, even beside a valid cookie, and sets no cookie. `authenticateApiKey`, on `/api` after the general limit, looks the key up and reads its owner as they are now, and gives the request a session object that is never stored, holding the owner's id and current role. A key that does not exist or has expired answers 401 and is counted against the address by a failure limiter (20 in 15 minutes, then 429); only those count, and the 429 is checked only for a wrong key, so a correct key is never held back. Live connections take the session only; a key opens none.
+- **The route gate.** Express runs a matched route's handlers through `Route.prototype.dispatch`; `installApiKeyRouteGate` puts a check in front of it once per process, so it sees the route Express actually matched, never the address as asked. `createApp` notes each router it mounts with its path (`recordRouterMounts`), and `registerApiKeyRoutes` gives every route its full path, as written in the code. `routeAccess` (`services/apiKeyPermissions.ts`) places that path under one permission through `ROUTE_RULES`, the first match winning; `GET` and `HEAD` need Read, every other method Read and Write, unless the rule is marked read-only. A route no rule names, one the table never saw, one marked `EXCLUDED`, and any route reached with the header but no checked key, are refused with 403. Router-level middleware runs before the gate, so routers mount only guards there; `apiKeyRoutes.e2e.test.ts` checks that, that every served route is placed, that every rule and permission is used, the exact list of excluded routes, and sends a key with no permissions to every route.
+- **Never with a key.** Sign-in and the account's own credentials (`/api/auth/*`), setup, `/api/config` and `/health`, key management (`/api/api-keys/*`, which also refuses a key request itself, as a second lock), the admin routes that set or send someone's credentials or let them sign in, the backup restore, and a backup's download, which holds every password hash and MFA secret. `*` floors every permission but the administration ones, which are granted one by one, so a key made for someone's own data gains nothing if they are made an admin later. Inside routes a key may use, `assertSignedInSession` refuses a change to an email address, a role, the three permission flags, the registration settings and the API key switch; sending the stored value is no change.
+- **Managing keys.** `/api/api-keys` (`routes/apiKeys.ts`). A person manages only their own; someone else's key answers 404. An administrator may list every account's and revoke any, written to the activity log, but cannot change or replace another's, so nobody is handed a secret for someone else's account. The permissions offered come from the routes: the administration ones to administrators only, and Read and Write only where a route writes; a level not offered is refused, not lowered.
 
 ### Role-Based Authorization
 

@@ -11,6 +11,7 @@ import { profileService } from '@/services/profile.service';
 import { api } from '@/services/api';
 import MFASection from '@/components/profile/MFASection';
 import ChangeEmailForm from '@/components/profile/ChangeEmailForm';
+import ApiKeysSection from '@/components/profile/ApiKeysSection';
 import ThemePicker, { DEFAULT_CUSTOM_COLORS, type ThemePickerColors } from '@/components/appearance/ThemePicker';
 import { AssetType } from '@/types';
 import type { UserPreferences } from '@/types';
@@ -874,6 +875,13 @@ export default function ProfilePage() {
           <div>
             <MFASection />
           </div>
+
+          {/* API keys, for an account that may hold them */}
+          {user?.apiKeysAllowed && (
+            <div className="border-t border-moss-green/10 pt-6">
+              <ApiKeysSection />
+            </div>
+          )}
 
           <div className="border-t border-moss-green/10 pt-6">
             <h3 className="text-sm font-semibold text-brand-ink mb-4">Change Password</h3>

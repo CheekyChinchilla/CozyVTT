@@ -6,6 +6,7 @@ import { rememberMeMaxAge } from '../config/sessionDurations';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
 import { destroyUserLoginSessions, capLoginSessions } from '../services/sessionStore';
+import { accountMayHoldKeys, apiKeysEnabledOnInstance } from '../services/apiKeys';
 import { voidOutstandingResetLinks, issueResetToken, findResetTokenRow, RESET_LINK_TTL_MS } from '../services/passwordResetTokens';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
@@ -81,6 +82,10 @@ export async function clientUser(user: Parameters<typeof sanitizeUser>[0]) {
     ...sanitizeUser(user),
     adminMfaDeadline: deadline ? deadline.toISOString() : null,
     mfaBackupCodesRemaining: user.mfaEnabled ? user.mfaBackupCodes.length : null,
+    // Whether this account may make and use API keys now: the instance allows
+    // them, and the account is an administrator or has been given them. The
+    // pages show the API key settings only when it may.
+    apiKeysAllowed: accountMayHoldKeys(user) && (await apiKeysEnabledOnInstance()),
   };
 }
 

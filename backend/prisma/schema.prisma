@@ -108,6 +108,9 @@ model User {
   // Can edit and delete anyone's character template, not just their own.
   // Defaults off — an admin grants it, the same way globalAssetManager works.
   templateEditor     Boolean @default(false)
+  // May create and use personal API keys. Defaults off — an admin grants it,
+  // the same way the two above work. Admins may hold keys without it.
+  apiKeysEnabled     Boolean @default(false)
 
   // MFA
   mfaEnabled     Boolean  @default(false)
@@ -152,8 +155,31 @@ model User {
   mapExplorations     MapExploration[]
   drawings            MapDrawing[]
   documentLinks       CampaignDocument[]
+  apiKeys             ApiKey[]
 
   @@index([email])
+}
+
+// A personal API key: lets a script or integration call the REST API as its
+// owner, narrowed to the areas in `permissions` (services/apiKeys). Only the
+// SHA-256 hash of the key is kept; the key itself is shown once.
+model ApiKey {
+  id          String    @id @default(uuid())
+  userId      String
+  name        String    @db.VarChar(100)
+  // The first characters of the key, so the owner can tell keys apart.
+  prefix      String    @db.VarChar(16)
+  keyHash     String    @unique @db.VarChar(64)
+  // { permission: "read" | "write" }; a permission left out is no access.
+  permissions Json      @default("{}")
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  // Null: the key never expires.
+  expiresAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ============================================
@@ -887,6 +913,10 @@ model SystemSettings {
   customLogoUrl     String?
   customFaviconUrl  String?
   customMascotUrl   String?
+
+  // Personal API keys for the whole instance. Off: every key is refused and
+  // nobody may make one, whatever their account allows.
+  apiKeysEnabled Boolean @default(true)
 
   // Campaign Export/Import
   campaignExportSizeLimit Int @default(524288000) // 500 MB in bytes

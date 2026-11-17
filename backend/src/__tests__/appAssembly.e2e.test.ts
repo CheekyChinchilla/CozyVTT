@@ -24,6 +24,7 @@ import { refuseWhileDatabaseIsReplaced } from '../middleware/restoreGate';
 import { requireSetupComplete } from '../middleware/setup';
 import { requirePasswordChanged } from '../middleware/passwordChange';
 import { requireAdminMfa } from '../middleware/adminMfa';
+import { authenticateApiKey } from '../middleware/apiKeys';
 
 const app = createTestApp();
 const created: string[] = [];
@@ -154,10 +155,11 @@ describe('the order a request meets the middleware in', () => {
     ['CORS', named('corsMiddleware')],
     ['the cross-site check', by(originCheck)],
     ['the restore gate', by(refuseWhileDatabaseIsReplaced)],
-    ['the session', named('session')],
+    ['the session, skipped for API keys', named('sessionUnlessApiKey')],
     ['the setup gate', by(requireSetupComplete)],
     ['the health check', layers.findIndex((layer) => layer.route && layer.path === '/health')],
     ['the general limit', by(limiter)],
+    ['the API key check', by(authenticateApiKey)],
     ['the password-change gate', by(requirePasswordChanged)],
     ['the administrator two-factor gate', by(requireAdminMfa)],
     ['the first router', named('router')],
@@ -179,9 +181,9 @@ describe('the order a request meets the middleware in', () => {
     expect(routers.filter((index) => index < lastGate)).toEqual([]);
   });
 
-  it('mounts the restore gate, the general limit and the two account gates on /api, and the setup gate on every path', () => {
+  it('mounts the restore gate, the general limit, the API key check and the two account gates on /api, and the setup gate on every path', () => {
     const at = (handle: unknown) => layers[by(handle)]?.path;
-    expect([refuseWhileDatabaseIsReplaced, limiter, requirePasswordChanged, requireAdminMfa].map(at)).toEqual(['/api', '/api', '/api', '/api']);
+    expect([refuseWhileDatabaseIsReplaced, limiter, authenticateApiKey, requirePasswordChanged, requireAdminMfa].map(at)).toEqual(['/api', '/api', '/api', '/api', '/api']);
     expect(at(requireSetupComplete)).toBe('');
   });
 });

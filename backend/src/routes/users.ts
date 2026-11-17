@@ -21,6 +21,7 @@ import logger from '../utils/logger';
 import { deleteAccount, removePersonalFilesAfterwards, runsCampaignsMessage } from '../services/accountDeletion';
 import { removeAvatars } from '../services/avatars';
 import { writeSystemLog, writeAdminLog } from '../services/systemLog';
+import { assertSignedInSession } from '../middleware/apiKeys';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 
 /**
@@ -103,7 +104,10 @@ router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Respon
  * Update user profile
  * Requires: Authentication (users can update their own profile, admins can update any)
  * Allowed fields: displayName, email, avatarUrl (own avatar address or null), bio
- * Admins can also update: platformRole
+ * Admins can also update: platformRole, globalAssetManager, templateEditor,
+ * apiKeysEnabled
+ * An API key may change none of email, platformRole and the permissions; it is
+ * answered 403 (middleware/apiKeys.ts assertSignedInSession).
  * Changing your own email needs currentPassword and is capped per account
  * (EMAIL_CHANGES_PER_HOUR); an admin changing someone else's needs neither.
  */
@@ -120,6 +124,7 @@ router.put('/:id', requireAuth, hashingPerAddressWhen(asksForPassword), password
       bio,
       globalAssetManager,
       templateEditor,
+      apiKeysEnabled,
       currentPassword,
     } = req.body;
 
@@ -142,6 +147,18 @@ router.put('/:id', requireAuth, hashingPerAddressWhen(asksForPassword), password
         message: 'User not found',
       });
     }
+
+    // What only a signed-in person may change, never an API key: the address
+    // reset links go to, a role, and the permissions an administrator grants,
+    // API keys among them. Sending the value already stored is no change, so
+    // an integration that sends the whole account back still works.
+    const changesSignIn =
+      (typeof email === 'string' && email.toLowerCase() !== existingUser.email.toLowerCase()) ||
+      (platformRole !== undefined && platformRole !== existingUser.platformRole) ||
+      (globalAssetManager !== undefined && globalAssetManager !== existingUser.globalAssetManager) ||
+      (templateEditor !== undefined && templateEditor !== existingUser.templateEditor) ||
+      (apiKeysEnabled !== undefined && apiKeysEnabled !== existingUser.apiKeysEnabled);
+    if (changesSignIn && !assertSignedInSession(req, res)) return;
 
     // Build update data
     const updateData: Prisma.UserUpdateInput = {};
@@ -296,6 +313,25 @@ router.put('/:id', requireAuth, hashingPerAddressWhen(asksForPassword), password
       updateData.templateEditor = templateEditor;
     }
 
+    // Only admins can grant/revoke API keys. Admins hold them regardless.
+    if (apiKeysEnabled !== undefined) {
+      if (!isAdmin) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Only admins can update the API key permission',
+        });
+      }
+
+      if (typeof apiKeysEnabled !== 'boolean') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'apiKeysEnabled must be a boolean',
+        });
+      }
+
+      updateData.apiKeysEnabled = apiKeysEnabled;
+    }
+
     // Perform update. A new address also voids every unused reset or
     // invitation link, in the same transaction, so a link already sent to the
     // old address cannot set the password afterwards. A request that sets the
@@ -381,7 +417,7 @@ router.put('/:id', requireAuth, hashingPerAddressWhen(asksForPassword), password
     // holding admin until they signed out. Compared against what was stored, so
     // setting the role to what it already was signs nobody out.
     //
-    // globalAssetManager and templateEditor are deliberately not session fields
+    // globalAssetManager, templateEditor and apiKeysEnabled are deliberately not session fields
     // and are read from the database where they are used, so changing one
     // already takes effect on the next request and needs no sign-out.
     if (updateData.platformRole !== undefined && updateData.platformRole !== stored.platformRole) {
@@ -741,7 +777,7 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
 });
 
 /** The account fields an administrator's change is logged for. */
-type LoggedAccountFields = Pick<User, 'email' | 'displayName' | 'avatarUrl' | 'bio' | 'globalAssetManager' | 'templateEditor'>;
+type LoggedAccountFields = Pick<User, 'email' | 'displayName' | 'avatarUrl' | 'bio' | 'globalAssetManager' | 'templateEditor' | 'apiKeysEnabled'>;
 
 /**
  * What the log keeps of a change: the value before and after, except for the
@@ -761,8 +797,8 @@ type AccountChanges = {
 function adminChangesTo(before: LoggedAccountFields, after: LoggedAccountFields, othersProfile: boolean): AccountChanges {
   const changes: AccountChanges = {};
   const fields: (keyof LoggedAccountFields)[] = othersProfile
-    ? ['globalAssetManager', 'templateEditor', 'email', 'displayName', 'avatarUrl', 'bio']
-    : ['globalAssetManager', 'templateEditor'];
+    ? ['globalAssetManager', 'templateEditor', 'apiKeysEnabled', 'email', 'displayName', 'avatarUrl', 'bio']
+    : ['globalAssetManager', 'templateEditor', 'apiKeysEnabled'];
   for (const field of fields) {
     if (before[field] === after[field]) continue;
     Object.assign(changes, { [field]: field === 'bio' ? { changed: true } : { from: before[field], to: after[field] } });
@@ -775,6 +811,7 @@ function describeAdminChanges(changes: AccountChanges): string[] {
   const words: string[] = [];
   if (changes.globalAssetManager) words.push(`Global Assets ${changes.globalAssetManager.to ? 'granted' : 'taken away'}`);
   if (changes.templateEditor) words.push(`template editing ${changes.templateEditor.to ? 'granted' : 'taken away'}`);
+  if (changes.apiKeysEnabled) words.push(`API keys ${changes.apiKeysEnabled.to ? 'granted' : 'taken away'}`);
   if (changes.email) words.push(`email address changed from ${changes.email.from} to ${changes.email.to}`);
   if (changes.displayName) words.push(`display name changed from "${changes.displayName.from}" to "${changes.displayName.to}"`);
   if (changes.avatarUrl) words.push(changes.avatarUrl.to ? 'avatar changed' : 'avatar removed');

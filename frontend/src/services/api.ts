@@ -7,6 +7,9 @@ import type { WallSegment, WallsAdded } from '@/types/walls';
 import type {
   User,
   AdminListedUser,
+  ApiKey,
+  ApiKeyPermission,
+  ApiKeyWithSecret,
   InvitableUserSearch,
   AuthResponse,
   MFARequiredResponse,
@@ -356,6 +359,49 @@ class ApiClient {
   async adminSendPasswordResetLink(id: string): Promise<{ message: string }> {
     const response = await this.client.post(`/api/users/${id}/send-reset-link`);
     return response.data;
+  }
+
+  // ============================================
+  // Personal API keys
+  // ============================================
+
+  /** Your own keys, or with `all` (administrators) every account's. Never the keys themselves. */
+  async listApiKeys(all = false): Promise<{ apiKeys: ApiKey[] }> {
+    const response = await this.client.get<{ apiKeys: ApiKey[] }>('/api/api-keys', all ? { params: { all: 'true' } } : undefined);
+    return response.data;
+  }
+
+  /** The permissions your keys can be given, with the levels your account is offered. */
+  async listApiKeyPermissions(): Promise<{ permissions: ApiKeyPermission[] }> {
+    const response = await this.client.get<{ permissions: ApiKeyPermission[] }>('/api/api-keys/permissions');
+    return response.data;
+  }
+
+  async createApiKey(data: {
+    name: string;
+    permissions: Record<string, string>;
+    expiresAt: string | null;
+  }): Promise<ApiKeyWithSecret> {
+    const response = await this.client.post<ApiKeyWithSecret>('/api/api-keys', data);
+    return response.data;
+  }
+
+  /** Leave `expiresAt` out to keep it; null makes the key never expire. */
+  async updateApiKey(
+    id: string,
+    data: { name?: string; permissions?: Record<string, string>; expiresAt?: string | null }
+  ): Promise<{ apiKey: ApiKey }> {
+    const response = await this.client.patch<{ apiKey: ApiKey }>(`/api/api-keys/${encodeURIComponent(id)}`, data);
+    return response.data;
+  }
+
+  async regenerateApiKey(id: string): Promise<ApiKeyWithSecret> {
+    const response = await this.client.post<ApiKeyWithSecret>(`/api/api-keys/${encodeURIComponent(id)}/regenerate`);
+    return response.data;
+  }
+
+  async deleteApiKey(id: string): Promise<void> {
+    await this.client.delete(`/api/api-keys/${encodeURIComponent(id)}`);
   }
 
   // ============================================

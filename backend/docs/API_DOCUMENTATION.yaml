@@ -10,11 +10,13 @@ info:
     carries **no compatibility promise**, and any route here may change shape or
     disappear in a point release without notice or a deprecation period.
 
-    There are no API keys, no bearer tokens and no service accounts. The only
-    credential is the session cookie described below — but a program can obtain
-    one exactly as the web client does, by posting a user's own email and
-    password to `/api/auth/login` and keeping the cookie it returns. That cookie
-    also authenticates the Socket.io connection, which shares the same session.
+    There are no bearer tokens and no service accounts. A program authenticates
+    either with a **personal API key** (see API keys below), which acts as the
+    person who made it within the permissions they gave it, or exactly as the
+    web client does, by posting a user's own email and password to
+    `/api/auth/login` and keeping the session cookie it returns. That cookie
+    also authenticates the Socket.io connection, which shares the same session;
+    an API key does not.
 
     So scripting CozyVTT is possible, and people have done it. What it does not
     come with is a promise: a script authenticates **as a specific user** and can
@@ -27,8 +29,35 @@ info:
     a contract.
 
     ## Authentication
-    All endpoints (except `/health`, `/api/setup/*`, `/api/config` and the public auth routes) require authentication via session cookies.
+    All endpoints (except `/health`, `/api/setup/*`, `/api/config` and the public auth routes) require authentication via session cookies or an API key.
     Login via `/api/auth/login` to obtain a session cookie.
+
+    ## API keys
+    A personal API key is sent as `X-API-Key: cozy_...` on each request; never
+    in the address. Administrators may make keys, and anyone else once an
+    administrator has turned `apiKeysEnabled` on for their account; the
+    instance's `apiKeysEnabled` setting turns them off for everyone. A key acts
+    as its owner, with the owner's role as it is at each request, and is
+    narrowed to its permissions: each route falls under one permission
+    (`backend/src/services/apiKeyPermissions.ts`), `GET` needs Read and every
+    other method Read and Write. A request that sends the header never uses a
+    session, even alongside a valid cookie, and gets none.
+
+    Keys never reach `/api/auth/*`, `/api/setup/*`, `/api/api-keys/*`,
+    `/api/config`, `/health`, the admin routes that set or send someone's
+    credentials (`/api/admin/users/*`, `POST /api/users/{id}/reset-password`,
+    `POST /api/users/{id}/send-reset-link`), `POST
+    /api/admin/backups/restore`, and a backup's download, which holds every
+    password hash and MFA secret: 403 `API keys cannot be used for this
+    endpoint`. `*` in a key's permissions floors every permission except the
+    administration ones, which are granted one by one. A route the key lacks the level for answers 403 `This API key
+    needs read access to maps (it has none)`. Inside routes a key may use, a
+    change to an email address, a role, a permission flag, the registration
+    settings or the instance's API key switch answers 403 `This change needs a
+    signed-in session, not an API key`; sending the stored value is no change.
+    A key that does not exist or has expired answers 401, and after 20 such
+    answers to one address in 15 minutes further wrong keys from it answer 429;
+    a correct key is never held back.
 
     Until the setup wizard has run, every request except `/health`,
     `/api/setup` and the routes under it is refused with 403
@@ -327,6 +356,8 @@ tags:
     description: A player's own saved dice rolls for one campaign, private to whoever saved them
   - name: Admin
     description: Admin-only platform management endpoints (requires ADMIN platform role)
+  - name: API Keys
+    description: Personal API keys for scripts and integrations. A signed-in session only; never reachable with an API key
   - name: Notes
     description: A member's own private notes in a campaign
   - name: Character Templates
@@ -1938,6 +1969,9 @@ paths:
                 templateEditor:
                   type: boolean
                   description: Admin only. 403 for a non-admin caller, 400 if sent and not a boolean.
+                apiKeysEnabled:
+                  type: boolean
+                  description: Admin only. May make and use API keys; administrators may regardless. Taking it away stops the account's keys at once. 403 for a non-admin caller, 400 if sent and not a boolean.
                 currentPassword:
                   type: string
                   description: Required when changing your own email
@@ -1983,8 +2017,10 @@ paths:
           description: >-
             A non-admin tried to update another user (checked first, so also
             for an id that does not exist), or sent `platformRole`,
-            `globalAssetManager` or `templateEditor`, even for their own
-            account and even unchanged.
+            `globalAssetManager`, `templateEditor` or `apiKeysEnabled`, even
+            for their own account and even unchanged. With an API key, a change
+            to the email address, `platformRole` or any of the three flags
+            (`This change needs a signed-in session, not an API key`).
           content:
             application/json:
               schema:
@@ -3549,6 +3585,309 @@ paths:
   # INVITATIONS
   # ============================================
 
+  /api/api-keys:
+    get:
+      tags:
+        - API Keys
+      summary: List your API keys
+      description: >-
+        Your keys, newest first: everything but the key itself and its hash,
+        which is all that is stored. With `all=true`, an administrator gets
+        every account's, each with its `owner`, also while API keys are turned
+        off for the instance.
+      operationId: listApiKeys
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: all
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ['true']
+          description: Administrators only; 403 for anyone else.
+      responses:
+        '200':
+          description: The keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apiKeys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApiKey'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: >-
+            API keys are turned off on this server, the account has not been
+            given them, `all=true` from someone who is not an administrator, or
+            the request was made with an API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: API keys are not enabled for your account
+    post:
+      tags:
+        - API Keys
+      summary: Make an API key
+      description: >-
+        Makes a key that acts as you. The key itself is in `key`, in this
+        answer only; only its SHA-256 hash is stored. An account holds at most
+        50 keys.
+      operationId: createApiKey
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  description: Trimmed.
+                permissions:
+                  $ref: '#/components/schemas/ApiKeyPermissions'
+                expiresAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  description: In the future, with its offset; null or left out for a key that never expires.
+      responses:
+        '201':
+          description: The key, shown once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyWithSecret'
+        '400':
+          description: >-
+            A blank or long name, an expiry not in the future, an unknown
+            permission, or a permission or level the account is not offered
+            (see `GET /api/api-keys/permissions`); nothing is lowered quietly.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: Level "write" is not available for admin-overview
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: As for listing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The account already holds 50 keys.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/api-keys/permissions:
+    get:
+      tags:
+        - API Keys
+      summary: The permissions your keys can be given
+      description: >-
+        Each permission with the levels your account is offered: Read and Write
+        only where a route under it writes, and the administration permissions
+        to administrators only.
+      operationId: listApiKeyPermissions
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: The permissions, in the order the key editor lists them
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permissions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: maps
+                        name:
+                          type: string
+                          example: Maps
+                        description:
+                          type: string
+                        group:
+                          type: string
+                          enum: [campaigns, personal, admin]
+                        levels:
+                          type: array
+                          items:
+                            type: string
+                            enum: [none, read, write]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: As for listing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/api-keys/{id}:
+    patch:
+      tags:
+        - API Keys
+      summary: Rename one of your keys, or change its permissions or expiry
+      description: >-
+        Every field may be left out. An `expiresAt` left out stays as it is;
+        null makes the key never expire. Someone else's key answers 404, an
+        administrator's request included.
+      operationId: updateApiKey
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                permissions:
+                  $ref: '#/components/schemas/ApiKeyPermissions'
+                expiresAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+      responses:
+        '200':
+          description: The key as changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apiKey:
+                    $ref: '#/components/schemas/ApiKey'
+        '400':
+          description: As for making a key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: As for listing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No key of yours has this id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+        - API Keys
+      summary: Revoke an API key
+      description: >-
+        Revokes one of your keys at once, also while API keys are turned off
+        for the instance. An administrator may revoke anyone's, even one whose
+        owner has since lost API keys; revoking another account's is written
+        to the admins' activity log as a WARNING.
+      operationId: deleteApiKey
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: As for listing, for someone who is not an administrator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No key the caller may revoke has this id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/api-keys/{id}/regenerate:
+    post:
+      tags:
+        - API Keys
+      summary: Replace one of your keys' secret
+      description: >-
+        A new key with the same name and permissions, in `key`, in this answer
+        only. The old one stops working at once. Someone else's key answers
+        404, an administrator's request included, and an expired key 400:
+        give it a new expiry first.
+      operationId: regenerateApiKey
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The new key, shown once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyWithSecret'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: As for listing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No key of yours has this id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/invitations:
     get:
       tags:
@@ -10651,6 +10990,9 @@ paths:
                         type: boolean
                       requireAdminApproval:
                         type: boolean
+                      apiKeysEnabled:
+                        type: boolean
+                        description: Personal API keys for the whole instance.
                       themeId:
                         type: string
                       customThemeColors:
@@ -10738,6 +11080,12 @@ paths:
                   type: boolean
                 requireAdminApproval:
                   type: boolean
+                apiKeysEnabled:
+                  type: boolean
+                  description: >-
+                    Off, every API key is refused and nobody can make one. With
+                    an API key, changing this, `allowRegistration` or
+                    `requireAdminApproval` answers 403.
                 themeId:
                   type: string
                   enum: [cozy-default, autumn-hearth, desert-sand, rose-garden, ocean-depths, northern-frost, enchanted-forest, twilight-vale, obsidian-night, shadow-realm, deep-dungeon, midnight-court, parchment-classic, slate-modern, dragonfire, arcane-storm, custom]
@@ -12796,6 +13144,11 @@ components:
       in: cookie
       name: cozyvtt.sid
       description: Session cookie obtained via /api/auth/login
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: A personal API key, made under Profile → Security → API Keys. See API keys in the introduction.
 
   parameters:
     CampaignId:
@@ -12939,6 +13292,16 @@ components:
         templateEditor:
           type: boolean
           description: May edit and delete anyone's character template.
+        apiKeysEnabled:
+          type: boolean
+          description: An administrator has given the account API keys. Administrators hold them regardless.
+        apiKeysAllowed:
+          type: boolean
+          description: >-
+            Whether the account may make and use API keys now: the instance
+            allows them, and it is an administrator or has `apiKeysEnabled`.
+            On the `user` of /api/auth/login, /api/auth/mfa/verify-login,
+            /api/setup/init and /api/auth/me.
         mustChangePassword:
           type: boolean
           description: Set when an admin created the account or reset its password; see Forced password changes.
@@ -14207,6 +14570,67 @@ components:
         totalSizeBytes:
           type: integer
 
+    ApiKeyPermissions:
+      type: object
+      description: >-
+        `{ permission: level }`, level `none`, `read` or `write`; a permission
+        left out is no access. `*` raises every permission, those added later
+        included, to at least its level.
+      additionalProperties:
+        type: string
+        enum: [none, read, write]
+      example:
+        maps: read
+        characters: write
+    ApiKey:
+      type: object
+      description: A personal API key as listed. Never the key itself or its hash.
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        owner:
+          type: object
+          description: In an administrator's list of every key only.
+          properties:
+            displayName:
+              type: string
+            email:
+              type: string
+        name:
+          type: string
+        prefix:
+          type: string
+          description: The key's first 12 characters, to tell keys apart.
+          example: cozy_Xy3abQ9
+        permissions:
+          $ref: '#/components/schemas/ApiKeyPermissions'
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Written at most once a minute.
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        expired:
+          type: boolean
+    ApiKeyWithSecret:
+      type: object
+      properties:
+        apiKey:
+          $ref: '#/components/schemas/ApiKey'
+        key:
+          type: string
+          description: The key itself. Shown in this answer only.
+          example: cozy_Xy3abQ9...
     Error:
       type: object
       description: >

@@ -28,7 +28,7 @@ vi.mock('@/contexts/ThemeContext', () => ({
 }));
 
 const SETTINGS: AdminSystemSettings = {
-  id: 's1', instanceName: 'Friday Night Table', timezone: 'UTC', allowRegistration: true, requireAdminApproval: false,
+  id: 's1', instanceName: 'Friday Night Table', timezone: 'UTC', allowRegistration: true, requireAdminApproval: false, apiKeysEnabled: true,
   themeId: 'cozy-default', customThemeColors: null, fontId: 'default',
   customLogoUrl: null, customFaviconUrl: null, customMascotUrl: null,
 };

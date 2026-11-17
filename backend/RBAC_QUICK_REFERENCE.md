@@ -15,7 +15,8 @@ router sees it, in this order (see `docs/ARCHITECTURE.md`, Request Flow):
 4. The session lookup
 5. The setup gate: until setup has run, `403` "Setup Required" for everything but `/health` and `/api/setup/*`; `POST /api/setup/init` also asks for the setup token (`middleware/setup.ts`, `routes/setup.ts`)
 6. The general rate limiter: `429` past `RATE_LIMIT_MAX_REQUESTS` a minute per address, an IPv6 address counted by its /56 network
-7. The password-change gate (`middleware/passwordChange.ts`), then the admin MFA gate (`middleware/adminMfa.ts`); both are described below
+7. The API key check (`middleware/apiKeys.ts`): a request that sends `X-API-Key` skipped the session lookup in step 4, and here becomes the key's owner or is refused (401 for a key that does not exist or has expired, 403 while the owner may hold no keys); see "API keys" below
+8. The password-change gate (`middleware/passwordChange.ts`), then the admin MFA gate (`middleware/adminMfa.ts`); both are described below, and both apply to a key request as to its owner's sign-in
 
 ### Import Statement
 ```typescript
@@ -417,8 +418,8 @@ router.put('/api/characters/:id', authenticated, async (req: AuthenticatedReques
 
 ## Per-user permission flags
 
-Four booleans on `User` gate things the role system does not. `globalAssetManager`
-and `templateEditor` are not carried in the session, so each is read from the
+Five booleans on `User` gate things the role system does not. `globalAssetManager`,
+`templateEditor` and `apiKeysEnabled` are not carried in the session, so each is read from the
 database at the point of use; do not assume `req.session` knows about them.
 `mustChangePassword` is copied into the session at sign-in and the gate trusts
 that copy (it reads the database only for a session from before the field
@@ -430,6 +431,37 @@ existed), and `isApproved` is read at sign-in only.
 | `templateEditor` | `false` | Editing and deleting other people's shared character sheets (`PUT` and `DELETE /api/character-templates/:id`). Any signed-in user may publish one and edit or delete their own. Checked in `routes/characterTemplates.ts` (`canModifyTemplate`); platform ADMIN also passes. |
 | `mustChangePassword` | `false` | When true, **every** endpoint returns 403 with `code: PASSWORD_CHANGE_REQUIRED` except `POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`, `GET /api/auth/appearance` and `GET /api/config`. WebSocket connections are refused on the same basis. Set when an admin creates an account or resets a password. |
 | `isApproved` | `true` | Sign-in. An unapproved account authenticates but is refused at `routes/auth.ts`. New registrations are created unapproved when the instance requires approval. |
+| `apiKeysEnabled` | `false` | Making and using personal API keys (`accountMayHoldKeys`, `services/apiKeys.ts`), read on every key request; a platform ADMIN holds keys regardless. Only an admin's signed-in session may change it. |
+
+## API keys
+
+A request with `X-API-Key` is the key's owner, with the owner's role as it is
+now, narrowed to the key's permissions: every guard and check below runs for it
+as for the owner's own sign-in. On top of that, the route gate in
+`middleware/apiKeys.ts` places each route under one permission
+(`ROUTE_RULES` in `services/apiKeyPermissions.ts`) and refuses a key without
+the level it needs (Read for `GET`, Read and Write otherwise), and refuses
+every route no rule names. A new route therefore answers 403 to every key until
+someone adds its rule, and `src/routes/__tests__/apiKeyRoutes.e2e.test.ts` fails
+until they do.
+
+Never with a key, whatever it holds: `/api/auth/*`, `/api/setup/*`,
+`/api/api-keys/*` (whose router also refuses a key itself), `/api/config`,
+`/health`, `/api/admin/users/*`, `POST /api/users/:id/reset-password`,
+`POST /api/users/:id/send-reset-link`, `POST /api/admin/backups/restore` and
+`GET /api/admin/backups/:filename/download` (a backup holds every password
+hash). `*` floors every permission but the administration ones.
+
+A route a key may use that also holds a change only a person may make calls
+`assertSignedInSession(req, res)` before making it, and returns if that
+answered. Today: in `PUT /api/users/:id`, a change of email address,
+`platformRole`, `globalAssetManager`, `templateEditor` or `apiKeysEnabled`;
+in `PUT /api/admin/settings`, a change of `allowRegistration`,
+`requireAdminApproval` or `apiKeysEnabled`. Sending the stored value is no
+change, so a key may save a whole form back.
+
+Router-level middleware (`router.use`) runs before the gate, so a router puts
+only guards there; the route test checks it.
 
 ## Reading a map: the current one
 

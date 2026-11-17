@@ -10,6 +10,15 @@ Game systems and the game master's role are called by their current names throug
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Personal API keys.** A script or another tool can call CozyVTT's REST API as the person who made its key, sent in the `X-API-Key` header. Make keys under Profile → Security → API Keys. Each key gets a name, an expiry (90 days unless you choose otherwise) and its permissions, area by area, at No access, Read or Read & write. A key never does more than its owner's account can. Administrators can always make keys, and other users once an administrator turns API Keys on for them in the Users tab. **Allow API Keys** in Settings turns keys off for everyone, and the Settings tab also lists every account's keys so an administrator can revoke any of them.
+- A key is shown once. Only a fingerprint of it is stored. A key cannot sign in, open a live table connection, reach the sign-in, account, setup or key routes, download or restore a backup, or change an email address, a role, a permission or the sign-in settings. A request that sends a key never uses a session cookie, and wrong keys from one address are refused with 429 after 20 in 15 minutes.
+
+---
+
 ## [1.7.0] - 2026-11-12
 
 ### Upgrading from 1.6.0
