@@ -973,6 +973,48 @@
     },
     {
       "method": "GET",
+      "path": "/api/api-keys",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/api-keys/permissions",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/api-keys",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/api-keys/:id",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/api-keys/:id/regenerate",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/api-keys/:id",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/assets",
       "handlers": [
         "requireAuth",
@@ -1595,7 +1637,7 @@
       "route": false
     },
     {
-      "name": "session",
+      "name": "sessionUnlessApiKey",
       "path": "",
       "route": false
     },
@@ -1610,6 +1652,11 @@
     },
     {
       "name": "<anonymous>",
+      "path": "/api",
+      "route": false
+    },
+    {
+      "name": "authenticateApiKey",
       "path": "/api",
       "route": false
     },
@@ -1681,6 +1728,11 @@
     {
       "name": "router",
       "path": "/api/invitations",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/api-keys",
       "route": false
     },
     {

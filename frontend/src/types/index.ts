@@ -262,6 +262,14 @@ export interface User {
   globalAssetManager: boolean;
   /** May edit or delete anyone's character template, not just their own. */
   templateEditor: boolean;
+  /** An administrator has given this account API keys. Administrators hold them regardless. */
+  apiKeysEnabled?: boolean;
+  /**
+   * Whether this account may make and use API keys now: the instance allows
+   * them, and it is an administrator or has been given them. Sent with the
+   * signed-in user only.
+   */
+  apiKeysAllowed?: boolean;
   mfaEnabled: boolean;
   avatarUrl: string | null;
   bio: string | null;
@@ -279,6 +287,45 @@ export interface User {
   adminMfaDeadline?: string | null;
   /** How many MFA backup codes are left; null with MFA off. */
   mfaBackupCodesRemaining?: number | null;
+}
+
+/** A key's level for one permission. "none" is never stored. */
+export type ApiKeyLevel = 'none' | 'read' | 'write';
+
+/** The sections of the API key editor, in order. */
+export type ApiKeyPermissionGroup = 'campaigns' | 'personal' | 'admin';
+
+/** A permission a key can be given, with the levels this account is offered. */
+export interface ApiKeyPermission {
+  id: string;
+  /** Its name in the editor, with the description in a line under it. */
+  name: string;
+  description: string;
+  group: ApiKeyPermissionGroup;
+  levels: ApiKeyLevel[];
+}
+
+/** A personal API key as listed: never the key itself. */
+export interface ApiKey {
+  id: string;
+  userId: string;
+  /** Whose key it is; only in an administrator's list of every key. */
+  owner?: { displayName: string; email: string };
+  name: string;
+  /** The key's first characters, to tell keys apart. */
+  prefix: string;
+  /** `{ permission or "*": "read" | "write" }`; a permission left out is no access. */
+  permissions: Record<string, 'read' | 'write'>;
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  expired: boolean;
+}
+
+/** What making or replacing a key answers: the only time the key is shown. */
+export interface ApiKeyWithSecret {
+  apiKey: ApiKey;
+  key: string;
 }
 
 /** A campaign member's user, as the campaign routes send it. */
@@ -388,6 +435,8 @@ export interface AdminSystemSettings {
   timezone: string;
   allowRegistration: boolean;
   requireAdminApproval: boolean;
+  /** Personal API keys for the whole instance. */
+  apiKeysEnabled: boolean;
   themeId: string;
   customThemeColors: Record<string, string> | null;
   fontId: string;

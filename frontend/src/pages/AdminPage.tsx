@@ -50,6 +50,7 @@ import {
   RotateCcw,
   Palette,
   LockOpen,
+  KeyRound,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -91,6 +92,7 @@ import { cn } from '@/utils/cn';
 import { assetScopeLabel } from '@/utils/assetUrl';
 import DeletionBlockers from '@/components/admin/DeletionBlockers';
 import OrphanedFilesPanel from '@/components/admin/OrphanedFilesPanel';
+import ApiKeysPanel from '@/components/admin/ApiKeysPanel';
 import { LogActor, LogChanges } from '@/components/admin/AdminLogDetails';
 import { formatDuration, formatFileSize, formatRelativeTime, type FileSizeOptions } from '@/utils/format';
 import { tabKeyTarget } from '@/utils/tabKeys';
@@ -269,6 +271,7 @@ export default function AdminPage() {
     instanceName: '',
     allowRegistration: false,
     requireAdminApproval: true,
+    apiKeysEnabled: true,
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState('');
@@ -349,6 +352,7 @@ export default function AdminPage() {
   // ---- Global Asset Manager toggle ----
   const [togglingGlobalAssets, setTogglingGlobalAssets] = useState<string | null>(null);
   const [togglingTemplateEditor, setTogglingTemplateEditor] = useState<string | null>(null);
+  const [togglingApiKeys, setTogglingApiKeys] = useState<string | null>(null);
 
   // ---- Delete user — asset warning ----
   const [deletingUserAssetCount, setDeletingUserAssetCount] = useState<number>(0);
@@ -489,6 +493,8 @@ export default function AdminPage() {
         instanceName: settings.instanceName,
         allowRegistration: settings.allowRegistration,
         requireAdminApproval: settings.requireAdminApproval,
+        // An older server sends none: keys were not there to turn off.
+        apiKeysEnabled: settings.apiKeysEnabled ?? true,
       });
       setAppearanceForm({
         themeId: settings.themeId || 'cozy-default',
@@ -538,6 +544,23 @@ export default function AdminPage() {
   // ============================================
   // User management actions
   // ============================================
+
+  const handleToggleApiKeys = async (u: User) => {
+    setTogglingApiKeys(u.id);
+    const next = !u.apiKeysEnabled;
+    // Optimistic update
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, apiKeysEnabled: next } : x));
+    try {
+      const updated = await adminService.updateUser(u.id, { apiKeysEnabled: next });
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, ...updated } : x));
+      showToast(`API keys ${next ? 'enabled' : 'disabled'} for ${u.displayName}`, 'success');
+    } catch (err: unknown) {
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, apiKeysEnabled: !next } : x));
+      showToast(apiErrorMessage(err) ?? 'Failed to update permission', 'error');
+    } finally {
+      setTogglingApiKeys(null);
+    }
+  };
 
   const handleToggleTemplateEditor = async (u: User) => {
     setTogglingTemplateEditor(u.id);
@@ -1394,6 +1417,26 @@ export default function AdminPage() {
                                         Templates
                                       </button>
                                     )}
+                                    {/* API key toggle — admins hold keys regardless; shown while keys are on */}
+                                    {u.platformRole !== PlatformRole.ADMIN && settings?.apiKeysEnabled !== false && (
+                                      <button
+                                        onClick={() => !isSelf && togglingApiKeys !== u.id && handleToggleApiKeys(u)}
+                                        disabled={isSelf || togglingApiKeys === u.id}
+                                        title="Can make API keys for scripts and other tools"
+                                        aria-pressed={!!u.apiKeysEnabled}
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                                          u.apiKeysEnabled
+                                            ? 'bg-moss-green/15 text-brand-ink hover:bg-moss-green/30'
+                                            : 'bg-warm-gray/10 text-warm-gray/60 hover:bg-warm-gray/20'
+                                        } ${isSelf ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
+                                      >
+                                        {togglingApiKeys === u.id
+                                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                                          : <KeyRound className="w-3 h-3" />
+                                        }
+                                        API Keys
+                                      </button>
+                                    )}
                                   </div>
                                 </td>
                                 {/* MFA */}
@@ -2121,6 +2164,31 @@ export default function AdminPage() {
                   </button>
                 </div>
 
+                {/* Personal API keys */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-stone-gray">Allow API Keys</p>
+                    <p className="text-xs text-warm-gray mt-0.5">
+                      Admins, and users you give them to, can make keys for scripts and other tools. Off, every key stops working.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSettingsForm(f => ({ ...f, apiKeysEnabled: !f.apiKeysEnabled }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      settingsForm.apiKeysEnabled ? 'bg-moss-green' : 'bg-warm-gray/40'
+                    }`}
+                    role="switch"
+                    aria-checked={settingsForm.apiKeysEnabled}
+                    aria-label="Allow API keys"
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        settingsForm.apiKeysEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
                 <div className="pt-2 border-t border-warm-gray/20 flex items-center gap-3">
                   {settingsError && (
                     <p className="text-sm text-danger-ink flex-1">{settingsError}</p>
@@ -2135,6 +2203,14 @@ export default function AdminPage() {
                   </Button>
                 </div>
 
+              </section>
+            )}
+
+            {/* ---- Every account's API keys, shown while keys are off too, so a
+                 leaked one can be revoked before they go on again ---- */}
+            {settings && (
+              <section className="glass-panel p-6">
+                <ApiKeysPanel />
               </section>
             )}
 

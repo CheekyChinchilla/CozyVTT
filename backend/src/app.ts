@@ -22,6 +22,7 @@ import { refuseNulCharacters } from './middleware/nulCharacter';
 import { originCheck } from './middleware/originCheck';
 import { errorHandler } from './middleware/errorHandler';
 import { refuseWhileDatabaseIsReplaced } from './middleware/restoreGate';
+import { authenticateApiKey, installApiKeyRouteGate, recordRouterMounts, registerApiKeyRoutes, skipSessionForApiKeys } from './middleware/apiKeys';
 import setupRoutes from './routes/setup';
 import authRoutes from './routes/auth';
 import campaignRoutes from './routes/campaigns';
@@ -38,6 +39,7 @@ import tokenTemplateRoutes from './routes/tokenTemplates';
 import adminRoutes from './routes/admin';
 import adminStorageRoutes from './routes/adminStorage';
 import configRoutes from './routes/config';
+import apiKeyRoutes from './routes/apiKeys';
 import { prisma } from './config/database';
 import { positiveIntegerFromEnv } from './config/env';
 
@@ -86,6 +88,13 @@ export function createGeneralApiLimiter(): RequestHandler {
 
 export function createApp(options: AppOptions): express.Express {
   const app = express();
+
+  // Every route checks a personal API key against its permission as Express
+  // dispatches it (middleware/apiKeys.ts). Once per process.
+  installApiKeyRouteGate();
+
+  // Each router mounted below and the path it is mounted at, for that check.
+  const mounts = recordRouterMounts(app);
 
   // Trust the first proxy hop (Nginx).
   // Required so that:
@@ -169,7 +178,9 @@ export function createApp(options: AppOptions): express.Express {
   // SESSION MANAGEMENT
   // ============================================
 
-  app.use(session(options.session));
+  // A request with an API key never loads or saves a session: the key alone
+  // says who it is (middleware/apiKeys.ts).
+  app.use(skipSessionForApiKeys(session(options.session)));
 
   // ============================================
   // SETUP WIZARD GATE
@@ -206,6 +217,10 @@ export function createApp(options: AppOptions): express.Express {
   // Apply general rate limiter to all API routes
   const generalApiLimiter = options.generalApiLimiter ?? createGeneralApiLimiter();
   if (generalApiLimiter !== false) app.use('/api', generalApiLimiter);
+
+  // A request with an X-API-Key header is its owner's, held to the key's
+  // permissions, and the gates below apply to it as to the owner.
+  app.use('/api', authenticateApiKey);
 
   // Accounts flagged `mustChangePassword` (admin-created, or admin-reset) can do
   // nothing but change it until they do — see middleware/passwordChange.ts
@@ -245,6 +260,9 @@ export function createApp(options: AppOptions): express.Express {
   // Campaign invitations
   app.use('/api/invitations', invitationRoutes);
 
+  // Personal API keys (never reachable with one)
+  app.use('/api/api-keys', apiKeyRoutes);
+
   // Asset library
   app.use('/api/assets', assetRoutes);
 
@@ -256,6 +274,8 @@ export function createApp(options: AppOptions): express.Express {
 
   // Token Templates (nested under campaigns)
   app.use('/api/campaigns/:campaignId/token-templates', tokenTemplateRoutes);
+
+  registerApiKeyRoutes(app, mounts);
 
   // Whatever no route above answered. Mounted without a path, which matches
   // every one.

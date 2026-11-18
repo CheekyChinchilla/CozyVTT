@@ -7,11 +7,11 @@ itself.
 > own web client calls. They are not versioned, carry no compatibility promise,
 > and may change shape or disappear in a point release.
 >
-> A program *can* use them: there are no API keys or service accounts, but
-> signing in with a user's own credentials returns a session cookie that works
-> for both REST and Socket.io. It simply comes with no stability promise, and
-> acts only with that user's permissions. Treat these files as a map of the
-> current code.
+> A program *can* use them, with a personal API key (REST only) or by signing
+> in with a user's own credentials, which returns a session cookie that works
+> for both REST and Socket.io. There are no service accounts. Either way it
+> comes with no stability promise, and acts only with that user's permissions.
+> Treat these files as a map of the current code.
 
 ## Files
 

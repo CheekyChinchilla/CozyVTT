@@ -106,6 +106,7 @@ export async function updateSystemSettings(data: {
   instanceName?: string;
   allowRegistration?: boolean;
   requireAdminApproval?: boolean;
+  apiKeysEnabled?: boolean;
   themeId?: string;
   /**
    * The four colours of the custom theme, checked by the route

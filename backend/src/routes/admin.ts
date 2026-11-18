@@ -16,6 +16,7 @@ import multer from 'multer';
 import { Router, type RequestHandler } from 'express';
 import { Prisma } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth';
+import { assertSignedInSession } from '../middleware/apiKeys';
 import { prisma } from '../config/database';
 import { errorCode, errorMessage, errorStderr } from '../utils/errors';
 import {
@@ -280,10 +281,20 @@ router.put('/settings', async (req, res) => {
   }
   try {
     const {
-      instanceName, allowRegistration, requireAdminApproval,
+      instanceName, allowRegistration, requireAdminApproval, apiKeysEnabled,
       themeId, customThemeColors, fontId,
       customLogoUrl, customFaviconUrl, customMascotUrl,
     } = parsed.data;
+
+    // Who may sign up and sign in, and whether API keys work at all, are a
+    // signed-in administrator's to change, never a key's. Sending the stored
+    // value is no change, so a key may still save the settings page whole.
+    const stored = await getSystemSettings();
+    const changesSignIn =
+      (allowRegistration !== undefined && allowRegistration !== stored.allowRegistration) ||
+      (requireAdminApproval !== undefined && requireAdminApproval !== stored.requireAdminApproval) ||
+      (apiKeysEnabled !== undefined && apiKeysEnabled !== stored.apiKeysEnabled);
+    if (changesSignIn && !assertSignedInSession(req, res, 'Sign-in and API key settings need a signed-in session')) return;
 
     const updateData: Parameters<typeof updateSystemSettings>[0] = {};
 
@@ -295,6 +306,9 @@ router.put('/settings', async (req, res) => {
     }
     if (requireAdminApproval !== undefined) {
       updateData.requireAdminApproval = requireAdminApproval;
+    }
+    if (apiKeysEnabled !== undefined) {
+      updateData.apiKeysEnabled = apiKeysEnabled;
     }
     if (themeId !== undefined) {
       updateData.themeId = themeId;

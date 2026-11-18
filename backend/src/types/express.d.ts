@@ -31,6 +31,16 @@ declare global {
   namespace Express {
     interface Request {
       userId?: string;
+      /**
+       * Set when the request authenticated with a personal API key
+       * (middleware/apiKeys.ts); the session is then the key's owner, never
+       * stored.
+       */
+      apiKey?: {
+        id: string;
+        userId: string;
+        permissions: Record<string, string>;
+      };
     }
   }
 }

@@ -17,6 +17,8 @@ export const UpdateSystemSettingsSchema = z.object({
   instanceName: z.string().optional(),
   allowRegistration: z.boolean().optional(),
   requireAdminApproval: z.boolean().optional(),
+  /** Personal API keys for the whole instance. */
+  apiKeysEnabled: z.boolean().optional(),
   themeId: z.enum(THEME_IDS).optional(),
   fontId: z.enum(FONT_IDS).optional(),
   /** null clears the custom colours. */

@@ -107,6 +107,18 @@ Your role badge is visible on your profile page.
 
 **Never signed in (admins).** In the **Users** tab of the Admin Panel, the **Last Login** column shows when each account last signed in. An account whose owner has not signed in yet, such as one you invited or created, shows **Never signed in** there instead. On an instance with email set up, such a row also has an **Invite** button, which emails a fresh invitation link and cancels any link sent before. Running the setup wizard counts as signing in, and so does registering when it signs the person in straight away; an account that had to wait for an administrator's approval counts from its first sign-in. Once the owner has signed in, the button goes away and **Send Reset Link** is the way to help them.
 
+### API keys
+
+An API key lets a script or another tool use CozyVTT as you, such as a Discord bot that reads your characters or a tool that sets up maps. Administrators can always make keys; anyone else can once an administrator has turned **API Keys** on for their account.
+
+Open **Profile**, and under **Security** find **API Keys**. **New key** asks for a name, how long it lasts (90 days unless you choose otherwise) and what it may reach: each area at **No access**, **Read** or **Read & write**. **Everything** gives every area at least that level, including ones added in later versions; the **Administration** areas are given one by one. A key never does more than your account can.
+
+The key is shown once, when you make it. Copy it then and keep it secret; CozyVTT keeps only a fingerprint of it, so it cannot show it again. If you lose it, **Regenerate** gives the same key a new secret and the old one stops working at once. **Revoke** ends a key for good. The list shows each key's first characters, when it was last used and when it expires.
+
+A key cannot sign in, join a live table, or change your password, email address or two-factor settings.
+
+**For admins.** In the **Users** tab of the Admin Panel, the **API Keys** badge beside an account gives it keys or takes them away; taking them away stops its keys at once. In the **Settings** tab, **Allow API Keys** turns keys off for everyone, and **API keys on this instance** lists every account's keys, with **Revoke** for each, also while keys are off: if a key leaks, turn keys off, revoke it, then turn them on again. A key can never download a backup. Revoking someone else's key is written to the activity log.
+
 ### The activity log (admins)
 
 The **Activity** tab of the Admin Panel, headed **Platform Activity** and reloaded with its **Refresh** button, has four lists: **Currently Online** (the accounts with a live sign-in, with each one's role, last login and when its sign-in expires), **Recent Admin Actions** (the newest 100 lines of the admins' activity log), **Recent Registrations** (the 50 newest accounts) and **Recent Game Sessions** (the 20 most recent). The rest of this section is about the activity log. A line is written each time an administrator:

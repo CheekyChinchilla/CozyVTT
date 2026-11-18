@@ -11,32 +11,49 @@ The backend also ships a full **OpenAPI 3.0 specification** at `backend/docs/API
 1. [Authentication](#authentication)
 2. [REST API Overview](#rest-api-overview)
 3. [Auth Endpoints](#auth-endpoints)
-4. [Campaign Endpoints](#campaign-endpoints)
-5. [Token Template Endpoints](#token-template-endpoints)
-6. [Campaign Export & Import Endpoints](#campaign-export--import-endpoints)
-7. [Character Endpoints](#character-endpoints)
-8. [Map & Token Endpoints](#map--token-endpoints)
-9. [Creature Endpoints](#creature-endpoints)
-10. [Asset Endpoints](#asset-endpoints)
-11. [Invitation Endpoints](#invitation-endpoints)
-12. [User & Admin Endpoints](#user--admin-endpoints)
-13. [Config Endpoint](#config-endpoint)
-14. [Setup Endpoints](#setup-endpoints)
-15. [WebSocket Events](#websocket-events)
-16. [Error Responses](#error-responses)
-17. [Rate Limits](#rate-limits)
+4. [API Key Endpoints](#api-key-endpoints)
+5. [Campaign Endpoints](#campaign-endpoints)
+6. [Token Template Endpoints](#token-template-endpoints)
+7. [Campaign Export & Import Endpoints](#campaign-export--import-endpoints)
+8. [Character Endpoints](#character-endpoints)
+9. [Map & Token Endpoints](#map--token-endpoints)
+10. [Creature Endpoints](#creature-endpoints)
+11. [Asset Endpoints](#asset-endpoints)
+12. [Invitation Endpoints](#invitation-endpoints)
+13. [User & Admin Endpoints](#user--admin-endpoints)
+14. [Config Endpoint](#config-endpoint)
+15. [Setup Endpoints](#setup-endpoints)
+16. [WebSocket Events](#websocket-events)
+17. [Error Responses](#error-responses)
+18. [Rate Limits](#rate-limits)
 
 ---
 
 ## Authentication
 
-CozyVTT uses **session-based authentication**. The session cookie is set on login and must be included in every subsequent request (browsers do this automatically with `credentials: 'include'`).
+CozyVTT uses **session-based authentication**. The session cookie is set on login and must be included in every subsequent request (browsers do this automatically with `credentials: 'include'`). A script can use a personal API key instead (below).
 
 ### Session Cookie
 
 - **Cookie name:** `cozyvtt.sid`, always. It is signed with `SESSION_SECRET`, which does not change the name
 - **Flags:** `httpOnly` and `sameSite: lax`. `Secure` is added only when the request reached the server over HTTPS, directly or through a proxy that sends `X-Forwarded-Proto: https`, so an install served over plain HTTP sends the cookie without it. The bundled nginx passes that header on only from a proxy listed in `NGINX_TRUSTED_PROXIES` in `.env`
 - **Duration:** the session ends after `SESSION_MAX_AGE` (default 1 hour) with no request, and every request starts that count again. With "remember me" the window is `REMEMBER_ME_MAX_AGE` (default 30 days). Every session also ends `REMEMBER_ME_MAX_AGE` after it was made, however active, with 401 "Your sign-in has reached its 30-day limit. Sign in again." and `code: "SIGN_IN_EXPIRED"`; an account keeps at most 20 live sessions, and each sign-in ends those beyond 20 that are due to end soonest
+
+### API Keys
+
+A personal API key lets a script or another tool call these routes as the person who made it, narrowed to the permissions they gave it. Make one under **Profile → Security → API Keys**: administrators always can, and anyone else once an administrator has turned **API Keys** on for their account in the Admin Panel. The **Allow API Keys** setting turns them off for the whole instance.
+
+Send the key in a header with every request, never in the address:
+
+```bash
+curl -H "X-API-Key: cozy_..." https://vtt.example.com/api/campaigns
+```
+
+- **Acts as you.** The key is its owner, with the owner's role as it is at each request, so it never does more than they could. What it makes is theirs.
+- **Narrowed by permission.** Each route falls under one permission (`maps`, `characters`, `campaigns` and so on); `GET` needs Read, every other method Read and Write. `*` gives every permission, those added later included, at least its level, except the administration ones, which are granted one by one. A route the key lacks answers `403` with, for example, `This API key needs write access to maps (it has read)`.
+- **Never a session.** A request with the header ignores any session cookie and gets none, and a key opens no live (Socket.io) connection.
+- **Never sign-in or credentials.** `/api/auth/*`, `/api/setup/*`, `/api/api-keys/*`, `/api/config`, `/health`, the admin routes that set or send someone's credentials, the backup restore and a backup's download (it holds every password hash) answer `403` `API keys cannot be used for this endpoint`. Inside the routes it may use, changing an email address, a role, a permission flag, the registration settings or the API key switch answers `403` `This change needs a signed-in session, not an API key`; sending the stored value is no change.
+- **Wrong keys.** A key that does not exist or has expired answers `401`. Past 20 of those from one address in 15 minutes, further wrong keys from it answer `429`; a correct key is never held back.
 
 ### Error Responses for Unauthenticated Requests
 
@@ -84,10 +101,12 @@ request, `POST /api/auth/login`, `GET /api/auth/me`, `GET /api/campaigns`,
 These routes are also not a public API: they are not versioned and they carry no
 compatibility promise, so any of them may change shape in a point release.
 
-A program can still call them. There are no API keys or service accounts, but
-signing in with a user's own email and password returns a session cookie that
-authenticates both these routes and the Socket.io connection. A script doing
-that is acting as that user, with exactly that user's permissions — see
+A program can still call them, with a personal API key or by signing in. There
+are no service accounts. An API key acts as the person who made it, within the
+permissions they gave it, for these routes only; signing in with a user's own
+email and password returns a session cookie that authenticates both these
+routes and the Socket.io connection. Either way a script acts as that user,
+with no more than that user's permissions — see
 [Authentication](#authentication) below.
 
 ## REST API Overview
@@ -303,6 +322,60 @@ Returns the instance's appearance settings, with its name, which the browser tab
   "customMascotUrl": null
 }
 ```
+
+---
+
+## API Key Endpoints
+
+All of these need a signed-in session; an API key can never reach them, so no key can make or widen keys. Someone else's key answers `404`, so ids cannot be probed.
+
+### `GET /api/api-keys`
+
+Your keys, newest first, never the key itself:
+
+```json
+{
+  "apiKeys": [
+    {
+      "id": "7d1c...",
+      "userId": "a3f0...",
+      "name": "Discord dice bot",
+      "prefix": "cozy_Xy3abQ9",
+      "permissions": { "campaigns": "read", "characters": "write" },
+      "createdAt": "2026-11-16T10:00:00.000Z",
+      "lastUsedAt": null,
+      "expiresAt": "2027-02-14T10:00:00.000Z",
+      "expired": false
+    }
+  ]
+}
+```
+
+An administrator adds `?all=true` for every account's keys, each with its `owner`.
+
+### `GET /api/api-keys/permissions`
+
+The permissions your keys can be given, each with the levels your account is offered (`["none", "read", "write"]`, or `["none", "read"]` where nothing under it writes). The administration permissions are offered to administrators only.
+
+### `POST /api/api-keys`
+
+```json
+{ "name": "Discord dice bot", "permissions": { "campaigns": "read" }, "expiresAt": "2027-02-14T10:00:00Z" }
+```
+
+Answers `201` with `{ "apiKey": { ... }, "key": "cozy_..." }`. This is the only time the key is shown: only its hash is stored. `expiresAt` null or left out never expires; one in the past, an unknown permission, or a level your account is not offered answers `400`.
+
+### `PATCH /api/api-keys/:id`
+
+Change `name`, `permissions` or `expiresAt`. An `expiresAt` left out stays; null makes the key never expire.
+
+### `POST /api/api-keys/:id/regenerate`
+
+A new key with the same name and permissions, shown once; the old one stops working at once. An expired key answers `400`: give it a new expiry first.
+
+### `DELETE /api/api-keys/:id`
+
+Revokes the key at once (`204`), also while API keys are turned off for the instance. An administrator may revoke anyone's, and lists every account's with `?all=true` then too.
 
 ---
 

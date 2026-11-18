@@ -7,11 +7,12 @@ through the `pg` driver (`src/config/prismaClient.ts`).
 
 ## Models
 
-The schema is in [`schema.prisma`](./schema.prisma) — 24 models grouped by domain:
+The schema is in [`schema.prisma`](./schema.prisma) — 25 models grouped by domain:
 
 **User & auth**
 - `User` — accounts with optional MFA, which an administrator must turn on within 7 days
 - `PasswordResetToken` — password reset links (1 hour) and admin invitation links (7 days), stored as the SHA-256 of the token (`services/passwordResetTokens.ts`)
+- `ApiKey` — a personal API key: its owner, name, the SHA-256 of the key (never the key), its first 12 characters, its permissions, an optional expiry and when it was last used. It goes with its owner's account. `User.apiKeysEnabled` is whether an administrator has given the account keys, and `SystemSettings.apiKeysEnabled` whether the instance allows them (`services/apiKeys.ts`)
 - `LoginSession` — the `session` table where `connect-pg-simple` keeps sign-ins. `@@ignore` leaves it out of the Prisma client; the session store and `services/sessionStore.ts` read and write it with SQL of their own. Its migration, `20261015032229_add_login_session_table`, uses `IF NOT EXISTS`, so on an instance whose backend already made the table it changes nothing
 
 **Campaigns & membership**
@@ -62,7 +63,7 @@ The schema is in [`schema.prisma`](./schema.prisma) — 24 models grouped by dom
 
 **Platform**
 - `SystemLog` — admin-visible audit log. The admin MFA rule also reads its rows: the policy's start date and each administrator's 7-day restart are lines there (`services/adminMfaPolicy.ts`)
-- `SystemSettings` — singleton row holding instance-wide config (setup state, instance name and timezone, registration policy, theme and branding, campaign export size limit; upload limits come from the environment)
+- `SystemSettings` — singleton row holding instance-wide config (setup state, instance name and timezone, registration policy, whether API keys are allowed, theme and branding, campaign export size limit; upload limits come from the environment)
 
 ## Enums
 

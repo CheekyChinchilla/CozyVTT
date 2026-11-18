@@ -100,6 +100,7 @@ describe('sanitizeUser', () => {
     mustChangePassword: false,
     globalAssetManager: false,
     templateEditor: false,
+    apiKeysEnabled: false,
     rememberMe: false,
     preferences: null,
     lastLoginAt: null,
