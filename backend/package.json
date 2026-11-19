@@ -40,7 +40,7 @@
     "file-type": "^22.3.0",
     "helmet": "^8.3.0",
     "multer": "^2.5.0",
-    "nodemailer": "^10.4.0",
+    "nodemailer": "^10.5.0",
     "otplib": "^13.6.0",
     "pg": "^8.23.1",
     "prisma": "7.10.1",
